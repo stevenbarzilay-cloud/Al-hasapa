@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import app.couch.alhasapa.R
+import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.ui.theme.Palette
 import kotlin.math.PI
 import kotlin.math.pow
@@ -97,8 +98,18 @@ fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
         targetValue = if (leaving) 1f else 0f,
         animationSpec = tween(EXIT_MS, easing = FastOutSlowInEasing),
         label = "splash-exit",
-        finishedListener = { if (leaving && it >= 1f) onFinished() },
     )
+    // Removal is driven by time, not by an animation callback, so the splash can never stay behind.
+    LaunchedEffect(leaving) {
+        if (leaving) {
+            Diag.log("splash: leaving")
+            delay(EXIT_MS + 60L)
+            Diag.splashShowing = false
+            Diag.log("splash: removed")
+            onFinished()
+        }
+    }
+    LaunchedEffect(Unit) { Diag.splashShowing = true; Diag.log("splash: shown") }
 
     // The cats are there from the very first frame, full size, already asleep. Only the logo bounces in.
     val logoIn = remember { Animatable(0f) }
@@ -123,8 +134,10 @@ fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Palette.Cream)
+            // The fade layer comes FIRST so that the cream background is inside it and fades with the cats.
+            // (It used to come after the background, which stayed fully opaque and could hide the hub forever.)
             .graphicsLayer { alpha = 1f - exit }
+            .background(Palette.Cream)
             .pointerInput(Unit) { detectTapGestures { leaving = true } }
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,

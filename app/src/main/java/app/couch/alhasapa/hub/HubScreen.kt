@@ -1,6 +1,9 @@
 package app.couch.alhasapa.hub
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
@@ -42,21 +45,43 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.webkit.WebViewAssetLoader
 import app.couch.alhasapa.R
+import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.theme.Palette
+import kotlin.coroutines.resume
 import kotlinx.coroutines.delay
-
-/** The page must have reported its first successful draw within this long after loading, or we say so out loud. */
-private const val HUB_DRAW_TIMEOUT_MS = 4_000L
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
+import org.json.JSONObject
+import org.json.JSONTokener
 
 /** The page must have finished loading within this long. */
 private const val HUB_LOAD_TIMEOUT_MS = 10_000L
+
+/** Moments (after the page reports it finished loading) at which the host checks that the hub is really on screen. */
+private val CHECK_AT_MS = longArrayOf(2_500, 5_000, 8_000)
+
+/** Below this share of non-background pixels the window counts as blank. A drawn hub is well above it. */
+private const val BLANK_BELOW = 0.004
+
+/** How many times a blank hub is rebuilt automatically before the error screen takes over. */
+private const val MAX_REBUILDS = 2
+
+private const val PROBE_JS = """(function(){
+  function r(e){if(!e)return null;var x=e.getBoundingClientRect();return [Math.round(x.left),Math.round(x.top),Math.round(x.width),Math.round(x.height)]}
+  var b=document.body;
+  return JSON.stringify({ready:window.__ready===true,errors:(window.__errors||[]).slice(0,3),vis:document.visibilityState,
+    iw:innerWidth,ih:innerHeight,dpr:devicePixelRatio,rows:document.querySelectorAll('#v-home .row').length,
+    bg:b?getComputedStyle(b).backgroundColor:null,mast:r(document.querySelector('.mast')),scroller:r(document.getElementById('scroller'))});
+})()"""
 
 /**
  * The hub: the prototype's web UI, rendered from local assets. The native app owns everything
  * around it (player, accounts, storage); the hub keeps the exact look and copy of the prototype.
  *
- * A blank screen is never an acceptable failure: if the page does not load, or loads but does not draw itself,
- * a native error screen shows what happened and offers a retry.
+ * A blank screen is never an acceptable failure. After the page loads, the host asks the page what it sees AND
+ * captures the real composited window; if the hub is blank it rebuilds the WebView, and if that does not help it shows
+ * a native error screen with the evidence.
  */
 @Composable
 fun HubScreen(
@@ -65,6 +90,7 @@ fun HubScreen(
     onReady: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     val assetLoader = remember(context) {
         WebViewAssetLoader.Builder()
             .setDomain(HubOrigin.HOST)
@@ -72,28 +98,56 @@ fun HubScreen(
             .build()
     }
     var webView by remember { mutableStateOf<WebView?>(null) }
-    // Bumped to rebuild the WebView from scratch (render process died, or the person tapped retry).
+    // Bumped to rebuild the WebView from scratch (render process died, blank hub, or the person tapped retry).
     var generation by remember { mutableIntStateOf(0) }
     var pageReady by remember { mutableStateOf(false) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    var rebuilds by remember { mutableIntStateOf(0) }
     val console = remember { ConsoleToLogcat() }
 
     // 1) Did the page finish loading at all?
     LaunchedEffect(generation) {
         delay(HUB_LOAD_TIMEOUT_MS)
-        if (!pageReady) loadError = "the page did not finish loading"
+        if (!pageReady) {
+            Diag.markProblem("the page did not finish loading in ${HUB_LOAD_TIMEOUT_MS / 1000}s")
+            loadError = "the page did not finish loading"
+        }
     }
-    // 2) Did it finish loading AND draw itself? (The page sets window.__ready after its first render.)
+    // 2) Once loaded: is the hub really on screen? Ask the page, then look at the actual pixels.
     LaunchedEffect(generation, pageReady) {
         if (!pageReady) return@LaunchedEffect
-        delay(HUB_DRAW_TIMEOUT_MS)
-        val view = webView ?: return@LaunchedEffect
-        view.evaluateJavascript("(function(){return window.__ready===true?'ok':((window.__errors||[]).slice(0,3).join(' | ')||'no script error, still waiting')})()") { raw ->
-            val answer = raw?.trim('"').orEmpty()
-            if (answer != "ok") {
-                Log.e(TAG, "page loaded but did not draw: $answer")
-                loadError = answer.ifBlank { console.lastError.orEmpty() }.ifBlank { "the page loaded but did not draw" }
+        var elapsed = 0L
+        for (at in CHECK_AT_MS) {
+            delay(at - elapsed)
+            elapsed = at
+            val view = webView ?: return@LaunchedEffect
+            Diag.log("check +${at}ms: webview ${view.width}x${view.height} visible=${view.visibility == android.view.View.VISIBLE} shown=${view.isShown} attached=${view.isAttachedToWindow} window=${view.windowVisibility}")
+            val page = probePage(view)
+            Diag.log("page says: ${page ?: "no answer"}")
+            if (page == null || !page.optBoolean("ready")) {
+                val why = page?.optJSONArray("errors")?.let { a -> (0 until a.length()).joinToString(" | ") { a.getString(it) } }
+                    .orEmpty().ifBlank { console.lastError.orEmpty() }.ifBlank { "the page loaded but did not draw" }
+                Diag.markProblem(why)
+                loadError = why
+                return@LaunchedEffect
             }
+            if (Diag.splashShowing) continue // the splash is still up: no verdict yet
+            val share = activity?.let { DiagOverlay.nonCreamShare(it, Diag.overlayBottomPx) }
+            Diag.log("screen: ${share?.let { "%.1f%% of pixels are not background".format(it * 100) } ?: "capture unavailable"}")
+            if (share == null || share >= BLANK_BELOW) {
+                Diag.markHubVisible()
+                return@LaunchedEffect
+            }
+            Diag.markProblem("the window is blank although the page says it drew itself")
+            if (rebuilds < MAX_REBUILDS) {
+                rebuilds++
+                Diag.log("recovery: rebuilding the WebView (try $rebuilds of $MAX_REBUILDS)")
+                pageReady = false
+                generation++
+            } else {
+                loadError = "the screen stays blank although the page drew itself"
+            }
+            return@LaunchedEffect
         }
     }
 
@@ -114,15 +168,22 @@ fun HubScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
+                    Diag.log("webview: created (generation $generation)")
                     WebView(ctx).apply {
                         configureHub()
                         webChromeClient = console
                         webViewClient = HubWebViewClient(
                             ctx, assetLoader,
-                            onPageReady = { pageReady = true; onReady() },
-                            onLoadError = { loadError = it },
-                        ) { pageReady = false; generation++ }
+                            onPageReady = {
+                                pageReady = true
+                                // A WebView that was ever paused does not paint; make sure this one is running.
+                                webView?.let { it.onResume(); it.resumeTimers() }
+                                onReady()
+                            },
+                            onLoadError = { Diag.markProblem("load error: $it"); loadError = it },
+                        ) { Diag.markProblem("the render process died"); pageReady = false; generation++ }
                         loadUrl(HubOrigin.url(reduceMotion))
+                        Diag.log("webview: loadUrl")
                         webView = this
                     }
                 },
@@ -136,12 +197,28 @@ fun HubScreen(
 
     if (loadError != null) {
         HubLoadError(
-            detail = loadError.orEmpty(),
-            onRetry = { loadError = null; pageReady = false; generation++ },
+            detail = loadError.orEmpty() + "\n\n" + Diag.snapshot(8),
+            onRetry = { loadError = null; pageReady = false; rebuilds = 0; generation++ },
         )
     }
 
     DisposableEffect(Unit) { onDispose { webView = null } }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+/** Asks the page what it sees. Null if it does not answer within 3 s. */
+private suspend fun probePage(view: WebView): JSONObject? = withTimeoutOrNull(3_000) {
+    suspendCancellableCoroutine { cont ->
+        view.evaluateJavascript(PROBE_JS) { raw ->
+            val parsed = runCatching { JSONObject(JSONTokener(raw).nextValue() as String) }.getOrNull()
+            if (cont.isActive) cont.resume(parsed)
+        }
+    }
 }
 
 @SuppressLint("SetJavaScriptEnabled") // The hub is our own page, served from local assets.
@@ -180,7 +257,10 @@ private class ConsoleToLogcat : WebChromeClient() {
             else -> Log.INFO
         }
         val line = "${message.message()} (${message.sourceId()}:${message.lineNumber()})"
-        if (priority == Log.ERROR) lastError = line
+        if (priority == Log.ERROR) {
+            lastError = line
+            Diag.log("js error: $line")
+        }
         Log.println(priority, TAG, line)
         return true
     }

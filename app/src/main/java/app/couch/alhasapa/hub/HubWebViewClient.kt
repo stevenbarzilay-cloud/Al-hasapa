@@ -1,6 +1,7 @@
 package app.couch.alhasapa.hub
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.util.Log
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
@@ -11,6 +12,7 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.webkit.WebViewAssetLoader
 import app.couch.alhasapa.R
+import app.couch.alhasapa.diag.Diag
 import java.io.ByteArrayInputStream
 
 internal const val TAG = "AlHasapaHub"
@@ -56,13 +58,23 @@ class HubWebViewClient(
         return true
     }
 
+    override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+        Diag.log("webview: page started")
+    }
+
+    override fun onPageCommitVisible(view: WebView, url: String) {
+        Diag.log("webview: first content committed (visible)")
+    }
+
     override fun onPageFinished(view: WebView, url: String) {
         Log.i(TAG, "page finished: $url")
+        Diag.log("webview: page finished")
         onPageReady()
     }
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         Log.e(TAG, "load error ${error.errorCode} ${error.description} for ${request.url} (main frame: ${request.isForMainFrame})")
+        Diag.log("webview: load error ${error.errorCode} ${error.description} (main=${request.isForMainFrame})")
         if (request.isForMainFrame) onLoadError("${error.errorCode} ${error.description}")
     }
 

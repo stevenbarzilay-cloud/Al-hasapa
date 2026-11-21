@@ -91,37 +91,54 @@ class AppRootTest {
         assertNotNull(findWebView())
     }
 
+    /** The page's answer to the host's probe, as evaluateJavascript delivers it: a JSON string containing a JSON object. */
+    private fun pageAnswer(ready: Boolean, vararg errors: String): String {
+        val obj = org.json.JSONObject().put("ready", ready).put("errors", org.json.JSONArray(errors.toList()))
+        return org.json.JSONObject.quote(obj.toString())
+    }
+
     /**
-     * Plays the page's part: finishes loading, lets the host's draw check come due (4 s), then answers it.
+     * Plays the page's part: finishes loading, lets the host's first check come due (2.5 s), then answers its probe.
      * State written from the test thread is published explicitly, because Robolectric's paused main looper would
      * otherwise not deliver it until some unrelated recomposition (on a real device the looper just runs).
      */
-    private fun answerHealthCheck(answer: String) {
+    private fun answerProbe(answer: String) {
         val web = findWebView()!!
         shadowOf(web).webViewClient.onPageFinished(web, HubOrigin.url(false))
         Snapshot.sendApplyNotifications()
         rule.mainClock.advanceTimeByFrame()
-        rule.mainClock.advanceTimeBy(4_500)
+        rule.mainClock.advanceTimeBy(2_700)
         val callback = shadowOf(web).lastEvaluatedJavascriptCallback
-        assertNotNull("the host never ran its health check within 4.5 s (last script: ${shadowOf(web).lastEvaluatedJavascript})", callback)
+        assertNotNull("the host never probed the page within 2.7 s (last script: ${shadowOf(web).lastEvaluatedJavascript})", callback)
         callback.onReceiveValue(answer)
         Snapshot.sendApplyNotifications()
-        rule.mainClock.advanceTimeBy(100)
+        rule.mainClock.advanceTimeBy(300)
     }
 
     @Test
     fun aPageThatLoadsButNeverDrawsShowsAVisibleErrorWithTheReason() {
         start(playSplash = false)
-        answerHealthCheck("\"TypeError: boom @12:3\"")
+        answerProbe(pageAnswer(false, "TypeError: boom @12:3"))
         rule.onNodeWithText(rule.activity.getString(R.string.hub_error_title)).assertIsDisplayed()
-        rule.onNodeWithText("TypeError: boom @12:3").assertIsDisplayed()
+        rule.onNodeWithText("TypeError: boom @12:3", substring = true).assertIsDisplayed()
     }
 
     @Test
     fun aPageThatDrewItselfShowsNoError() {
         start(playSplash = false)
-        answerHealthCheck("\"ok\"")
+        answerProbe(pageAnswer(true))
         rule.onNodeWithText(rule.activity.getString(R.string.hub_error_title)).assertDoesNotExist()
+    }
+
+    @Test
+    fun aPageThatNeverAnswersTheProbeIsReportedNotIgnored() {
+        start(playSplash = false)
+        val web = findWebView()!!
+        shadowOf(web).webViewClient.onPageFinished(web, HubOrigin.url(false))
+        Snapshot.sendApplyNotifications()
+        rule.mainClock.advanceTimeByFrame()
+        rule.mainClock.advanceTimeBy(6_000) // 2.5 s to the probe + its 3 s patience
+        rule.onNodeWithText(rule.activity.getString(R.string.hub_error_title)).assertIsDisplayed()
     }
 
     @Test

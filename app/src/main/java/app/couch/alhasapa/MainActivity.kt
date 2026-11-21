@@ -2,6 +2,7 @@ package app.couch.alhasapa
 
 import android.content.ContentResolver
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.webkit.WebView
@@ -10,6 +11,9 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.LifecycleEventObserver
+import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.AppRoot
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 
@@ -19,6 +23,11 @@ class MainActivity : ComponentActivity() {
         // the animated in-app splash continues from it.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        Diag.log("activity: onCreate, build ${BuildConfig.VERSION_NAME}, android ${Build.VERSION.RELEASE} (api ${Build.VERSION.SDK_INT})")
+        Diag.log("webview package: " + (WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" } ?: "NONE"))
+        val dm = resources.displayMetrics
+        Diag.log("screen ${dm.widthPixels}x${dm.heightPixels} density ${dm.density}, animator scale ${Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f)}")
+        lifecycle.addObserver(LifecycleEventObserver { _, event -> Diag.log("lifecycle: $event") })
         // Light UI on a cream background: dark system-bar icons, transparent bars.
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
@@ -35,6 +44,8 @@ class MainActivity : ComponentActivity() {
                 AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() })
             }
         }
+        // Plain views, no Compose and no WebView: readable even if either of those fails. Debug builds only.
+        if (BuildConfig.DEBUG) DiagOverlay.install(this)
     }
 }
 

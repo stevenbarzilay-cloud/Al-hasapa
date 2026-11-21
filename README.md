@@ -26,6 +26,12 @@ Hub notes:
   within 4 s, a native error screen shows the reason with a retry button; if the page's own script crashes, the
   error is printed on the page. Everything the page logs goes to Logcat under the tag `AlHasapaHub`
   (`adb logcat -s AlHasapaHub`).
+- Debug builds show a small on-screen startup log (plain Android views, so it works even if Compose or the
+  WebView fail): activity and lifecycle events, the device's WebView version, splash events, page events, what the
+  page reports about itself, and a capture of the real composited window with the share of non-background pixels.
+  It fades away a few seconds after the hub is confirmed visible and stays up if anything went wrong. If the hub is
+  blank although the page says it drew, the host rebuilds the WebView up to twice, then shows the error screen.
+  The same lines go to Logcat under `AlHasapaDiag`.
 - `AppRootTest` runs the startup flow (hub created and told to load, splash lifts, hub stays mounted, error
   screen and retry) through the real Android framework with Robolectric. It cannot run Chromium, so page
   rendering itself is checked separately in a browser.
