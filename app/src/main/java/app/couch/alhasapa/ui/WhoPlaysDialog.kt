@@ -45,17 +45,19 @@ fun WhoPlaysDialog(
     pieceB: PieceStyle,
     onPick: (who: String) -> Unit,
     onDismiss: () -> Unit,
+    title: String = stringResource(R.string.who_plays_title),
+    hint: String = stringResource(R.string.who_plays_hint),
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier.clip(RoundedCornerShape(20.dp)).background(Palette.Cream).border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(20.dp)).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(stringResource(R.string.who_plays_title), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center)
+            Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(gameName, fontSize = 18.sp, color = Palette.Ink2, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
-            Text(stringResource(R.string.who_plays_hint), fontSize = 15.sp, color = Palette.Ink2, textAlign = TextAlign.Center)
+            Text(hint, fontSize = 15.sp, color = Palette.Ink2, textAlign = TextAlign.Center)
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 WhoButton(nameA, pieceA) { onPick("a") }

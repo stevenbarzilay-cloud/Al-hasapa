@@ -8,9 +8,29 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Status:** milestone 3 (TV display). The data layer, the isolated player with persistent logins (including two LinkedIn
-profiles), the accounts screen, "who plays?" for head-to-head games, and per-site display profiles are in. Still to
-come: result capture (share / copy hook, native result sheet, Android share target) and the polish pass.
+**Status:** milestone 4 (results). The data layer, the isolated player with persistent logins (including two LinkedIn
+profiles), the accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, and result capture
+(the game's own Share / Copy, a native result sheet, and an Android share target) are in. Still to come: the polish pass
+(do-not-disturb chip, accessibility and RTL audit, install notes).
+
+Results (`results/`):
+
+- **Capture.** On the game's own sites only, a script injected at document start wraps `navigator.share`,
+  `navigator.clipboard.writeText` and `document.execCommand("copy")`. When the game calls one (the person pressed the game's
+  own Share or Copy button), the text is passed to the app through a web-message listener, and the call goes straight on to
+  the original, so the game behaves as before. The script reads nothing else (a test greps it for page, form and storage
+  access) and the app re-checks every message: https origin on the allowlist, size, shape, no repeats. As a second route,
+  text that appears on the clipboard while the player is in front and reads as this game's result also opens the sheet.
+  A Share press always opens the sheet; a bare copy only when it parses as a result.
+- **The sheet** is the prototype's result sheet, native: the captured or pasted text, what was understood and what it is
+  worth ("זוהה: 3/6 · 9 נקודות ספה"), a manual field, "לא הצלחנו הפעם", and for games we play together "מי פיצח?". Nothing is
+  saved until "שמירה". The scoring is the exact port from M1. A head-to-head result belongs to whoever is playing
+  (`who` from the "who plays?" step) and only writes that side; the other side is never touched.
+- **Share target.** "Share" in any game or app, choose "תוצאה על הספה". The game is recognised from the header
+  ("Wordle 1,618 3/6", "Connections / Puzzle #512", "Queens #612 | 1:24", "I solved The Mini Crossword...");
+  if it cannot be told, or two games tie, it asks instead of guessing. A head-to-head result asks "מי שיחק?" first.
+- `tools/capture_check.cjs` runs the real script in Chromium: originals still called, only shares and copies reported,
+  a throwing port never reaches the page.
 
 TV display (`app/src/main/assets/display_profiles.json`, `display/`):
 

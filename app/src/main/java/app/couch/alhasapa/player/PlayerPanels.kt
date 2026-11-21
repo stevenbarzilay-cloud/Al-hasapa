@@ -86,6 +86,23 @@ fun ProgressPanel(width: Dp, info: PlayerInfo, modifier: Modifier = Modifier, bo
     }
 }
 
+/** The big button at the foot of the progress panel. */
+@Composable
+fun PanelButton(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 64.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Palette.Ink)
+            .clickable(onClick = onClick)
+            .semantics { role = Role.Button; contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Cream)
+    }
+}
+
 @Composable
 private fun Person(style: app.couch.alhasapa.data.PieceStyle, name: String, active: Boolean) {
     val playing = stringResource(R.string.panel_playing)

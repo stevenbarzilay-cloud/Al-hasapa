@@ -62,6 +62,16 @@ import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.display.DisplayLayout
 import app.couch.alhasapa.display.DisplayProfile
 import app.couch.alhasapa.display.DisplayProfiles
+import app.couch.alhasapa.results.CaptureGate
+import app.couch.alhasapa.results.Couple
+import app.couch.alhasapa.results.ResultDraft
+import app.couch.alhasapa.results.ResultInput
+import app.couch.alhasapa.results.ResultSheet
+import app.couch.alhasapa.results.ResultSupport
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import app.couch.alhasapa.ui.theme.Palette
 import kotlinx.coroutines.delay
@@ -86,6 +96,10 @@ fun PlayerScreen(
     onTogglePlayed: () -> Unit,
     onSaveDisplay: (key: String, profile: DisplayProfile) -> Unit,
     onResetDisplay: (key: String) -> Unit,
+    /** Null for the login screens and anything else that is not a game: no result to record. */
+    result: ResultSupport? = null,
+    onSaveResult: (ResultInput) -> Unit = {},
+    onClearResult: () -> Unit = {},
     onClose: () -> Unit,
     onOpenInChrome: (String) -> Unit,
 ) {
@@ -105,6 +119,40 @@ fun PlayerScreen(
     var sheetOpen by remember { mutableStateOf(false) }
     val profile = draft ?: resolved.profile
 
+    // The result sheet: opened by the button, or by the game's own Share / Copy.
+    var resultOpen by remember { mutableStateOf(false) }
+    var resultText by remember { mutableStateOf("") }
+    var resultCaptured by remember { mutableStateOf(false) }
+    val gate = remember { CaptureGate(session.allowedHosts) }
+    val latestResult by androidx.compose.runtime.rememberUpdatedState(result)
+    val openWith: (CaptureGate.Captured) -> Unit = { c ->
+        val r = latestResult
+        if (r != null && !resultOpen) {
+            val log = r.state.optJSONObject("log") ?: org.json.JSONObject()
+            // A Share press is always a result; a bare copy only when it reads as one (people copy links and words too).
+            if (c.kind == "share" || ResultDraft.evaluate(r.game, c.text, "", false, log, r.day).result != null) {
+                resultText = c.text; resultCaptured = true; resultOpen = true
+            }
+        }
+    }
+    val onCaptured by androidx.compose.runtime.rememberUpdatedState(openWith)
+
+    // A second route for games that copy some other way: text that lands on the clipboard while the game is in front.
+    val context = LocalContext.current
+    DisposableEffect(context) {
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        val listener = ClipboardManager.OnPrimaryClipChangedListener {
+            val text = runCatching { cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(context)?.toString() }.getOrNull()
+            val r = latestResult
+            if (r != null && !resultOpen && text != null && text.length <= app.couch.alhasapa.results.CaptureScript.MAX_TEXT) {
+                val log = r.state.optJSONObject("log") ?: org.json.JSONObject()
+                if (ResultDraft.evaluate(r.game, text, "", false, log, r.day).result != null) gate.acceptClipboard(text)?.let { onCaptured(it) }
+            }
+        }
+        cm?.addPrimaryClipChangedListener(listener)
+        onDispose { cm?.removePrimaryClipChangedListener(listener) }
+    }
+
     val startedAt = remember { System.currentTimeMillis() }
     var now by remember { mutableLongStateOf(startedAt) }
     LaunchedEffect(Unit) { while (true) { delay(1_000); now = System.currentTimeMillis() } }
@@ -118,6 +166,7 @@ fun PlayerScreen(
     BackHandler {
         val view = webView
         when {
+            resultOpen -> resultOpen = false
             sheetOpen -> sheetOpen = false
             view != null && view.canGoBack() -> view.goBack()
             else -> onClose()
@@ -148,7 +197,9 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (layout.hasPanels) {
-                        ProgressPanel(layout.panelWidth.dp, info)
+                        ProgressPanel(layout.panelWidth.dp, info) {
+                            if (result != null) PanelButton(stringResource(R.string.player_result)) { resultText = ""; resultCaptured = false; resultOpen = true }
+                        }
                     }
                     Box(Modifier.size(layout.webWidth.dp, layout.webHeight.dp)) {
                         key(generation) {
@@ -161,6 +212,7 @@ fun PlayerScreen(
                                         val inj = DisplayInjector(this, DisplayInjector.originRules(session.allowedHosts, session.roaming))
                                         inj.apply(profile, layout)                 // before the first load, so the first page is already right
                                         injector = inj
+                                        if (result != null) CaptureInjector.install(this, session, gate) { c -> onCaptured(c) }
                                         webViewClient = PlayerWebViewClient(
                                             session = session,
                                             onBlocked = { d ->
@@ -213,6 +265,7 @@ fun PlayerScreen(
                     onBack = onClose,
                     onTogglePlayed = { onTogglePlayed(); stripTick++ },
                     onDisplay = { sheetOpen = true },
+                    onResult = if (result != null) ({ resultText = ""; resultCaptured = false; resultOpen = true }) else null,
                 )
             }
 
@@ -240,6 +293,25 @@ fun PlayerScreen(
             }
         }
 
+        if (resultOpen && result != null) {
+            Box(Modifier.fillMaxSize().background(Palette.Ink.copy(alpha = 0.45f)).pointerInput(Unit) { detectTapGestures { } }, contentAlignment = Alignment.Center) {
+                key(resultText) {
+                    // The sheet is right to left, like the rest of the app, whatever the player does with left and right.
+                    ResultSheet(
+                        support = result,
+                        couple = Couple(info.nameA, info.nameB, info.pieceA, info.pieceB),
+                        who = session.who,
+                        initialText = resultText.ifEmpty { existingRaw(result, session.who) },
+                        captured = resultCaptured,
+                        onSave = { onSaveResult(it); resultOpen = false },
+                        onClear = { onClearResult(); resultOpen = false },
+                        onCancel = { resultOpen = false },
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    )
+                }
+            }
+        }
+
         if (loadError != null) {
             LoadErrorPanel(
                 detail = loadError.orEmpty(),
@@ -252,7 +324,7 @@ fun PlayerScreen(
 }
 
 @Composable
-private fun ControlStrip(title: String, showPlayed: Boolean, played: Boolean, onBack: () -> Unit, onTogglePlayed: () -> Unit, onDisplay: () -> Unit) {
+private fun ControlStrip(title: String, showPlayed: Boolean, played: Boolean, onBack: () -> Unit, onTogglePlayed: () -> Unit, onDisplay: () -> Unit, onResult: (() -> Unit)?) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -268,6 +340,7 @@ private fun ControlStrip(title: String, showPlayed: Boolean, played: Boolean, on
             title, color = Palette.Cream, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1,
         )
+        if (onResult != null) StripButton(stringResource(R.string.player_result), onClick = onResult)
         if (showPlayed) {
             val label = stringResource(R.string.player_played)
             StripButton(if (played) "✓ $label" else label, onClick = onTogglePlayed, highlighted = played)
@@ -306,4 +379,11 @@ private fun LoadErrorPanel(detail: String, onRetry: () -> Unit, onChrome: () -> 
             }
         }
     }
+}
+
+/** What is already saved for this game today, so the sheet opens on it (the prototype does the same). */
+private fun existingRaw(result: ResultSupport, who: String?): String {
+    val e = app.couch.alhasapa.data.CouchState.entry(result.state, result.day, result.game.id) ?: return ""
+    return if (result.game.isDuel) e.optJSONObject("d")?.optJSONObject(who ?: "")?.optString("raw").orEmpty()
+    else e.optJSONObject("r")?.optString("raw").orEmpty()
 }

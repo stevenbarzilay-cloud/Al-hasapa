@@ -43,5 +43,19 @@
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
             android:theme="@style/Theme.AlHasapa" />
+
+        <!-- The share target: "Share" in any game or app, choose this one, and the result lands on tonight's page. -->
+        <activity
+            android:name=".results.ShareReceiverActivity"
+            android:exported="true"
+            android:label="@string/share_target_label"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.AlHasapa">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

@@ -12,6 +12,8 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.ScriptHandler
+import androidx.webkit.WebMessageCompat
+import androidx.webkit.WebViewCompat.WebMessageListener
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
@@ -19,6 +21,8 @@ import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.display.DisplayLayout
 import app.couch.alhasapa.display.DisplayProfile
 import app.couch.alhasapa.display.DisplayScript
+import app.couch.alhasapa.results.CaptureGate
+import app.couch.alhasapa.results.CaptureScript
 
 /** Creates and configures the WebView a game runs in, in its own browser profile. */
 object PlayerWebView {
@@ -108,6 +112,36 @@ class DisplayInjector(private val view: WebView, private val origins: Set<String
         /** The host itself and its subdomains, over https, for every allowed host; every origin when the session may roam. */
         fun originRules(hosts: Set<String>, roaming: Boolean): Set<String> =
             if (roaming) setOf("*") else hosts.flatMap { listOf("https://$it", "https://*.$it") }.toSet()
+    }
+}
+
+/**
+ * Catches the result a game hands over when ITS Share / Copy button is pressed (see [CaptureScript]). Needs a WebView that supports
+ * document-start scripts and web-message listeners; without one, [install] returns false and the clipboard route still works.
+ * Only on the game's own sites: the origin rules limit where the hook exists at all, and [CaptureGate] checks the origin of
+ * every message again.
+ */
+object CaptureInjector {
+    fun install(view: WebView, session: PlaySession, gate: CaptureGate, onCaptured: (CaptureGate.Captured) -> Unit): Boolean {
+        if (session.roaming || session.loginMode) return false
+        val origins = DisplayInjector.originRules(session.allowedHosts, roaming = false)
+        if (origins.isEmpty()) return false
+        return runCatching {
+            // Both are needed: the listener is the way out of the page, the document-start script is the hook.
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+                    val listener = WebMessageListener { _, message: WebMessageCompat, sourceOrigin, _, _ ->
+                        gate.accept(message.data, sourceOrigin.toString())?.let(onCaptured)
+                    }
+                    WebViewCompat.addWebMessageListener(view, CaptureScript.PORT, origins, listener)
+                    WebViewCompat.addDocumentStartJavaScript(view, CaptureScript.JS, origins)
+                    true
+                } else false
+            } else false
+        }.getOrElse {
+            Diag.log("capture: not available (${it.javaClass.simpleName})")
+            false
+        }
     }
 }
 

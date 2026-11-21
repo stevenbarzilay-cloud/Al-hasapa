@@ -19,6 +19,10 @@ import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.data.PiecesConfig
 import app.couch.alhasapa.display.DisplayStore
+import app.couch.alhasapa.results.ResultStore
+import app.couch.alhasapa.results.ResultSupport
+import android.widget.Toast
+import app.couch.alhasapa.R
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 import java.time.LocalDate
@@ -64,6 +68,11 @@ class PlayerActivity : ComponentActivity() {
                     overrides = DisplayStore.overrides(state),
                     onSaveDisplay = { key, p -> DisplayStore.save(app.repo, key, p) },
                     onResetDisplay = { key -> DisplayStore.reset(app.repo, key) },
+                    result = session.gameId?.let { id -> app.catalog.game(id) }
+                        ?.takeIf { !(it.isDuel && session.who == null) }
+                        ?.let { ResultSupport(it, state, today()) },
+                    onSaveResult = { input -> saveResult(app, input) },
+                    onClearResult = { clearResult(app) },
                     onTogglePlayed = { togglePlayed(app) },
                     onClose = { finish() },
                     onOpenInChrome = { url -> ChromeTab.open(this, url) },
@@ -94,6 +103,28 @@ class PlayerActivity : ComponentActivity() {
             val site = app.catalog.sites[intent.getStringExtra(EXTRA_SITE)] ?: return null
             PlaySession.forLogin(site, intent.getStringExtra(EXTRA_TITLE) ?: site.name, intent.getStringExtra(EXTRA_PROFILE) ?: ProfileNames.GAMES)
         }
+    }
+
+    private fun saveResult(app: CouchApp, input: app.couch.alhasapa.results.ResultInput) {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return
+        val names = CouchState.names(app.repo.snapshot())
+        val msg = when (val o = ResultStore.save(app.repo, game, today(), session.who, input)) {
+            is ResultStore.Outcome.Saved -> getString(R.string.result_saved_pts, o.points)
+            ResultStore.Outcome.MarkedOnly -> getString(R.string.result_marked)
+            ResultStore.Outcome.Nothing -> getString(R.string.result_nothing)
+            is ResultStore.Outcome.DuelSide -> when (o.winner) {
+                null -> getString(R.string.result_duel_wait)
+                "t" -> getString(R.string.result_duel_tie)
+                else -> getString(R.string.result_duel_win, if (o.winner == "a") names.first else names.second, game.n)
+            }
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun clearResult(app: CouchApp) {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return
+        ResultStore.clear(app.repo, game, today(), session.who)
+        Toast.makeText(this, R.string.result_cleared, Toast.LENGTH_SHORT).show()
     }
 
     /** Ticks or un-ticks today's "we played", like the tick in the hub. */
