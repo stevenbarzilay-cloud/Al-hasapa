@@ -64,6 +64,7 @@ import app.couch.alhasapa.display.DisplayMode
 import app.couch.alhasapa.display.ScaledFrame
 import app.couch.alhasapa.display.DisplayProfile
 import app.couch.alhasapa.display.DisplayProfiles
+import app.couch.alhasapa.display.UiPlace
 import app.couch.alhasapa.results.CaptureGate
 import app.couch.alhasapa.results.Couple
 import app.couch.alhasapa.results.ResultDraft
@@ -78,15 +79,16 @@ import org.json.JSONObject
 import app.couch.alhasapa.ui.theme.Palette
 import kotlinx.coroutines.delay
 
-/** How long the control strip stays on screen after it was last touched. */
-private const val STRIP_VISIBLE_MS = 4_000L
+private val ALL_ITEMS = BarItem.entries
+private val TOP_OF_BOTH = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM)
+private val BOTTOM_OF_BOTH = listOf(BarItem.PROGRESS, BarItem.POINTS, BarItem.PIECES, BarItem.RESULT, BarItem.PLAYED)
 
 /**
  * A game, full screen, in its own browser profile. What is on screen follows the site's display profile: the page as it is
  * (native), as a desktop window (wide), or as a phone held upright with the couch panels at its sides (portrait-fit).
  *
- * The control strip (back, name, display, "we played") sits at the top edge: it shows for a few seconds on entry, then hides;
- * a tap on the top edge brings it back. Everything else belongs to the page.
+ * The couch UI is always on screen, never behind a menu that vanishes: panels beside the game, bars above and below it, or at the
+ * least a floating hamburger (see UiPlace). The hamburger opens the settings and the quick actions. Everything else is the game's.
  */
 @Composable
 fun PlayerScreen(
@@ -113,8 +115,6 @@ fun PlayerScreen(
     var injector by remember { mutableStateOf<DisplayInjector?>(null) }
     var generation by remember { mutableIntStateOf(0) }
     var loadError by remember { mutableStateOf<String?>(null) }
-    var stripTick by remember { mutableIntStateOf(0) }
-    var stripVisible by remember { mutableStateOf(true) }
     var usedProfile by remember { mutableStateOf(session.profile) }
 
     // The page being shown decides how it is shown; a navigation to another game of the same site can change it.
@@ -173,19 +173,23 @@ fun PlayerScreen(
     var now by remember { mutableLongStateOf(startedAt) }
     LaunchedEffect(Unit) { while (true) { delay(1_000); now = System.currentTimeMillis() } }
 
-    LaunchedEffect(stripTick) {
-        stripVisible = true
-        delay(STRIP_VISIBLE_MS)
-        stripVisible = false
-    }
-
-    // The zoom buttons in the strip are for quick use while playing, so they keep what they set for this site without a second step.
+    // The zoom buttons are for quick use while playing, so they keep what they set for this site without a second step.
     val quickZoom: (Int) -> Unit = { direction ->
         val next = profile.copy(zoom = zoomBy(profile.zoom, direction))
         draft = next
         onSaveDisplay(profiles.keyFor(currentUrl, resolved), next)
         justSaved = true
     }
+
+    val openResult: () -> Unit = { resultText = ""; resultCaptured = false; resultOpen = true }
+    val chrome = ChromeData(
+        title = session.title, elapsed = formatElapsed((now - startedAt) / 1000), info = info, played = played,
+        showPlayed = !session.loginMode, zoom = if (profile.mode != DisplayMode.NATIVE) profile.zoom else null,
+    )
+    val actions = ChromeActions(
+        onMenu = { sheetOpen = true }, onBack = onClose, onResult = if (result != null) openResult else null,
+        onTogglePlayed = onTogglePlayed, onZoom = quickZoom,
+    )
 
     BackHandler {
         val view = webView
@@ -215,14 +219,23 @@ fun PlayerScreen(
 
             // Left and right here are the screen's own, whatever the language direction: the panels are placed by hand.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Column(Modifier.fillMaxSize().padding(horizontal = marginX.dp, vertical = marginY.dp)) {
+                if (layout.topBar > 0f) {
+                    PlayerBar(if (layout.place == UiPlace.BOTH) TOP_OF_BOTH else ALL_ITEMS, layout.size, chrome, actions)
+                }
                 Row(
-                    Modifier.fillMaxSize().padding(horizontal = marginX.dp, vertical = marginY.dp),
+                    Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (layout.hasPanels) {
                         ProgressPanel(layout.panelWidth.dp, info, compact = layout.compactPanels) {
-                            if (result != null) PanelButton(stringResource(R.string.player_result)) { resultText = ""; resultCaptured = false; resultOpen = true }
+                            if (result != null) PanelButton(stringResource(R.string.player_result)) { openResult() }
+                            if (!session.loginMode) {
+                                Spacer(Modifier.height(8.dp))
+                                val label = stringResource(R.string.player_played)
+                                PanelButton(if (played) "✓ $label" else label, primary = played, onClick = onTogglePlayed)
+                            }
                         }
                     }
                     Box(Modifier.size(layout.webWidth.dp, layout.webHeight.dp)) {
@@ -279,37 +292,27 @@ fun PlayerScreen(
                         }
                     }
                     if (layout.hasPanels) {
-                        IdentityPanel(layout.panelWidth.dp, session.title, formatElapsed((now - startedAt) / 1000), compact = layout.compactPanels)
+                        IdentityPanel(
+                            layout.panelWidth.dp, session.title, chrome.elapsed, compact = layout.compactPanels,
+                            onMenu = actions.onMenu, onBack = onClose, zoom = chrome.zoom, onZoom = quickZoom,
+                        )
                     }
+                }
+                if (layout.bottomBar > 0f) {
+                    PlayerBar(if (layout.place == UiPlace.BOTH) BOTTOM_OF_BOTH else ALL_ITEMS, layout.size, chrome, actions)
+                }
                 }
             }
 
-            // The top edge is a handle: a tap there brings the strip back. (The rest of the screen is the game's.)
-            Box(
-                Modifier.align(Alignment.TopCenter).fillMaxWidth().height(36.dp)
-                    .pointerInput(Unit) { detectTapGestures { stripTick++ } },
-            )
-
-            AnimatedVisibility(
-                visible = stripVisible && !sheetOpen,
-                modifier = Modifier.align(Alignment.TopCenter),
-                enter = enter, exit = exit,
-            ) {
-                ControlStrip(
-                    title = session.title,
-                    showPlayed = !session.loginMode,
-                    played = played,
-                    onBack = onClose,
-                    onTogglePlayed = { onTogglePlayed(); stripTick++ },
-                    onDisplay = { sheetOpen = true },
-                    onResult = if (result != null) ({ resultText = ""; resultCaptured = false; resultOpen = true }) else null,
-                    zoom = if (profile.mode != DisplayMode.NATIVE) profile.zoom else null,
-                    onZoom = quickZoom,
-                )
+            // The minimal UI is one button; it floats over the game's corner and is never taken away.
+            if (layout.place == UiPlace.MINIMAL) {
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    FloatingMenuButton(actions.onMenu, Modifier.align(Alignment.TopEnd).padding(12.dp))
+                }
             }
 
             app.couch.alhasapa.dnd.DndChipHost(
-                Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
+                Modifier.align(Alignment.TopCenter).padding(top = (layout.topBar + 12f).dp),
                 dndSignals ?: app.couch.alhasapa.dnd.DndSignals.real(androidx.compose.ui.platform.LocalContext.current),
             )
 
@@ -334,6 +337,11 @@ fun PlayerScreen(
                             draft = null; justSaved = false
                         },
                         onClose = { sheetOpen = false },
+                        onBack = { sheetOpen = false; onClose() },
+                        onResult = if (result != null) ({ sheetOpen = false; openResult() }) else null,
+                        played = played,
+                        showPlayed = !session.loginMode,
+                        onTogglePlayed = onTogglePlayed,
                     )
                 }
             }
@@ -366,59 +374,6 @@ fun PlayerScreen(
                 onClose = onClose,
             )
         }
-    }
-}
-
-@Composable
-private fun ControlStrip(
-    title: String, showPlayed: Boolean, played: Boolean, onBack: () -> Unit, onTogglePlayed: () -> Unit, onDisplay: () -> Unit,
-    onResult: (() -> Unit)?, zoom: Int?, onZoom: (Int) -> Unit,
-) {
-    // The phone is always sideways here (900+ dp), where everything fits; on a narrow window the zoom buttons give way.
-    val roomy = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width / androidx.compose.ui.platform.LocalDensity.current.density >= 600f
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.displayCutout)
-            .background(Palette.Ink.copy(alpha = 0.92f))
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        StripButton(stringResource(R.string.player_back), onClick = onBack)
-        StripButton("⚙ " + stringResource(R.string.player_display), onClick = onDisplay)
-        if (zoom != null && roomy) {
-            // Quick zoom, always one tap away: the whole point of the app is a game big enough to see from the couch.
-            StripButton("−", onClick = { onZoom(-1) }, description = stringResource(R.string.display_zoom_out))
-            Text(stringResource(R.string.display_zoom_value, zoom), color = Palette.Cream, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            StripButton("+", onClick = { onZoom(+1) }, description = stringResource(R.string.display_zoom_in))
-        }
-        Text(
-            title, color = Palette.Cream, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1,
-        )
-        if (onResult != null) StripButton(stringResource(R.string.player_result), onClick = onResult)
-        if (showPlayed) {
-            val label = stringResource(R.string.player_played)
-            StripButton(if (played) "✓ $label" else label, onClick = onTogglePlayed, highlighted = played)
-        }
-    }
-}
-
-@Composable
-private fun StripButton(label: String, onClick: () -> Unit, highlighted: Boolean = false, description: String = label) {
-    Box(
-        Modifier
-            .heightIn(min = 48.dp)
-            .widthIn(min = 48.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (highlighted) Palette.Cream else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp)
-            .semantics { role = Role.Button; contentDescription = description },
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(label, color = if (highlighted) Palette.Ink else Palette.Cream, fontSize = 20.sp, fontWeight = FontWeight.Medium)
     }
 }
 

@@ -11,6 +11,33 @@ enum class DisplayMode(val id: String) {
     }
 }
 
+/** Where the always-visible couch UI (menu, game, clock, evening so far, buttons) sits. */
+enum class UiPlace(val id: String) {
+    /** Two panels beside a phone-shaped game (portrait-fit only). */
+    SIDES("sides"),
+    TOP("top"),
+    BOTTOM("bottom"),
+
+    /** The game and clock on a top bar, the evening and the buttons on a bottom bar. */
+    BOTH("both"),
+
+    /** Only the menu button, floating in a corner: the most room for the game, and still never without a way in. */
+    MINIMAL("minimal");
+
+    companion object {
+        fun of(id: String?): UiPlace? = entries.firstOrNull { it.id == id }
+    }
+}
+
+/** How much room the couch UI takes: small bars are 48 dp tall (the touch minimum), large ones 76 dp. */
+enum class UiSize(val id: String, val barDp: Float) {
+    SMALL("s", 48f), MEDIUM("m", 60f), LARGE("l", 76f);
+
+    companion object {
+        fun of(id: String?): UiSize? = entries.firstOrNull { it.id == id }
+    }
+}
+
 /**
  * How one site is shown. The virtual viewport (vw x vh, in CSS px) is what the page believes the screen is: 430 x 800 is a
  * phone held upright, 1280 is a desktop window. zoom is a percentage of that (more zoom = a smaller virtual viewport) up to
@@ -29,15 +56,29 @@ data class DisplayProfile(
     val vh: Int = 800,
     /** CSS injected at document start to hide banners and the like. */
     val css: String = "",
-    /** The couch panels beside a phone-shaped game (the evening so far, the clock). Off = the game alone. */
-    val panels: Boolean = true,
+    /** Where the always-visible UI sits; null = by mode (panels beside a phone-shaped game, a top bar otherwise). */
+    val ui: UiPlace? = null,
+    /** How big it is; null = by placement (medium for panels, small for bars, which cost the game height). */
+    val uiSize: UiSize? = null,
     /** Where the view is centred on the page when zoomed in past what the page can re-fit (0..1 across and down). */
     val panX: Double = 0.5,
     val panY: Double = 0.5,
 ) {
+    /** The placement actually used: panels only make sense beside a phone-shaped game, anything else gets a top bar. */
+    val place: UiPlace
+        get() = when (val u = ui) {
+            null, UiPlace.SIDES -> if (mode == DisplayMode.PORTRAIT_FIT) UiPlace.SIDES else UiPlace.TOP
+            else -> u
+        }
+
+    val size: UiSize get() = uiSize ?: if (place == UiPlace.SIDES) UiSize.MEDIUM else UiSize.SMALL
+
     fun toJson(): JSONObject = JSONObject().put("mode", mode.id).put("zoom", zoom).put("injectCss", injectCss)
         .put("safeArea", safeArea).put("dark", dark).put("vw", vw).put("vh", vh)
-        .put("panels", panels).put("panX", panX).put("panY", panY)
+        .put("panX", panX).put("panY", panY).apply {
+            ui?.let { put("ui", it.id) }
+            uiSize?.let { put("uiSize", it.id) }
+        }
 
     /** This profile with the fields present in [o] replaced (what a saved override or a profile entry says). */
     fun overlay(o: JSONObject): DisplayProfile = copy(
@@ -49,7 +90,10 @@ data class DisplayProfile(
         vw = if (o.has("vw")) o.optInt("vw", vw).coerceIn(200, 3000) else vw,
         vh = if (o.has("vh")) o.optInt("vh", vh).coerceIn(200, 3000) else vh,
         css = if (o.has("css")) o.optString("css") else css,
-        panels = if (o.has("panels")) o.optBoolean("panels", panels) else panels,
+        // "panels": false was how 1.0.2 turned the panels off; it means the minimal UI now.
+        ui = if (o.has("ui")) UiPlace.of(o.optString("ui")) ?: ui
+        else if (o.has("panels") && !o.optBoolean("panels", true)) UiPlace.MINIMAL else ui,
+        uiSize = if (o.has("uiSize")) UiSize.of(o.optString("uiSize")) ?: uiSize else uiSize,
         panX = if (o.has("panX")) o.optDouble("panX", panX).coerceIn(0.0, 1.0) else panX,
         panY = if (o.has("panY")) o.optDouble("panY", panY).coerceIn(0.0, 1.0) else panY,
     )

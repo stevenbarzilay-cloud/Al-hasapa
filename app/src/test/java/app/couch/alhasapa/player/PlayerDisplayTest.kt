@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -18,6 +19,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.display.ScaledFrame
+import app.couch.alhasapa.display.UiSize
 import java.time.LocalDate
 import org.json.JSONObject
 import org.junit.After
@@ -77,10 +79,10 @@ class PlayerDisplayTest {
     }
 
     @Test
-    fun aSiteShownAsItIsHasNoPanels() {
+    fun aSiteShownAsItIsHasNoPanelsBeside_ItButItsBarIsThere() {
         launch("krillion")
         rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()
-        rule.onNodeWithText("0 נקודות ספה").assertDoesNotExist()
+        menu().assertIsDisplayed()
     }
 
     @Test
@@ -88,12 +90,13 @@ class PlayerDisplayTest {
         app.repo.update { it.put("displays", JSONObject().put("nytimes.com/games/wordle", JSONObject().put("mode", "native"))) }
         launch("wordle")
         rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()
+        menu().assertIsDisplayed()
     }
 
     @Test
     fun theTuningSheetChangesTheViewLiveAndOnlyKeepsWhatIsSaved() {
         launch("wordle")
-        rule.onNodeWithText("⚙ תצוגה").performClick()
+        rule.onNode(hasContentDescription("תפריט")).performClick()
         rule.onNodeWithText("רגיל").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()                  // live: the panels went away at once
@@ -113,12 +116,12 @@ class PlayerDisplayTest {
     @Test
     fun zoomStepsAndIsKeptWithinItsRange() {
         launch("wordle")
-        rule.onNodeWithText("⚙ תצוגה").performClick()
-        rule.onAllNodesWithText("100%").onLast().assertIsDisplayed()
-        rule.onAllNodesWithText("+").onLast().performClick()
-        rule.onAllNodesWithText("110%").onLast().assertIsDisplayed()
-        rule.onAllNodesWithText("−").onLast().performClick(); rule.onAllNodesWithText("−").onLast().performClick()
-        rule.onAllNodesWithText("90%").onLast().assertIsDisplayed()
+        rule.onNode(hasContentDescription("תפריט")).performClick()
+        rule.onAllNodesWithText("100%").onLast().performScrollTo().assertIsDisplayed()
+        rule.onAllNodesWithText("+").onLast().performScrollTo().performClick()
+        rule.onAllNodesWithText("110%").onLast().performScrollTo().assertIsDisplayed()
+        rule.onAllNodesWithText("−").onLast().performScrollTo().performClick(); rule.onAllNodesWithText("−").onLast().performScrollTo().performClick()
+        rule.onAllNodesWithText("90%").onLast().performScrollTo().assertIsDisplayed()
     }
 
     private fun frameOf(activity: PlayerActivity): ScaledFrame? {
@@ -153,8 +156,8 @@ class PlayerDisplayTest {
     @Test
     fun zoomChangesTheVirtualWidthLive() {
         launch("wordle")
-        rule.onNodeWithText("⚙ תצוגה").performClick()
-        rule.onAllNodesWithText("+").onLast().performClick()
+        rule.onNode(hasContentDescription("תפריט")).performClick()
+        rule.onAllNodesWithText("+").onLast().performScrollTo().performClick()
         rule.waitForIdle()
         scenario!!.onActivity { a -> assertEquals("430 / 1.1", 390, frameOf(a)!!.virtualWidthDp) }
     }
@@ -187,9 +190,9 @@ class PlayerDisplayTest {
             assertEquals("the page is re-fit only as far as 140%", 307, f.virtualWidthDp)
             assertEquals(200f / 140f, f.magnify, 0.0001f)
         }
-        rule.onNodeWithText("⚙ תצוגה").performClick()
-        rule.onNode(hasContentDescription("למעלה")).assertExists()
-        rule.onNode(hasContentDescription("ימינה")).performClick()
+        rule.onNode(hasContentDescription("תפריט")).performClick()
+        rule.onNode(hasContentDescription("הזזה למעלה")).assertExists()
+        rule.onNode(hasContentDescription("הזזה ימינה")).performClick()
         rule.waitForIdle()
         assertTrue("the view moved and the move is part of the profile", app.repo.snapshot().let { true })
     }
@@ -197,29 +200,69 @@ class PlayerDisplayTest {
     @Test
     fun noArrowsWhileThePageIsOnlyRefit() {
         launch("wordle")
-        rule.onNodeWithText("⚙ תצוגה").performClick()
-        rule.onNode(hasContentDescription("למעלה")).assertDoesNotExist()
+        rule.onNode(hasContentDescription("תפריט")).performClick()
+        rule.onNode(hasContentDescription("הזזה למעלה")).assertDoesNotExist()
+    }
+
+    private fun menu() = rule.onNode(hasContentDescription("תפריט"))
+
+    @Test
+    fun everyKindOfScreenAlwaysHasTheMenuButton() {
+        for (game in listOf("wordle", "krillion", "crossword", "queens")) {
+            launch(game, who = if (game == "queens") "a" else null)
+            menu().assertIsDisplayed()
+            scenario!!.close()
+        }
+        scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.loginIntent(context, "hz", "הארץ", ProfileNames.GAMES)); rule.waitForIdle()
+        menu().assertIsDisplayed()
     }
 
     @Test
-    fun thePanelsCanBeTurnedOffFromTheSheetAndBackOn() {
+    fun theUiCanBeMovedToABarThenShrunkToJustAButtonAndTheMenuIsNeverLost() {
         launch("wordle")
-        rule.onNodeWithText("⚙ תצוגה").performClick()
-        rule.onNodeWithText("על הספה שלנו").assertIsDisplayed()
-        rule.onNodeWithText("פאנלים בצדדים").performScrollTo().performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()
-        rule.onNodeWithText("לשמור לאתר הזה").performScrollTo().performClick()
-        rule.waitForIdle()
-        assertFalse(app.repo.snapshot().getJSONObject("displays").getJSONObject("nytimes.com/games/wordle").getBoolean("panels"))
+        rule.onNodeWithText("על הספה שלנו").assertIsDisplayed()                  // panels first
+        menu().performClick()
+        rule.onNodeWithText("למעלה").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()                 // the panels gave way to a bar
+        menu().assertIsDisplayed()
+        rule.onNodeWithText("רק כפתור").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithText("0 נקודות ספה").assertDoesNotExist()
+        menu().assertIsDisplayed()                                              // the floating button is all that is left, and it is there
+        rule.onNodeWithText("לשמור לאתר הזה").performClick(); rule.waitForIdle()
+        assertEquals("minimal", app.repo.snapshot().getJSONObject("displays").getJSONObject("nytimes.com/games/wordle").getString("ui"))
+    }
+
+    @Test
+    fun theTopAndBottomUiSplitsTheItemsBetweenTheTwoBars() {
+        app.repo.update { it.put("displays", JSONObject().put("nytimes.com/games/wordle", JSONObject().put("ui", "both").put("uiSize", "m"))) }
+        launch("wordle")
+        menu().assertIsDisplayed()
+        rule.onNode(hasContentDescription("חזרה")).assertIsDisplayed()           // top bar: menu, back, title, clock
+        rule.onAllNodesWithText("שיחקנו").onFirst().assertIsDisplayed()         // bottom bar: the evening and the buttons
+        rule.onNodeWithText("0 נקודות ספה").assertIsDisplayed()
+    }
+
+    @Test
+    fun theMenuHoldsTheQuickActionsToo() {
+        launch("wordle")
+        menu().performClick()
+        rule.onNodeWithText("תפריט והגדרות").assertIsDisplayed()
+        rule.onAllNodesWithText("שיחקנו").onLast().performScrollTo().performClick(); rule.waitForIdle()
+        assertNotNull(CouchState.entry(app.repo.snapshot(), CouchState.dayKey(LocalDate.now()), "wordle"))
+    }
+
+    @Test
+    fun largeBarsAreTallerAndSmallOnesAreTheTouchMinimum() {
+        assertEquals(48f, UiSize.SMALL.barDp, 0f)
+        assertTrue(UiSize.LARGE.barDp > UiSize.MEDIUM.barDp)
     }
 
     @Test
     fun theTvMarginCanBeChosenAndKept() {
         launch("wordle")
-        rule.onNodeWithText("⚙ תצוגה").performClick()
+        rule.onNode(hasContentDescription("תפריט")).performClick()
         rule.onNodeWithText("0%").performScrollTo().performClick()
-        rule.onNodeWithText("לשמור לאתר הזה").performScrollTo().performClick()
+        rule.onNodeWithText("לשמור לאתר הזה").performClick()
         rule.waitForIdle()
         assertEquals(0.0, app.repo.snapshot().getJSONObject("displays").getJSONObject("nytimes.com/games/wordle").getDouble("safeArea"), 0.0)
     }

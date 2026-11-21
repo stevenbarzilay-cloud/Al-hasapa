@@ -14,7 +14,7 @@ class DisplayLayoutTest {
 
     @Test
     fun nativeLeavesThePageAlone() {
-        val l = DisplayLayout.compute(DisplayProfile(), w, h)
+        val l = DisplayLayout.compute(DisplayProfile(ui = UiPlace.MINIMAL), w, h)
         assertEquals(w, l.webWidth, 0.01f); assertEquals(h, l.webHeight, 0.01f)
         assertNull(l.virtualWidth); assertNull(l.scale); assertFalse(l.hasPanels)
     }
@@ -62,7 +62,7 @@ class DisplayLayoutTest {
 
     @Test
     fun wideTellsThePageItIsADesktopWindowAndFillsTheScreen() {
-        val l = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.WIDE, vw = 1280), w, h)
+        val l = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.WIDE, vw = 1280, ui = UiPlace.MINIMAL), w, h)
         assertEquals(w, l.webWidth, 0.01f); assertEquals(h, l.webHeight, 0.01f); assertFalse(l.hasPanels)
         assertEquals(1280, l.virtualWidth)
         assertEquals(w / 1280f, l.scale!!, 0.0001f)
@@ -112,10 +112,51 @@ class DisplayLayoutTest {
     }
 
     @Test
-    fun panelsCanBeSwitchedOffAndTheGameIsNoSmallerForIt() {
-        val on = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), w, h)
-        val off = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, panels = false), w, h)
-        assertTrue(on.hasPanels); assertFalse(off.hasPanels)
-        assertEquals("the game's size depends on the screen's height, not on the panels", on.webWidth, off.webWidth, 0.01f)
+    fun theUiPlacementDefaultsByModeAndNeverLeavesTheScreenWithoutOne() {
+        assertEquals(UiPlace.SIDES, DisplayProfile(mode = DisplayMode.PORTRAIT_FIT).place)
+        assertEquals("wide has no room at the sides: a bar", UiPlace.TOP, DisplayProfile(mode = DisplayMode.WIDE).place)
+        assertEquals(UiPlace.TOP, DisplayProfile().place)
+        assertEquals("sides is only for a phone-shaped game", UiPlace.TOP, DisplayProfile(mode = DisplayMode.WIDE, ui = UiPlace.SIDES).place)
+        assertEquals(UiSize.MEDIUM, DisplayProfile(mode = DisplayMode.PORTRAIT_FIT).size)
+        assertEquals("bars cost the game height, so they start small", UiSize.SMALL, DisplayProfile(mode = DisplayMode.WIDE).size)
+    }
+
+    @Test
+    fun barsTakeTheirHeightFromTheGameAndPanelsAndTheMinimalUiTakeNone() {
+        val plain = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.WIDE, ui = UiPlace.MINIMAL), w, h)
+        assertEquals(h, plain.webHeight, 0.01f); assertEquals(0f, plain.topBar, 0f); assertEquals(UiPlace.MINIMAL, plain.place)
+        val top = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.WIDE), w, h)
+        assertEquals(48f, top.topBar, 0f); assertEquals(h - 48f, top.webHeight, 0.01f); assertEquals(0f, top.bottomBar, 0f)
+        val bottom = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.WIDE, ui = UiPlace.BOTTOM, uiSize = UiSize.LARGE), w, h)
+        assertEquals(76f, bottom.bottomBar, 0f); assertEquals(h - 76f, bottom.webHeight, 0.01f)
+        val both = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.WIDE, ui = UiPlace.BOTH, uiSize = UiSize.MEDIUM), w, h)
+        assertEquals(h - 120f, both.webHeight, 0.01f)
+        assertEquals("wide keeps its width-bound scale, so the page just sees a little less height", top.scale, plain.scale)
+        assertTrue(top.virtualHeight!! < plain.virtualHeight!!)
+    }
+
+    @Test
+    fun aPhoneShapedGameWithBarsIsShorterAndHasNoPanels() {
+        val sides = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), w, h)
+        val bar = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, ui = UiPlace.TOP), w, h)
+        assertTrue(sides.hasPanels); assertFalse(bar.hasPanels)
+        assertEquals(h - 48f, bar.webHeight, 0.01f)
+        assertTrue("the bar costs the game some size", bar.webWidth < sides.webWidth)
+        val minimal = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, ui = UiPlace.MINIMAL), w, h)
+        assertFalse(minimal.hasPanels); assertEquals("no size lost", sides.webWidth, minimal.webWidth, 0.01f)
+    }
+
+    @Test
+    fun panelsThatDoNotFitBecomeATopBarInsteadOfNothing() {
+        val tight = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), 400f, 390f)
+        assertFalse(tight.hasPanels)
+        assertEquals(UiPlace.TOP, tight.place); assertEquals(48f, tight.topBar, 0f)
+    }
+
+    @Test
+    fun smallUiMeansCompactPanels() {
+        val l = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, uiSize = UiSize.SMALL), w, h)
+        assertTrue(l.hasPanels); assertTrue(l.compactPanels)
+        assertFalse(DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, uiSize = UiSize.LARGE), w, h).compactPanels)
     }
 }

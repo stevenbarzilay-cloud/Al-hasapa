@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.compose.ui.test.SemanticsNodeInteractionCollection
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -64,9 +65,9 @@ class AccessibilityAuditTest {
     fun thePlayerStripPanelsAndSheets() {
         scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.gameIntent(context, "wordle", null)); rule.waitForIdle()
         audit("player strip and panels")
-        rule.onNodeWithText("⚙ תצוגה").performClick(); rule.waitForIdle()
+        rule.onNode(hasContentDescription("תפריט")).performClick(); rule.waitForIdle()
         audit("tuning sheet")
-        rule.onNodeWithText("סגירה").performScrollTo().performClick(); rule.waitForIdle()
+        rule.onNodeWithText("סגירה").performClick(); rule.waitForIdle()
         rule.onAllNodesWithText("תוצאה").onFirst().performClick(); rule.waitForIdle()
         audit("result sheet (together)")
     }
@@ -75,8 +76,31 @@ class AccessibilityAuditTest {
     fun theMagnifiedViewWithItsArrows() {
         (context as CouchApp).repo.update { it.put("displays", org.json.JSONObject().put("nytimes.com/games/wordle", org.json.JSONObject().put("zoom", 220))) }
         scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.gameIntent(context, "wordle", null)); rule.waitForIdle()
-        rule.onNodeWithText("⚙ תצוגה").performClick(); rule.waitForIdle()
+        rule.onNode(hasContentDescription("תפריט")).performClick(); rule.waitForIdle()
         audit("tuning sheet with the pan arrows")
+    }
+
+    private fun launchWith(gameId: String, key: String, profile: org.json.JSONObject) {
+        (context as CouchApp).repo.update { it.put("displays", org.json.JSONObject().put(key, profile)) }
+        scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.gameIntent(context, gameId, null)); rule.waitForIdle()
+    }
+
+    @Test
+    fun everyPlacementAndSizeOfTheAlwaysVisibleUi() {
+        val key = "nytimes.com/games/wordle"
+        for ((name, p) in listOf(
+            "top bar, small" to org.json.JSONObject().put("ui", "top").put("uiSize", "s"),
+            "bottom bar, large" to org.json.JSONObject().put("ui", "bottom").put("uiSize", "l"),
+            "top and bottom, medium" to org.json.JSONObject().put("ui", "both").put("uiSize", "m"),
+            "just the menu button" to org.json.JSONObject().put("ui", "minimal"),
+            "wide mode with its bar" to org.json.JSONObject().put("mode", "wide"),
+            "panels, small (compact)" to org.json.JSONObject().put("ui", "sides").put("uiSize", "s"),
+            "panels, large" to org.json.JSONObject().put("ui", "sides").put("uiSize", "l"),
+        )) {
+            scenario?.close()
+            launchWith("wordle", key, p)
+            audit(name)
+        }
     }
 
     @Test

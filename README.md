@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.0.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.1.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -79,13 +79,23 @@ TV display (`app/src/main/assets/display_profiles.json`, `display/`):
 - **How big the game can be.** In portrait-fit the game's size is set by the screen's height (a 430 x 800 page on a 390 dp
   tall screen is about half size); the panels only use what is left over. So the panels never take size from the game, but
   they are still responsive: full above 280 dp each, essentials only (the game, the clock, the count, the result button) down to
-  150 dp, gone below that, and "פאנלים בצדדים" in the display sheet turns them off for a site. "רחב" uses the whole screen
+  150 dp, and below that the same UI becomes a top bar instead of vanishing (see "The always-visible UI"). "רחב" uses the whole screen
   (the page believes it is a 1280 px desktop window), which makes the content larger than portrait-fit when the site's
   desktop layout works at that height. The TV margin (0 / 2.5 / 5%) is in the sheet too: 0 gives about 5% more game.
 - **Safe area** keeps 2.5% free on every side for TVs that crop (the camera cut-out is respected on top of that).
-- Tuning is live: top edge, then "תצוגה" opens a sheet on the left; mode and zoom change the page as you press.
-  "לשמור לאתר הזה" stores it under host + path prefix (the longest match wins; stored in the state as `displays`,
-  survives backups); "לחזור לברירת המחדל" removes it again.
+- **The always-visible UI** (1.1.0). There is no menu that disappears: the couch UI is on screen the whole time, and the hamburger
+  (☰) is always one tap from every setting. Where it sits is a per-site choice, made in the menu: **beside the game** (two
+  panels, for the phone-shaped mode), **a bar on top**, **a bar at the bottom**, **top and bottom** (the game, the clock and the zoom
+  above; the evening, the two of us and the buttons below), or **just the button** (it floats in the corner and costs the
+  game nothing). It comes in three sizes: small bars are 48 dp (the touch minimum), medium 60, large 76 with bigger text (20 sp
+  at least everywhere). Bars drop items as the room gets short (the pieces first, then the points, the count, the zoom, the clock
+  and the title) and never drop the hamburger, the back button, "we played" or the result. By default a phone-shaped game gets
+  panels and everything else a small top bar; if the panels do not fit the screen the same UI becomes a top bar. Bars cost
+  the game some height, panels and the single button cost none.
+- The menu (☰) holds the quick actions (back, result, "we played") and the live tuning: mode, zoom, the arrows, where the UI
+  sits and how big it is, and the TV margin. Changes show on the page as you make them; "לשמור לאתר הזה" (pinned at the foot of
+  the menu) stores them under host + path prefix (the longest match wins; stored in the state as `displays`, survives backups);
+  "לחזור לברירת המחדל" removes it again. The "−" and "+" next to the clock save the zoom at once.
 - Three sites in the defaults are my guesses, not in the brief (the NYT Mini, the NYT puzzles section, and the
   LinkedIn games index): they are marked `_note` in the file.
 - `tools/display_check.cjs` runs the real injected script in Chromium (mobile emulation) against pages with and without
@@ -179,7 +189,7 @@ Do these in order; each one tells you which part to blame if it fails.
    Roni are different people. (If the accounts screen says the WebView is too old for two LinkedIn logins, update
    "Android System WebView" in Google Play.)
 4. **TV display.** Cast, open a Haaretz riddle (the chain): the whole board should fit, nothing cut at the sides, with a
-   panel on each side. Tap the top edge, "⚙ תצוגה" (it says what size the page thinks the screen is: 430×800 in the phone-shaped mode), try "רחב" and
+   panel on each side. Tap ☰ (it is always there; the menu says what size the page thinks the screen is: 430×800 in the phone-shaped mode), try "רחב" and
    "רגיל", change the zoom, "לשמור לאתר הזה", leave and come back: it is remembered.
    NYT Wordle should also be a phone-shaped box; the NYT crossword wide.
 5. **Results.** Finish a Wordle, press the game's own Share: the result sheet should open filled in. If it does not, press

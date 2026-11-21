@@ -4,6 +4,7 @@ import java.io.File
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,12 +75,22 @@ class DisplayProfilesTest {
     }
 
     @Test
-    fun panelsAndPanSurviveBeingSavedAndLoaded() {
-        val p = DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, zoom = 230, panels = false, panX = 0.3, panY = 0.8, safeArea = 0.0)
+    fun uiPlacementAndPanSurviveBeingSavedAndLoaded() {
+        val p = DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, zoom = 230, ui = UiPlace.BOTH, uiSize = UiSize.LARGE, panX = 0.3, panY = 0.8, safeArea = 0.0)
         val back = DisplayProfile().overlay(p.toJson())
         assertEquals(p, back)
         val clamped = DisplayProfile().overlay(JSONObject().put("panX", 7).put("panY", -2))
         assertEquals(1.0, clamped.panX, 0.0); assertEquals(0.0, clamped.panY, 0.0)
         assertEquals(300, DisplayProfile.MAX_ZOOM)
+    }
+
+    @Test
+    fun anAutomaticUiStaysAutomaticAndAnOldPanelsOffMeansTheMinimalUi() {
+        val auto = DisplayProfile().overlay(DisplayProfile(mode = DisplayMode.WIDE).toJson())
+        assertNull(auto.ui); assertNull(auto.uiSize)
+        assertEquals(UiPlace.MINIMAL, DisplayProfile().overlay(JSONObject().put("panels", false)).ui)
+        assertNull(DisplayProfile().overlay(JSONObject().put("panels", true)).ui)
+        assertEquals("an explicit choice beats the old flag", UiPlace.TOP, DisplayProfile().overlay(JSONObject().put("panels", false).put("ui", "top")).ui)
+        assertNull("an unknown placement is ignored", DisplayProfile().overlay(JSONObject().put("ui", "sideways")).ui)
     }
 }

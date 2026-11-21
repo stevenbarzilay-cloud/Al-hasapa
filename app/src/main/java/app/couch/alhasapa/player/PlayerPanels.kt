@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.R
 import app.couch.alhasapa.display.DisplayMode
 import app.couch.alhasapa.display.DisplayProfile
+import app.couch.alhasapa.display.UiPlace
+import app.couch.alhasapa.display.UiSize
 import app.couch.alhasapa.ui.PieceIcon
 import app.couch.alhasapa.ui.theme.Palette
 
@@ -53,8 +55,17 @@ private val PanelText = 20.sp
 
 /** The panel beside the game (the one on the right, where a Hebrew reader begins): whose couch, which game, how long. */
 @Composable
-fun IdentityPanel(width: Dp, title: String, elapsed: String, modifier: Modifier = Modifier, compact: Boolean = false) {
+fun IdentityPanel(
+    width: Dp, title: String, elapsed: String, modifier: Modifier = Modifier, compact: Boolean = false,
+    /** The menu is part of the panel, so the settings are never hidden: always one tap away. */
+    onMenu: () -> Unit = {}, onBack: (() -> Unit)? = null, zoom: Int? = null, onZoom: (Int) -> Unit = {},
+) {
     PanelFrame(width, modifier, compact) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            MenuButton(56.dp, onMenu)
+            if (onBack != null && !compact) BarButton(stringResource(R.string.player_back), 56.dp, 20, onBack)
+        }
+        Spacer(Modifier.height(8.dp))
         // Narrow panels keep what matters while playing (the game and the clock) and drop the decoration.
         if (!compact) {
             Image(
@@ -69,6 +80,10 @@ fun IdentityPanel(width: Dp, title: String, elapsed: String, modifier: Modifier 
         // Digits read left to right even in a Hebrew sentence, so the clock sits in its own left-to-right run.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
             Text(elapsed, fontSize = if (compact) 28.sp else 34.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = elapsed })
+        }
+        if (zoom != null) {
+            Spacer(Modifier.height(12.dp))
+            ZoomGroup(zoom, 56.dp, 20, onZoom)
         }
     }
 }
@@ -92,18 +107,18 @@ fun ProgressPanel(width: Dp, info: PlayerInfo, modifier: Modifier = Modifier, co
 
 /** The big button at the foot of the progress panel. */
 @Composable
-fun PanelButton(label: String, onClick: () -> Unit) {
+fun PanelButton(label: String, primary: Boolean = true, onClick: () -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 64.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(Palette.Ink)
+            .background(if (primary) Palette.Ink else Palette.Tint)
             .clickable(onClick = onClick)
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Cream)
+        Text(label, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if (primary) Palette.Cream else Palette.Ink)
     }
 }
 
@@ -148,8 +163,8 @@ private fun PanelFrame(width: Dp, modifier: Modifier, compact: Boolean, content:
 }
 
 /**
- * The live tuning sheet: changes show on the page as they are made. Nothing is kept until "save for this site", and then it is
- * kept for that site (host and path) only.
+ * The menu behind the hamburger: the quick actions (back, result, "we played") and the live tuning. Changes show on the page as they
+ * are made. Nothing is kept until "save for this site", and then it is kept for that site (host and path) only.
  */
 @Composable
 fun TuningSheet(
@@ -164,6 +179,11 @@ fun TuningSheet(
     modifier: Modifier = Modifier,
     /** The picture is magnified past what the page can re-fit, so the view can be moved. */
     magnified: Boolean = false,
+    onBack: () -> Unit = {},
+    onResult: (() -> Unit)? = null,
+    played: Boolean = false,
+    showPlayed: Boolean = false,
+    onTogglePlayed: () -> Unit = {},
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
@@ -174,10 +194,19 @@ fun TuningSheet(
                 .clip(RoundedCornerShape(20.dp))
                 .background(Palette.Cream)
                 .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(20.dp))
-                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+          // The settings scroll; the three buttons that act on them stay pinned below, so saving is never a scroll away.
+          Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.menu_title), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SheetButton(stringResource(R.string.player_back), null, Modifier.weight(1f), onClick = onBack)
+                if (onResult != null) SheetButton(stringResource(R.string.player_result), null, Modifier.weight(1f), onClick = onResult)
+            }
+            if (showPlayed) {
+                val label = stringResource(R.string.player_played)
+                SheetButton(if (played) "✓ $label" else label, null, Modifier.fillMaxWidth(), primary = played, onClick = onTogglePlayed)
+            }
             Text(stringResource(R.string.display_mode), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ModeChip(stringResource(R.string.display_mode_native), profile.mode == DisplayMode.NATIVE, Modifier.weight(1f)) { onChange(profile.copy(mode = DisplayMode.NATIVE)) }
@@ -196,17 +225,24 @@ fun TuningSheet(
                     Text(stringResource(R.string.display_pan_hint), fontSize = PanelText, color = Palette.Ink2)
                     PanPad { dx, dy -> onChange(profile.copy(panX = (profile.panX + dx).coerceIn(0.0, 1.0), panY = (profile.panY + dy).coerceIn(0.0, 1.0))) }
                 }
-                if (profile.mode == DisplayMode.PORTRAIT_FIT) {
-                    Row(
-                        Modifier.fillMaxWidth().heightIn(min = 56.dp)
-                            .toggleable(value = profile.panels, role = Role.Switch, onValueChange = { onChange(profile.copy(panels = it)) }),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(stringResource(R.string.display_panels), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
-                        androidx.compose.material3.Switch(checked = profile.panels, onCheckedChange = null)
-                    }
-                }
+            }
+            // The always-visible UI: where it sits and how much room it takes. It can be made small or just a button, never removed.
+            Text(stringResource(R.string.menu_ui_place), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
+            val place = profile.place
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (profile.mode == DisplayMode.PORTRAIT_FIT) ModeChip(stringResource(R.string.place_sides), place == UiPlace.SIDES, Modifier.weight(1f)) { onChange(profile.copy(ui = UiPlace.SIDES)) }
+                ModeChip(stringResource(R.string.place_top), place == UiPlace.TOP, Modifier.weight(1f)) { onChange(profile.copy(ui = UiPlace.TOP)) }
+                ModeChip(stringResource(R.string.place_bottom), place == UiPlace.BOTTOM, Modifier.weight(1f)) { onChange(profile.copy(ui = UiPlace.BOTTOM)) }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ModeChip(stringResource(R.string.place_both), place == UiPlace.BOTH, Modifier.weight(1f)) { onChange(profile.copy(ui = UiPlace.BOTH)) }
+                ModeChip(stringResource(R.string.place_minimal), place == UiPlace.MINIMAL, Modifier.weight(1f)) { onChange(profile.copy(ui = UiPlace.MINIMAL)) }
+            }
+            Text(stringResource(R.string.menu_ui_size), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                ModeChip(stringResource(R.string.size_small), profile.size == UiSize.SMALL, Modifier.weight(1f)) { onChange(profile.copy(uiSize = UiSize.SMALL)) }
+                ModeChip(stringResource(R.string.size_medium), profile.size == UiSize.MEDIUM, Modifier.weight(1f)) { onChange(profile.copy(uiSize = UiSize.MEDIUM)) }
+                ModeChip(stringResource(R.string.size_large), profile.size == UiSize.LARGE, Modifier.weight(1f)) { onChange(profile.copy(uiSize = UiSize.LARGE)) }
             }
             Text(stringResource(R.string.display_margin), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -216,12 +252,16 @@ fun TuningSheet(
                 }
             }
             if (pageSees != null) Text(stringResource(R.string.display_page_sees, pageSees), fontSize = PanelText, color = Palette.Ink2)
-            SheetButton(
-                if (saved) "✓ " + stringResource(R.string.display_saved) else stringResource(R.string.display_save),
-                null, Modifier.fillMaxWidth(), primary = !saved, onClick = onSave,
-            )
-            SheetButton(stringResource(R.string.display_reset), null, Modifier.fillMaxWidth(), onClick = onReset)
-            SheetButton(stringResource(R.string.display_close), null, Modifier.fillMaxWidth(), onClick = onClose)
+          }
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SheetButton(
+                    if (saved) "✓ " + stringResource(R.string.display_saved) else stringResource(R.string.display_save),
+                    null, Modifier.weight(2f), primary = !saved, onClick = onSave,
+                )
+                SheetButton(stringResource(R.string.display_reset), null, Modifier.weight(1.4f), onClick = onReset)
+                SheetButton(stringResource(R.string.display_close), null, Modifier.weight(1f), onClick = onClose)
+            }
         }
     }
 }
