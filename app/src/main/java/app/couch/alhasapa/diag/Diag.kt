@@ -7,7 +7,7 @@ import android.util.Log
 
 /**
  * A tiny startup log that does not depend on Compose or on the WebView: every step is kept here, written to
- * Logcat (tag AlHasapaDiag) and mirrored on screen by [DiagOverlay]. When something is blank, this says why.
+ * Logcat (tag AlHasapaDiag) and mirrored on screen by [DiagOverlay] only when something is wrong. When something is blank, this says why.
  */
 object Diag {
     private const val TAG = "AlHasapaDiag"
@@ -25,11 +25,11 @@ object Diag {
     /** True while the in-app splash is on screen (so a "blank" check does not mistake the splash for the hub). */
     @Volatile var splashShowing: Boolean = false
 
-    /** True once the hub has been seen on screen (page ready and the window is not blank). The overlay then fades away. */
+    /** True once the hub has been seen on screen (page ready and the window is not blank). */
     @Volatile var hubVisible: Boolean = false
         private set
 
-    /** True once something is wrong (blank, error). The overlay then stays up. */
+    /** True once something is wrong (blank, error). Only then does the overlay appear. */
     @Volatile var problem: Boolean = false
         private set
 
@@ -41,6 +41,15 @@ object Diag {
         }
         Log.i(TAG, line)
         main.post { onChange?.invoke() }
+    }
+
+    /** Back to a clean slate (tests only; the log is process-wide state). */
+    internal fun reset() {
+        problem = false
+        hubVisible = false
+        splashShowing = false
+        overlayBottomPx = 0
+        synchronized(lines) { lines.clear() }
     }
 
     fun markHubVisible() { hubVisible = true; log("OK: hub is visible"); }

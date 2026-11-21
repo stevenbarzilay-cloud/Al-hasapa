@@ -20,24 +20,22 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * Plain Android view (no Compose, no WebView) laid over everything, so it can still be read when either of those
- * fails. Shown during startup of a debug build; it disappears a few seconds after the hub is confirmed visible and
- * stays up if anything went wrong.
+ * fails. It is INVISIBLE by default, so it never shows on the loading screen or over the hub; the log keeps being
+ * written (and mirrored to Logcat) either way, and the overlay appears only once a problem has been recorded.
  */
 class DiagOverlay private constructor(private val view: TextView) {
-    private val main = Handler(Looper.getMainLooper())
-    private var hideAt: Runnable? = null
-
     private fun refresh() {
-        view.text = Diag.snapshot()
-        view.post { Diag.overlayBottomPx = if (view.visibility == View.VISIBLE) view.bottom else 0 }
-        if (Diag.hubVisible && !Diag.problem && hideAt == null) {
-            hideAt = Runnable { view.visibility = View.GONE; Diag.overlayBottomPx = 0 }.also { main.postDelayed(it, HIDE_AFTER_MS) }
+        if (!Diag.problem) {
+            view.visibility = View.GONE
+            Diag.overlayBottomPx = 0
+            return
         }
+        view.text = Diag.snapshot()
+        view.visibility = View.VISIBLE
+        view.post { Diag.overlayBottomPx = view.bottom }
     }
 
     companion object {
-        private const val HIDE_AFTER_MS = 6_000L
-
         fun install(activity: Activity): DiagOverlay {
             val tv = TextView(activity).apply {
                 setTextColor(Color.parseColor("#F2EBDD"))
@@ -50,6 +48,7 @@ class DiagOverlay private constructor(private val view: TextView) {
                 isClickable = false
                 isFocusable = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                visibility = View.GONE // hidden until a problem is recorded
             }
             ViewCompat.setOnApplyWindowInsetsListener(tv) { v, insets ->
                 val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())

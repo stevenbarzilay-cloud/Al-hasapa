@@ -85,6 +85,18 @@ img{max-width:100%;height:auto;display:block}
 .dbg{position:fixed;inset-inline-start:6px;top:6px;z-index:70;background:var(--ink);color:var(--cream);font:11px/1.35 ui-monospace,monospace;padding:3px 7px;border-radius:6px;opacity:.9;pointer-events:none;direction:ltr;max-width:calc(100vw - 12px)}
 .dbg[hidden]{display:none}
 .reduce-motion *,.reduce-motion *::before,.reduce-motion *::after{animation:none!important;transition:none!important}
+/* ---------- illustrations follow the pieces' colours ----------
+   Each picture is the untouched original plus two layers, one per colour family in the art (the red family is Steve's
+   shirt, mug and cushions; the pink family is Roni's shirt and the couch). A layer is a flat colour, cut out by a soft
+   mask of its family and blended with mix-blend-mode:color: new hue and saturation, but every pixel keeps its own
+   brightness, so shading and linework survive and skin, ink, hair and cream are never touched. */
+.art{position:relative;display:block;isolation:isolate}
+.art img{display:block;width:100%;height:auto}
+.art .tint{position:absolute;inset:0;pointer-events:none;opacity:0;mix-blend-mode:color;-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.art .lift{position:absolute;inset:0;pointer-events:none;opacity:0;background-size:100% 100%;background-repeat:no-repeat;filter:brightness(var(--art-lift,1));-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat}
+.art .tr{background:var(--art-steve,#D94E38)}
+.art .tp{background:var(--art-roni,#E8A5B5)}
+:root.tint-r .art .tr,:root.tint-r .art .lift,:root.tint-p .art .tp{opacity:1}
 /* ---------- our pieces: shape and colour per person ---------- */
 .who-card{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--line)}
 .who-card:first-of-type{border-top:0;padding-top:0}
@@ -213,7 +225,7 @@ img{max-width:100%;height:auto;display:block}
 .row:hover .rm,.rm:focus-visible{opacity:1}
 .rm:hover{background:var(--tint);color:var(--ink)}
 .coda{display:flex;flex-direction:column;align-items:center;gap:6px;padding:40px 0 30px;text-align:center}
-.coda img{width:min(520px,90%)}
+.coda .art{width:min(520px,90%)}
 .coda b{font-weight:600}
 
 /* ---------- under the cushions ---------- */
@@ -226,7 +238,7 @@ img{max-width:100%;height:auto;display:block}
 .lists li svg{width:20px;height:20px;flex:none}
 .lists li b{flex:1;font-weight:500}
 .empty-ill{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;padding:10px 0}
-.empty-ill img{width:min(460px,100%)}
+.empty-ill .art{width:min(460px,100%)}
 
 /* ---------- the dent (stats) ---------- */
 .stats{padding:clamp(18px,2.4vw,28px) 0 40px;display:grid;grid-template-columns:repeat(12,1fr);gap:28px 40px}
@@ -542,16 +554,27 @@ const piece=(who,c="pc")=>{const p=piecesOf()[who];return svgPiece(shapeOf(p.sha
 const pieceName=who=>{const p=piecesOf()[who];return "ה"+shapeOf(p.shape).n+" "+colorOf(p.color).def};
 /* Steve's colour takes the "red" role of the interface (the count, the stamp, the one hard shadow);
    Roni's takes the "pink" role (warm surfaces). Pick a colour and the whole app follows. */
-function applyTheme(){const p=piecesOf(),r=document.documentElement.style;r.setProperty("--red",colorOf(p.a.color).accent);r.setProperty("--pink",colorOf(p.b.color).soft)}
+const lum=h=>{const c=[1,3,5].map(i=>parseInt(h.slice(i,i+2),16)/255).map(v=>v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4));return .2126*c[0]+.7152*c[1]+.0722*c[2]};
+const RED_LUM=lum("#D94E38");
+/* css brightness() works on gamma-encoded values, so a luminance ratio R needs R^(1/2.2); never darken, never blow out */
+const artLift=base=>Math.min(1.6,Math.max(1,Math.pow(lum(base)/RED_LUM,1/2.2)));
+function applyTheme(){const p=piecesOf(),root=document.documentElement,r=root.style,ca=colorOf(p.a.color),cb=colorOf(p.b.color);
+  r.setProperty("--red",ca.accent);r.setProperty("--pink",cb.soft);
+  /* the pictures: Steve's family takes his piece colour, Roni's family takes her soft tone (it is a light surface);
+     the original art is red and pink, so those need no layer at all and render exactly as drawn */
+  r.setProperty("--art-steve",ca.base);r.setProperty("--art-lift",artLift(ca.base).toFixed(3));r.setProperty("--art-roni",cb.soft);
+  root.classList.toggle("tint-r",ca.id!=="red");root.classList.toggle("tint-p",cb.id!=="pink")}
 const pcS=(c="pc")=>piece("a",c);
 const pcR=(c="pc")=>piece("b",c);
 const PIECE={get s(){return pcS()},get r(){return pcR()}};
 const bothHTML=()=>`<span class="both" aria-hidden="true">${pcS()}${pcR()}</span>`;
 const CHECK='<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5 5.6 10.4 11.5 3.8" fill="none" stroke="#F2EBDD" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const art=(name,cls,w,h,alt)=>{const m=n=>`style="-webkit-mask-image:url(img/${name}-${n}.webp);mask-image:url(img/${name}-${n}.webp)"`;
+  return `<span class="art ${cls}"><img src="img/${name}.webp" width="${w}" height="${h}" alt="${alt}"><i class="lift" style="background-image:url(img/${name}.webp);-webkit-mask-image:url(img/${name}-r.webp);mask-image:url(img/${name}-r.webp)"></i><i class="tint tr" ${m("r")}></i><i class="tint tp" ${m("p")}></i></span>`};
 const IMG={
-  couple:'<img class="ill-couple" src="img/couple.webp" width="1100" height="715" alt="סטיב ורוני על הספה הוורודה, משחקים בטאבלט, והחתול השחור ישן על המסעד">',
-  cats:'<img src="img/cats.webp" width="1100" height="547" alt="שלושה חתולים ישנים על הספה הוורודה, והשלט נעלם בין הכריות">',
-  board:'<img class="ill-board" src="img/board.webp" width="900" height="804" alt="סטיב ורוני על כריות, מזיזים עיגול אדום ומשולש ורוד על לוח">'
+  couple:art("couple","ill-couple",1100,715,"סטיב ורוני על הספה, משחקים בטאבלט, והחתול השחור ישן על המסעד"),
+  cats:art("cats","",1100,547,"שלושה חתולים ישנים על הספה, והשלט נעלם בין הכריות"),
+  board:art("board","ill-board",900,804,"סטיב ורוני על כריות, מזיזים כלים על לוח")
 };
 
 /* ================= scoring =================

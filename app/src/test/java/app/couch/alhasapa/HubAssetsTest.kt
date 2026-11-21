@@ -65,6 +65,24 @@ class HubAssetsTest {
     }
 
     @Test
+    fun everyIllustrationHasItsColourFamilyMasks() {
+        // The pieces' colours recolour the artwork through two masks per picture (see tools/make_illustration_masks.py).
+        for (n in listOf("couple", "cats", "board")) {
+            for (f in listOf("$n.webp", "$n-r.webp", "$n-p.webp")) assertTrue("img/$f missing", File(hubDir, "img/$f").isFile)
+            assertTrue("hub no longer builds $n through art()", html.contains("art(\"$n\""))
+        }
+    }
+
+    @Test
+    fun theDefaultColoursLeaveTheArtworkUntouched() {
+        // The art is drawn in red and pink: with those colours the colour layers must stay switched off.
+        assertTrue(html.contains("classList.toggle(\"tint-r\",ca.id!==\"red\")"))
+        assertTrue(html.contains("classList.toggle(\"tint-p\",cb.id!==\"pink\")"))
+        val css = Regex("<style>(.*?)</style>", RegexOption.DOT_MATCHES_ALL).findAll(html).joinToString("\n") { it.groupValues[1] }
+        assertTrue(Regex("""\.art \.tint\{[^}]*opacity:0""").containsMatchIn(css))
+    }
+
+    @Test
     fun hubShipsItsPiecesCatalog() {
         assertTrue("pieces.json missing", File(hubDir, "pieces.json").isFile)
         assertTrue("hub no longer loads pieces.json", html.contains("fetch(\"pieces.json\")"))
