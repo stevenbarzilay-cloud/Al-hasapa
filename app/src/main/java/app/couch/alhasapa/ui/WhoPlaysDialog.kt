@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import app.couch.alhasapa.R
+import app.couch.alhasapa.tv.tvTarget
 import app.couch.alhasapa.data.PieceStyle
 import app.couch.alhasapa.ui.theme.Palette
 
@@ -76,7 +77,7 @@ private fun WhoButton(name: String, piece: PieceStyle, onClick: () -> Unit) {
             .clip(RoundedCornerShape(16.dp))
             .background(Palette.Card)
             .border(BorderStroke(2.dp, Palette.Ink), RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .padding(16.dp)
             .semantics { role = Role.Button; contentDescription = label },
         horizontalAlignment = Alignment.CenterHorizontally,

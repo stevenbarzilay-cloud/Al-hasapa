@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.R
+import app.couch.alhasapa.tv.tvTarget
 import app.couch.alhasapa.ui.theme.Palette
 import kotlinx.coroutines.delay
 
@@ -74,7 +75,7 @@ fun DndChipHost(modifier: Modifier = Modifier, signals: DndSignals = DndSignals.
                 Modifier
                     .heightIn(min = 56.dp)
                     .widthIn(min = 48.dp)
-                    .clickable { DndPrompt.openSettings(context); show = false }
+                    .tvTarget { DndPrompt.openSettings(context); show = false }
                     .padding(horizontal = 20.dp, vertical = 8.dp)
                     .clearAndSetSemantics { role = Role.Button; contentDescription = "$label. $hint"; onClick { DndPrompt.openSettings(context); show = false; true } },
                 contentAlignment = Alignment.Center,
@@ -85,7 +86,7 @@ fun DndChipHost(modifier: Modifier = Modifier, signals: DndSignals = DndSignals.
                 Modifier
                     .heightIn(min = 56.dp)
                     .widthIn(min = 56.dp)
-                    .clickable { show = false }
+                    .tvTarget { show = false }
                     .clearAndSetSemantics { role = Role.Button; contentDescription = close; onClick { show = false; true } },
                 contentAlignment = Alignment.Center,
             ) { Text("✕", fontSize = 22.sp, color = Palette.Ink2) }

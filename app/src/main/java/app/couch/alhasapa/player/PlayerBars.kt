@@ -35,12 +35,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.R
+import app.couch.alhasapa.tv.tvTarget
 import app.couch.alhasapa.display.UiSize
 import app.couch.alhasapa.ui.PieceIcon
 import app.couch.alhasapa.ui.theme.Palette
 
 /** What the always-visible UI shows. The bars drop items from the least important end as the room gets short. */
-enum class BarItem { MENU, BACK, TITLE, TIMER, PROGRESS, POINTS, PIECES, ZOOM, RESULT, PLAYED }
+enum class BarItem { MENU, BACK, TITLE, TIMER, PROGRESS, POINTS, PIECES, ZOOM, MODE, UI, RESULT, PLAYED }
 
 /** What the bars and panels display. */
 data class ChromeData(
@@ -51,6 +52,8 @@ data class ChromeData(
     val showPlayed: Boolean,
     /** The zoom in percent, or null where zoom does not apply (a page shown as it is). */
     val zoom: Int?,
+    /** The page is shown phone-shaped (otherwise wide), for the button that swaps them. */
+    val portrait: Boolean = true,
 )
 
 /** What they can do. [onResult] is null where there is no result to record (the sign-in screens). */
@@ -60,18 +63,23 @@ class ChromeActions(
     val onResult: (() -> Unit)?,
     val onTogglePlayed: () -> Unit,
     val onZoom: (direction: Int) -> Unit,
+    /** Swap between the phone-shaped and the wide view of the game. */
+    val onToggleMode: () -> Unit = {},
+    /** Move the always-visible UI to its next place (sides, top, bottom, both, a button). */
+    val onCycleUi: () -> Unit = {},
 )
 
 /** Items in order of how much a bar misses them, most important first (the menu is never dropped). */
 private val IMPORTANCE = listOf(
     BarItem.MENU, BarItem.BACK, BarItem.PLAYED, BarItem.RESULT, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM,
-    BarItem.PROGRESS, BarItem.POINTS, BarItem.PIECES,
+    BarItem.MODE, BarItem.UI, BarItem.PROGRESS, BarItem.POINTS, BarItem.PIECES,
 )
 
 /** About how wide each item is at the medium size, in dp. */
 private fun baseWidth(item: BarItem): Float = when (item) {
     BarItem.MENU -> 56f; BarItem.BACK -> 92f; BarItem.TITLE -> 110f; BarItem.TIMER -> 84f; BarItem.PROGRESS -> 104f
     BarItem.POINTS -> 150f; BarItem.PIECES -> 200f; BarItem.ZOOM -> 176f; BarItem.RESULT -> 100f; BarItem.PLAYED -> 124f
+    BarItem.MODE -> 112f; BarItem.UI -> 104f
 }
 
 private fun sizeFactor(size: UiSize) = when (size) { UiSize.SMALL -> 0.9f; UiSize.MEDIUM -> 1f; UiSize.LARGE -> 1.25f }
@@ -140,6 +148,11 @@ fun PlayerBar(
                         BarPerson(data.info.pieceB, data.info.nameB, data.info.who == "b", h, sp)
                     }
                     BarItem.ZOOM -> data.zoom?.let { ZoomGroup(it, h, sp, actions.onZoom) }
+                    BarItem.MODE -> if (data.zoom != null) {
+                        val d = stringResource(R.string.bar_mode_desc)
+                        BarButton(stringResource(if (data.portrait) R.string.bar_mode_portrait else R.string.bar_mode_wide), h, sp, actions.onToggleMode, description = d)
+                    }
+                    BarItem.UI -> BarButton(stringResource(R.string.bar_ui), h, sp, actions.onCycleUi, description = stringResource(R.string.bar_ui_desc))
                     BarItem.RESULT -> actions.onResult?.let { BarButton(stringResource(R.string.player_result), h, sp, it) }
                     BarItem.PLAYED -> if (data.showPlayed) {
                         val label = stringResource(R.string.player_played)
@@ -162,7 +175,7 @@ fun MenuButton(height: androidx.compose.ui.unit.Dp, onClick: () -> Unit, modifie
             .size(height)
             .clip(RoundedCornerShape(12.dp))
             .background(Palette.Ink)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { Text("☰", fontSize = 26.sp, color = Palette.Cream) }
@@ -178,7 +191,7 @@ fun FloatingMenuButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
             .clip(CircleShape)
             .background(Palette.Card.copy(alpha = 0.92f))
             .border(BorderStroke(2.dp, Palette.Ink), CircleShape)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { Text("☰", fontSize = 26.sp, color = Palette.Ink) }
@@ -192,7 +205,7 @@ fun BarButton(label: String, height: androidx.compose.ui.unit.Dp, sp: Int, onCli
             .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (highlighted) Palette.Ink else Palette.Tint)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .padding(horizontal = 14.dp)
             .semantics { role = Role.Button; contentDescription = description },
         contentAlignment = Alignment.Center,

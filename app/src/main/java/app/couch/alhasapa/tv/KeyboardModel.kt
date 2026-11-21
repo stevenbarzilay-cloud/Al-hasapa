@@ -28,29 +28,27 @@ object KbLayouts {
         if (self != KbLayout.ENGLISH) add(KbKey.Switch(KbLayout.ENGLISH, "ABC"))
         if (self != KbLayout.HEBREW) add(KbKey.Switch(KbLayout.HEBREW, "עב"))
         if (self != KbLayout.SYMBOLS) add(KbKey.Switch(KbLayout.SYMBOLS, "123"))
-        add(KbKey.Space); add(KbKey.Ch("-")); add(KbKey.Ch(".")); add(KbKey.Ch("@")); add(KbKey.Close)
+        add(KbKey.Space); add(KbKey.Ch("@")); add(KbKey.Ch("-")); add(KbKey.Ch("."))
     }
 
+    /** Four rows: the keyboard must not take much of the screen. Digits and symbols are one switch away. */
     fun rows(layout: KbLayout): List<List<KbKey>> = when (layout) {
         KbLayout.ENGLISH -> listOf(
-            chars("1234567890") + KbKey.Backspace,
-            chars("qwertyuiop"),
+            chars("qwertyuiop") + KbKey.Backspace,
             chars("asdfghjkl") + KbKey.Enter,
             listOf<KbKey>(KbKey.Shift) + chars("zxcvbnm") + KbKey.Ch(",") + KbKey.Ch("?"),
             tail(KbLayout.ENGLISH),
         )
         KbLayout.HEBREW -> listOf(
-            chars("1234567890") + KbKey.Backspace,
-            chars("קראטוןםפ"),
+            chars("קראטוןםפ") + KbKey.Backspace,
             chars("שדגכעיחלךף") + KbKey.Enter,
-            chars("זסבהנמצתץ") + KbKey.Ch("?"),
+            chars("זסבהנמצתץ") + KbKey.Ch(",") + KbKey.Ch("?"),
             tail(KbLayout.HEBREW),
         )
         KbLayout.SYMBOLS -> listOf(
             chars("1234567890") + KbKey.Backspace,
-            chars("!?:;'\"()/"),
-            chars("#\$%&*+=_<>") + KbKey.Enter,
-            chars("[]{}~^|\\`€"),
+            chars("!?:;'\"()/") + KbKey.Enter,
+            chars("#\$%&*+=_<>"),
             tail(KbLayout.SYMBOLS),
         )
     }
@@ -99,5 +97,5 @@ class KeyboardNav(private var rows: List<List<KbKey>> = KbLayouts.rows(KbLayout.
 
     fun moveTo(r: Int, c: Int) { row = r.coerceIn(0, rows.size - 1); col = c.coerceIn(0, rows[row].size - 1) }
 
-    fun reset() { row = 1; col = 0 }
+    fun reset() { row = 0; col = 0 }
 }

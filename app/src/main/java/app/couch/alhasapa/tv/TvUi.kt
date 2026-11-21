@@ -3,6 +3,8 @@ package app.couch.alhasapa.tv
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
@@ -14,12 +16,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -30,8 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -41,8 +45,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -54,101 +61,174 @@ import app.couch.alhasapa.ui.theme.Palette
 /** The TV controller of the screen being shown, or null on a phone. */
 val LocalTv = compositionLocalOf<TvController?> { null }
 
+/** Width of the strip at the left edge that holds the paw and keyboard buttons. */
+private val DockWidth = 72.dp
+
 /**
- * Wraps a screen for the TV: the content, the keyboard that slides up from the bottom (the content gives way to it, so the field
- * being typed into stays in view), the handle that pulls it up, and the cursor on top. On a phone it is just the content.
+ * Wraps a screen for the TV: a slim dock on the left edge (the paw button, which switches between moving a focus ring and the free
+ * paw, and the keyboard button), the content, the keyboard that slides up from the bottom (the content gives way to it a little, so
+ * what is typed into stays in view), a short message when the way of controlling things changes, and the paw itself in paw mode.
+ * On a phone it is just the content.
  */
 @Composable
 fun TvLayer(c: TvController, content: @Composable () -> Unit) {
     if (!c.enabled) { content(); return }
+    val appDirection = LocalLayoutDirection.current
     val still = animationsRemoved(LocalContext.current.contentResolver)
     val screenH = LocalWindowInfo.current.containerSize.height / LocalDensity.current.density
-    CompositionLocalProvider(LocalTv provides c) {
+    CompositionLocalProvider(LocalTv provides c, LocalLayoutDirection provides LayoutDirection.Ltr) {
         Box(Modifier.fillMaxSize().onSizeChanged { c.resize(it.width.toFloat(), it.height.toFloat()) }) {
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-                AnimatedVisibility(
-                    visible = c.keyboardOpen,
-                    enter = if (still) EnterTransition.None else slideInVertically { it },
-                    exit = if (still) ExitTransition.None else slideOutVertically { it },
-                ) {
-                    // Five rows of keys and the line that shows what was typed, about 45% of the screen's height.
-                    TvKeyboard(c, rowHeight = ((screenH * 0.45f - 72f) / 5f).coerceIn(44f, 76f).dp)
+            Row(Modifier.fillMaxSize()) {
+                TvDock(c)
+                Column(Modifier.weight(1f).fillMaxHeight()) {
+                    // The app's own screens are right to left, like on the phone.
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        CompositionLocalProvider(LocalLayoutDirection provides appDirection) { content() }
+                    }
+                    AnimatedVisibility(
+                        visible = c.keyboardOpen,
+                        enter = if (still) EnterTransition.None else slideInVertically { it },
+                        exit = if (still) ExitTransition.None else slideOutVertically { it },
+                    ) {
+                        // Four rows of keys and a slim header: about a third of the screen (a little more on a short one), never more.
+                        TvKeyboard(c, rowHeight = ((screenH * 0.34f - 62f) / 4f).coerceIn(36f, 56f).dp)
+                    }
                 }
             }
-            // The handle is pulled up by pushing the cursor down to the bottom edge, so it never sits over the page's own controls.
-            val edge = with(LocalDensity.current) { 88.dp.toPx() }
-            if (!c.keyboardOpen && c.cursorMode && c.cursorVisible && c.cursorY >= c.cursor.height - edge) KeyboardHandle(c, Modifier.align(Alignment.BottomCenter))
+            HintPill(c, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
             CursorOverlay(c)
         }
     }
 }
 
-/** The tab that rises when the cursor is pushed to the bottom edge: select it (OK) and the keyboard slides up. */
+/** The strip at the left edge: always there, always the same two buttons, so the way of controlling things is never a mystery. */
 @Composable
-private fun KeyboardHandle(c: TvController, modifier: Modifier) {
-    val label = stringResource(R.string.tv_keyboard_open)
-    Box(
-        modifier
-            .padding(bottom = 6.dp)
-            .width(200.dp)
-            .height(48.dp)
-            .clip(RoundedCornerShape(24.dp))
-            .background(Palette.Card.copy(alpha = 0.95f))
-            .border(BorderStroke(2.dp, Palette.Ink), RoundedCornerShape(24.dp))
-            .clickable { c.openKeyboard() }
-            .semantics { role = Role.Button; contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) { Text("⌨  " + stringResource(R.string.tv_keyboard), fontSize = 20.sp, fontWeight = FontWeight.Medium, color = Palette.Ink) }
-}
-
-/** The remote's finger: a small cat paw, red while it is dragging. Its centre is where a tap lands. */
-@Composable
-private fun CursorOverlay(c: TvController) {
-    if (!c.cursorMode || !c.cursorVisible || c.keyboardOpen) return
-    Canvas(Modifier.fillMaxSize()) {
-        val u = density
-        val x = c.cursorX
-        val y = c.cursorY
-        val fill = if (c.dragging) Palette.Red else Palette.Ink
-        val ring = Stroke(width = 2f * u)
-        fun blob(cx: Float, cy: Float, r: Float) {
-            drawCircle(Palette.Cream, radius = r + 2f * u, center = Offset(cx, cy))
-            drawCircle(fill, radius = r, center = Offset(cx, cy))
-        }
-        blob(x, y + 3f * u, 9f * u)                                   // the pad
-        blob(x - 11f * u, y - 8f * u, 4.5f * u)                       // the toes
-        blob(x - 4f * u, y - 14f * u, 4.5f * u)
-        blob(x + 4f * u, y - 14f * u, 4.5f * u)
-        blob(x + 11f * u, y - 8f * u, 4.5f * u)
-        drawCircle(Palette.Cream, radius = 2.2f * u, center = Offset(x, y))   // the exact point
-        drawCircle(Color.Transparent, radius = 0f, center = Offset(x, y), style = ring)
+private fun TvDock(c: TvController) {
+    val paw = c.mode == InputMode.PAW
+    val pawLabel = stringResource(if (paw) R.string.tv_paw_on else R.string.tv_paw_off)
+    val keyboardLabel = stringResource(R.string.tv_keyboard_open)
+    Column(
+        Modifier
+            .width(DockWidth)
+            .fillMaxHeight()
+            .background(Palette.Card)
+            .border(BorderStroke(1.dp, Palette.Line2))
+            .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+    ) {
+        // The mouse: lit (dark, red paw) while it is on, so it is obvious from across the room.
+        Box(
+            Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(if (paw) Palette.Ink else Palette.Tint)
+                .tvTarget { c.togglePaw() }
+                .semantics { role = Role.Switch; selected = paw; contentDescription = pawLabel },
+            contentAlignment = Alignment.Center,
+        ) { PawIcon(34.dp, if (paw) Palette.Red else Palette.Ink, outline = if (paw) Palette.Cream else Palette.Tint) }
+        Box(
+            Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(Palette.Tint)
+                .tvTarget { if (c.keyboardOpen) c.closeKeyboard() else c.openKeyboard() }
+                .semantics { role = Role.Button; contentDescription = keyboardLabel },
+            contentAlignment = Alignment.Center,
+        ) { Text("⌨", fontSize = 28.sp, color = Palette.Ink) }
     }
 }
 
-/** The keys, in the keyboard's own left-to-right order (the Hebrew rows are laid out like a Hebrew keyboard). */
+/** A few words at the top when the control mode changes, so it is never unclear which mode the arrows are in. */
+@Composable
+private fun HintPill(c: TvController, modifier: Modifier) {
+    val text = when (c.hint) {
+        TvHint.PAW_ON -> stringResource(R.string.tv_hint_paw)
+        TvHint.NAV_ON -> stringResource(R.string.tv_hint_nav)
+        TvHint.NO_TARGETS -> stringResource(R.string.tv_hint_none)
+        null -> null
+    }
+    AnimatedVisibility(visible = text != null, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {
+      // The message is Hebrew with "OK" in it: it must read right to left, which the dock layer (left to right) would not do.
+      CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Row(
+            Modifier
+                .widthIn(max = 760.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Palette.Ink.copy(alpha = 0.94f))
+                .padding(horizontal = 22.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            PawIcon(30.dp, Palette.Red, outline = Palette.Ink)
+            Text(text.orEmpty(), fontSize = 22.sp, color = Palette.Cream, fontWeight = FontWeight.Medium, textAlign = TextAlign.Start)
+        }
+      }
+    }
+}
+
+/** The remote's free finger in paw mode: a paw print, red while it is dragging. Its centre is where a tap lands. */
+@Composable
+private fun CursorOverlay(c: TvController) {
+    if (c.mode != InputMode.PAW || !c.cursorVisible || c.keyboardOpen) return
+    Canvas(Modifier.fillMaxSize()) {
+        drawPaw(Offset(c.cursorX, c.cursorY + 8f * density), density * 0.9f, if (c.dragging) Palette.Red else Palette.Ink, Palette.Cream)
+        drawCircle(Palette.Red, radius = 3f * density, center = Offset(c.cursorX, c.cursorY))
+        drawCircle(Palette.Cream, radius = 1.4f * density, center = Offset(c.cursorX, c.cursorY))
+    }
+}
+
+/**
+ * The keyboard, kept small: a slim header (what has been typed, and a close button) over four rows of soft, rounded keys. The
+ * layouts are the ordinary left-to-right ones (Hebrew as on a Hebrew keyboard).
+ */
 @Composable
 fun TvKeyboard(c: TvController, rowHeight: Dp, modifier: Modifier = Modifier) {
     val rows = KbLayouts.rows(c.layout)
+    val closeLabel = stringResource(R.string.kb_close)
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Column(
             modifier
                 .fillMaxWidth()
-                .background(Palette.Card)
-                .border(BorderStroke(2.dp, Palette.Ink))
-                .padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+                .clip(RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                .background(Palette.Cream)
+                .border(BorderStroke(2.dp, Palette.Ink), RoundedCornerShape(topStart = 26.dp, topEnd = 26.dp))
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            val shown = c.preview.ifEmpty { stringResource(R.string.tv_keyboard_hint) }
-            Text(
-                shown, fontSize = 26.sp, color = if (c.preview.isEmpty()) Palette.Ink2 else Palette.Ink, maxLines = 1,
-                modifier = Modifier.fillMaxWidth().height(40.dp).semantics { contentDescription = if (c.password) "" else shown },
-            )
+            Row(Modifier.fillMaxWidth().height(36.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(Palette.Card)
+                        .border(BorderStroke(1.5.dp, Palette.Line2), RoundedCornerShape(20.dp))
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    PawIcon(24.dp, Palette.Ink2, outline = Palette.Card)
+                    val shown = c.preview.ifEmpty { stringResource(R.string.tv_keyboard_hint) }
+                    Text(
+                        shown, fontSize = 22.sp, maxLines = 1, overflow = TextOverflow.Clip,
+                        color = if (c.preview.isEmpty()) Palette.Ink2 else Palette.Ink,
+                        modifier = Modifier.semantics { contentDescription = if (c.password) "" else shown },
+                    )
+                }
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Palette.Tint)
+                        .tvTarget { c.closeKeyboard() }
+                        .semantics { role = Role.Button; contentDescription = closeLabel },
+                    contentAlignment = Alignment.Center,
+                ) { Text("✕", fontSize = 22.sp, color = Palette.Ink) }
+            }
             rows.forEachIndexed { r, row ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEachIndexed { col, key ->
-                        KeyCap(c, key, r, col, rowHeight, Modifier.weight(weightOf(key)))
-                    }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    row.forEachIndexed { col, key -> KeyCap(c, key, r, col, rowHeight, Modifier.weight(weightOf(key))) }
                 }
             }
         }
@@ -156,9 +236,9 @@ fun TvKeyboard(c: TvController, rowHeight: Dp, modifier: Modifier = Modifier) {
 }
 
 private fun weightOf(key: KbKey) = when (key) {
-    KbKey.Space -> 3.5f
-    KbKey.Shift, KbKey.Backspace, KbKey.Enter -> 1.5f
-    is KbKey.Switch, KbKey.Close -> 1.4f
+    KbKey.Space -> 4f
+    KbKey.Shift, KbKey.Backspace, KbKey.Enter -> 1.6f
+    is KbKey.Switch -> 1.5f
     else -> 1f
 }
 
@@ -181,16 +261,30 @@ private fun KeyCap(c: TvController, key: KbKey, row: Int, col: Int, height: Dp, 
         else -> label
     }
     val on = c.highlightRow == row && c.highlightCol == col
-    val lit = key == KbKey.Shift && c.shift
+    val base = when (key) {
+        KbKey.Enter -> Palette.Red
+        KbKey.Backspace, KbKey.Shift -> Palette.Pink
+        is KbKey.Switch -> Palette.Card
+        else -> Palette.Tint
+    }
+    val shape = RoundedCornerShape(14.dp)
     Box(
         modifier
-            .heightIn(min = height)
             .height(height)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (on) Palette.Ink else if (lit) Palette.Pink else Palette.Tint)
-            .then(if (on) Modifier.border(BorderStroke(3.dp, Palette.Red), RoundedCornerShape(10.dp)) else Modifier)
-            .clickable { c.highlight(row, col); c.press(key) }
+            .graphicsLayer { val s = if (on) 1.07f else 1f; scaleX = s; scaleY = s }
+            .clip(shape)
+            .background(if (on) Palette.Ink else base)
+            .border(BorderStroke(if (on) 3.dp else 1.dp, if (on) Palette.Red else Palette.Line2), shape)
+            .tvKey { c.highlight(row, col); c.press(key) }
             .semantics { role = Role.Button; contentDescription = description },
         contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 26.sp, fontWeight = FontWeight.Medium, color = if (on) Palette.Cream else Palette.Ink, maxLines = 1) }
+    ) {
+        Text(
+            label, fontSize = if (key is KbKey.Switch || key == KbKey.Space) 20.sp else 26.sp, fontWeight = FontWeight.Medium, maxLines = 1,
+            color = if (on || key == KbKey.Enter) Palette.Cream else Palette.Ink,
+        )
+    }
 }
+
+/** A key is a plain touch target: the keyboard's own highlight (moved by the arrows) is its focus. */
+private fun Modifier.tvKey(onClick: () -> Unit): Modifier = this.clickable(onClick = onClick)

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.R
+import app.couch.alhasapa.tv.tvTarget
 import app.couch.alhasapa.display.DisplayMode
 import app.couch.alhasapa.display.DisplayProfile
 import app.couch.alhasapa.display.UiPlace
@@ -59,6 +60,7 @@ fun IdentityPanel(
     width: Dp, title: String, elapsed: String, modifier: Modifier = Modifier, compact: Boolean = false,
     /** The menu is part of the panel, so the settings are never hidden: always one tap away. */
     onMenu: () -> Unit = {}, onBack: (() -> Unit)? = null, zoom: Int? = null, onZoom: (Int) -> Unit = {},
+    portrait: Boolean = true, onMode: (() -> Unit)? = null, onUi: (() -> Unit)? = null,
 ) {
     PanelFrame(width, modifier, compact) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -84,6 +86,16 @@ fun IdentityPanel(
         if (zoom != null) {
             Spacer(Modifier.height(12.dp))
             ZoomGroup(zoom, 56.dp, 20, onZoom)
+        }
+        // The two things worth changing in the middle of a game: phone-shaped or wide, and where this UI sits.
+        if (!compact && (onMode != null || onUi != null)) {
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (onMode != null && zoom != null) {
+                    BarButton(stringResource(if (portrait) R.string.bar_mode_portrait else R.string.bar_mode_wide), 56.dp, 20, onMode, description = stringResource(R.string.bar_mode_desc))
+                }
+                if (onUi != null) BarButton(stringResource(R.string.bar_ui), 56.dp, 20, onUi, description = stringResource(R.string.bar_ui_desc))
+            }
         }
     }
 }
@@ -114,7 +126,7 @@ fun PanelButton(label: String, primary: Boolean = true, onClick: () -> Unit) {
             .heightIn(min = 64.dp)
             .clip(RoundedCornerShape(16.dp))
             .background(if (primary) Palette.Ink else Palette.Tint)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -252,15 +264,6 @@ fun TuningSheet(
                 }
             }
             if (pageSees != null) Text(stringResource(R.string.display_page_sees, pageSees), fontSize = PanelText, color = Palette.Ink2)
-            val tv = app.couch.alhasapa.tv.LocalTv.current
-            if (tv != null) {
-                // On a TV: the keyboard, and whether the arrows move a cursor or the focus.
-                SheetButton("⌨  " + stringResource(R.string.tv_keyboard), stringResource(R.string.tv_keyboard_open), Modifier.fillMaxWidth(), onClick = { onClose(); tv.openKeyboard() })
-                SheetButton(
-                    stringResource(if (tv.cursorMode) R.string.tv_cursor_on else R.string.tv_cursor_off), null, Modifier.fillMaxWidth(),
-                    onClick = { tv.cursorMode = !tv.cursorMode },
-                )
-            }
           }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -309,7 +312,7 @@ private fun ModeChip(label: String, selected: Boolean, modifier: Modifier, onCli
             .heightIn(min = 56.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) Palette.Ink else Palette.Tint)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .semantics { role = Role.RadioButton; this.selected = selected; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
@@ -325,7 +328,7 @@ private fun SheetButton(label: String, description: String?, modifier: Modifier,
             .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (primary) Palette.Ink else Palette.Tint)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .semantics { role = Role.Button; contentDescription = description ?: label },
         contentAlignment = Alignment.Center,
     ) {

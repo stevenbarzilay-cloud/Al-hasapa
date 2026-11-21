@@ -1,23 +1,14 @@
 package app.couch.alhasapa.ui
 
 import android.graphics.BitmapFactory
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -28,6 +19,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -43,7 +36,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -56,21 +51,24 @@ import app.couch.alhasapa.R
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.ui.theme.Palette
 import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.pow
 import kotlin.math.sin
-import kotlinx.coroutines.delay
 
 /** Never shorter than this, so the animation reads as a moment and not a flicker. */
 private const val MIN_VISIBLE_MS = 1500L
 
 /** Never longer than this, even if the hub is somehow slow to report ready. */
 private const val MAX_VISIBLE_MS = 3600L
-private const val EXIT_MS = 340
+private const val EXIT_MS = 340L
 
 /** The artwork keeps its 1100x547 canvas; the Z's rise through this much extra room above it. */
 private const val ART_W = 1100f
 private const val ART_H = 547f
 private const val SKY = 120f
+
+/** What sits under the cats: the gap and the logo (about 190 dp at most), so the whole splash always fits the screen's height. */
+private val BELOW_ART = 190.dp
 
 /**
  * Where each cat's Z's start, as fractions of the artwork: the Siamese on the left, the big black cat on top,
@@ -82,115 +80,101 @@ private val Z_PHASES = listOf(0f, 0.5f, 0.17f, 0.67f, 0.34f, 0.84f)
 /**
  * Three sleeping cats that breathe, a little stream of Z's drifting up from each, and the logo bouncing
  * up beneath them. Ends by itself once the hub is ready (and at least [MIN_VISIBLE_MS] has passed),
- * or on tap. Skipped entirely when the system's "remove animations" is on (see MainActivity).
+ * or on tap. Skipped entirely when the system's "remove animations" is on (see MainActivity), except on a TV.
+ *
+ * Everything moves from one clock, the frame time, and not from Compose's animation specs: those follow the system's animation
+ * scale, which some TV boxes ship set to zero or tiny (the splash then froze or flashed by). The cats are one still picture that is
+ * only scaled a hair (cheap on a weak GPU), the Z's are a few strokes, and the artwork is sized to fit the screen's height as well
+ * as its width, so a wide, short TV screen gets the same splash as a phone.
  */
 @Composable
 fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
     val cats = rememberAssetBitmap("hub/img/cats.webp")
     val logo = rememberAssetBitmap("hub/img/logo.webp")
 
-    var minElapsed by remember { mutableStateOf(false) }
-    var leaving by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { delay(MIN_VISIBLE_MS); minElapsed = true }
-    LaunchedEffect(Unit) { delay(MAX_VISIBLE_MS); leaving = true }
-    LaunchedEffect(hubReady, minElapsed) { if (hubReady && minElapsed) leaving = true }
-    val exit by animateFloatAsState(
-        targetValue = if (leaving) 1f else 0f,
-        animationSpec = tween(EXIT_MS, easing = FastOutSlowInEasing),
-        label = "splash-exit",
-    )
-    // Removal is driven by time, not by an animation callback, so the splash can never stay behind.
-    LaunchedEffect(leaving) {
-        if (leaving) {
-            Diag.log("splash: leaving")
-            delay(EXIT_MS + 60L)
-            Diag.splashShowing = false
-            Diag.log("splash: removed")
+    // Milliseconds since the splash began, from the frame clock.
+    var t by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        val start = withFrameNanos { it }
+        while (true) withFrameNanos { t = (it - start) / 1_000_000L }
+    }
+    var tapped by remember { mutableStateOf(false) }
+    var leaveAt by remember { mutableLongStateOf(-1L) }
+    val wantsOut = tapped || t >= MAX_VISIBLE_MS || (hubReady && t >= MIN_VISIBLE_MS)
+    if (wantsOut && leaveAt < 0) leaveAt = t
+    val exit = if (leaveAt < 0) 0f else ((t - leaveAt) / EXIT_MS.toFloat()).coerceIn(0f, 1f)
+    // Removal follows the clock too, so the splash can never stay behind.
+    LaunchedEffect(exit >= 1f) {
+        if (exit >= 1f) {
+            Diag.log("splash: leaving"); Diag.splashShowing = false; Diag.log("splash: removed")
             onFinished()
         }
     }
     LaunchedEffect(Unit) { Diag.splashShowing = true; Diag.log("splash: shown") }
 
-    // The cats are there from the very first frame, full size, already asleep. Only the logo bounces in.
-    val logoIn = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        delay(150)
-        logoIn.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow))
-    }
-
-    val loop = rememberInfiniteTransition(label = "splash-loop")
-    val breath by loop.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(2300, easing = FastOutSlowInEasing), RepeatMode.Reverse),
-        label = "breath",
-    )
-    val zPhase by loop.animateFloat(
-        initialValue = 0f, targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(3000, easing = LinearEasing)),
-        label = "z",
-    )
+    // The cats are there from the first frame, full size, already asleep. Only the logo bounces in.
+    val logoIn = easeOutBack(((t - 150L) / 900f).coerceIn(0f, 1f))
+    val breath = 0.5f - 0.5f * cos(2f * PI.toFloat() * t / 4600f)
+    val zPhase = (t % 3000L) / 3000f
 
     val description = stringResource(R.string.splash_description)
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             // The fade layer comes FIRST so that the cream background is inside it and fades with the cats.
-            // (It used to come after the background, which stayed fully opaque and could hide the hub forever.)
             .graphicsLayer { alpha = 1f - exit }
             .background(Palette.Cream)
-            .pointerInput(Unit) { detectTapGestures { leaving = true } }
+            .pointerInput(Unit) { detectTapGestures { tapped = true } }
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
+        val artWidth = minOf(maxWidth * 0.88f, 560.dp, (maxHeight - BELOW_ART).coerceAtLeast(120.dp) * (ART_W / (ART_H + SKY)))
         Column(
-            modifier = Modifier.fillMaxWidth(0.88f).widthIn(max = 560.dp),
+            modifier = Modifier.width(artWidth),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
             if (cats != null) {
-                Canvas(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(ART_W / (ART_H + SKY)),
-                ) {
-                    val w = size.width
-                    val unit = w / ART_W
-                    val artTop = SKY * unit
-                    val artH = ART_H * unit
-
-                    // The cats, breathing: a whisper of vertical swell anchored at the couch.
-                    scale(
-                        scaleX = 1f - 0.004f * breath,
-                        scaleY = 1f + 0.013f * breath,
-                        pivot = Offset(w / 2f, artTop + artH),
-                    ) {
-                        drawImage(
-                            image = cats,
-                            srcOffset = IntOffset.Zero,
-                            srcSize = IntSize(cats.width, cats.height),
-                            dstOffset = IntOffset(0, artTop.toInt()),
-                            dstSize = IntSize(w.toInt(), artH.toInt()),
-                            filterQuality = FilterQuality.High,
-                        )
-                    }
-
-                    // Z's: each cat sends two up per cycle, growing as they rise and fading at both ends.
-                    val rise = w * 0.15f
-                    val base = w * 0.034f
-                    Z_PHASES.forEachIndexed { i, offset ->
-                        val p = (zPhase + offset) % 1f
-                        val anchor = SNORES[i / 2]
-                        val a = sin(PI.toFloat() * p).pow(1.3f)
-                        val s = 0.55f + 0.8f * p
-                        val x = anchor.x * w + w * 0.03f * p + w * 0.010f * sin(p * 2f * PI.toFloat() * 1.2f)
-                        val y = artTop + anchor.y * artH - rise * p
-                        translate(left = x, top = y) {
-                            scale(s, pivot = Offset.Zero) {
-                                drawPath(
-                                    path = zPath(base),
-                                    color = Palette.Ink.copy(alpha = a),
-                                    style = Stroke(width = base * 0.3f, cap = StrokeCap.Round, join = StrokeJoin.Round),
-                                )
+                Box(Modifier.fillMaxWidth().aspectRatio(ART_W / (ART_H + SKY))) {
+                    // The cats, breathing: a whisper of vertical swell anchored at the couch, done by the layer, not by redrawing.
+                    Image(
+                        bitmap = cats,
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        filterQuality = FilterQuality.Medium,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(ART_W / ART_H)
+                            .align(Alignment.BottomCenter)
+                            .graphicsLayer {
+                                scaleX = 1f - 0.004f * breath
+                                scaleY = 1f + 0.013f * breath
+                                transformOrigin = TransformOrigin(0.5f, 1f)
+                            },
+                    )
+                    Canvas(Modifier.matchParentSize()) {
+                        val w = size.width
+                        val unit = w / ART_W
+                        val artTop = SKY * unit
+                        val artH = ART_H * unit
+                        // Z's: each cat sends two up per cycle, growing as they rise and fading at both ends.
+                        val rise = w * 0.15f
+                        val base = w * 0.034f
+                        Z_PHASES.forEachIndexed { i, offset ->
+                            val p = (zPhase + offset) % 1f
+                            val anchor = SNORES[i / 2]
+                            val a = sin(PI.toFloat() * p).pow(1.3f)
+                            val sz = 0.55f + 0.8f * p
+                            val x = anchor.x * w + w * 0.03f * p + w * 0.010f * sin(p * 2f * PI.toFloat() * 1.2f)
+                            val y = artTop + anchor.y * artH - rise * p
+                            translate(left = x, top = y) {
+                                scale(sz, pivot = Offset.Zero) {
+                                    drawPath(
+                                        path = zPath(base),
+                                        color = Palette.Ink.copy(alpha = a),
+                                        style = Stroke(width = base * 0.3f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+                                    )
+                                }
                             }
                         }
                     }
@@ -206,13 +190,21 @@ fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
                         .widthIn(max = 260.dp)
                         .aspectRatio(900f / 444f)
                         .graphicsLayer {
-                            alpha = logoIn.value.coerceIn(0f, 1f)
-                            translationY = (1f - logoIn.value) * 40.dp.toPx()
+                            alpha = logoIn.coerceIn(0f, 1f)
+                            translationY = (1f - logoIn) * 40.dp.toPx()
                         },
                 )
             }
         }
     }
+}
+
+/** The logo's bounce: it overshoots a little and settles (the spring the splash used to use, as a plain curve of time). */
+private fun easeOutBack(p: Float): Float {
+    val c1 = 1.70158f
+    val c3 = c1 + 1f
+    val x = p - 1f
+    return 1f + c3 * x * x * x + c1 * x * x
 }
 
 /** A hand-drawn feeling "Z": top bar, diagonal, bottom bar. */

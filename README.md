@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.2.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.3.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -192,23 +192,36 @@ adb install -r app-tv-debug.apk
 Without a computer: put the APK on a USB stick and open it with a file manager app from the Play Store, or use "Send Files to TV".
 Later versions install over the old one (same key), so the logins stay.
 
-**The remote.** There is no touch and no mouse, so the arrows move a small cat paw over the screen: slowly at first, faster the
-longer an arrow is held. **OK** is a tap where the paw is. **Hold OK** puts the finger down (the paw turns red) and the arrows
-then drag, which scrolls a page or swipes a word; **hold OK again** lifts it. Everything works the same way (the hub, the games, the
-menus), because the paw hands the screen real touches. **Back** and **Home** are the system's.
+**The remote: two modes, always visible.** A slim dock on the left edge of every screen holds two round buttons: the **paw** and
+the **keyboard**.
 
-**The keyboard.** Push the paw to the bottom edge of the screen: a "⌨ מקלדת" tab rises; OK on it slides the keyboard up (the page
-makes room, so the field you type into stays in view). It also slides up by itself when a text field takes focus, from the
-menu (☰, at the bottom of it), and with the remote's Play/Pause key if it has one. English, Hebrew and symbols; Shift makes one capital;
-the arrows move the highlight, OK types, **Back** closes it. A password field shows dots in the preview. Letters and digits go in as real
-key presses (a game that listens for keys, like Wordle, just works); Hebrew and symbols are inserted as text. The system keyboard is
-kept away so the two never fight. Sign-in works the same way: tap the field, type, tap "Sign in".
+- **Navigate (the default).** The arrows move a bright red ring from button to button, in the direction pressed, like Tab: through
+  the app's own buttons (☰, back, zoom, "we played", the menu), and *into the pages* too: the hub's buttons, the games' buttons,
+  links and fields (a small script finds what can be pressed; it only reads where things are, never what they say). **OK** presses
+  what is ringed (as a real tap at its centre, so every game gets the touches it expects). When there is nothing further, the page
+  **scrolls**; at the end of the page the ring moves to the app's bars and panels, and back. Down from a bar goes into the game,
+  Up from the game goes to the bar.
+- **Paw (the mouse), only when needed.** Press the paw button (a dark circle with a red paw while it is on, and a message at the
+  top says which mode you are in): the arrows now move a free paw print, slowly at first and faster the longer an arrow is held,
+  **OK** taps where it is, **hold OK** puts the finger down (the paw turns red) so the arrows drag, hold OK again to lift. Use it for
+  games with nothing to select (a canvas, a grid you swipe across). If a page has nothing the ring can land on, the app says so
+  and points at the paw. The paw button switches back.
+- **Back** and **Home** are the system's. The Mi Box remote has no Menu key, so the menu is the ☰ button, reached with the ring.
+
+**Quick buttons while playing** (on the bars or panels, reachable with the ring, no menu needed): zoom out and in (it keeps the
+zoom for that game), **▯ אנכי / ▭ אופקי** (phone-shaped or wide, one press), and **ממשק** (moves the always-visible UI: sides,
+top, bottom, top and bottom, or just a button).
+
+**The keyboard.** The keyboard button in the dock (or the remote's Play/Pause key, or a text field taking focus) slides it up
+from the bottom. It is small: four rows and a slim header that shows what you typed, about a third of the screen, and the game
+area shrinks to make room, so you still see the game while you type. English, Hebrew and symbols (digits are on the symbols
+layout); Shift makes one capital; the arrows move a highlight, OK types, **Back** or ✕ closes it. A password field shows dots. Letters
+go in as real key presses (a game that listens for keys, like Wordle, just works); Hebrew and symbols are inserted as text. The
+system keyboard is kept away so the two never fight. Sign-in works the same way: ring the field, OK, type, ring "Sign in".
 
 **Sound and video** play as on the phone, and a game's full-screen video fills the screen (Back leaves it).
 
-The Mi Box remote has no Menu key, so the menu is the ☰ button, reached with the paw like everything else.
-
-What cannot be checked without the box: how fast the paw feels, whether the keyboard reaches the page on this WebView, and whether
+What cannot be checked without the box: how the ring moves around real pages (it is tested in Chromium on a sample page, not on every game), how fast the paw feels, whether the keyboard reaches the page on this WebView, and whether
 the WebView on the Mi Box is recent enough for the games. The Mi Box's own WebView version matters most (Settings, Apps, show system
 apps, Android System WebView): the oldest ones cannot run some modern pages.
 

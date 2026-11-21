@@ -72,6 +72,9 @@ What it can do, honestly:
    pressed); the keyboard handle rises when the cursor is pushed to the bottom edge (a permanent handle sat over the page's own
    controls), and the keyboard also opens by itself when a field takes focus, from the menu, and on Play/Pause. The Mi Box remote has no Menu key,
    so the ☰ button is how the menu is reached.
+   **Revised in 1.3.0 after the first try on the box:** the default is now *navigate* (a focus ring that walks between buttons and
+   through pages, scrolling at the ends), and the paw is an explicit second mode with its own always-visible button in a dock on the
+   left edge; quick buttons for zoom, phone-shaped/wide and the UI's place; a smaller keyboard that makes the game area shrink.
 2. **Accounts and sync** (needs the backend decision below).
 3. **Several users and avatars, and the animation set** (ANIMATION-IDEAS.md).
 

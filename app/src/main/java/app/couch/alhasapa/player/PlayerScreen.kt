@@ -62,6 +62,7 @@ import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.tv.CouchWebView
 import app.couch.alhasapa.tv.LocalTv
 import app.couch.alhasapa.tv.TvTarget
+import app.couch.alhasapa.tv.tvPage
 import app.couch.alhasapa.tv.VideoChrome
 import app.couch.alhasapa.display.DisplayLayout
 import app.couch.alhasapa.display.DisplayMode
@@ -84,7 +85,7 @@ import app.couch.alhasapa.ui.theme.Palette
 import kotlinx.coroutines.delay
 
 private val ALL_ITEMS = BarItem.entries
-private val TOP_OF_BOTH = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM)
+private val TOP_OF_BOTH = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM, BarItem.MODE, BarItem.UI)
 private val BOTTOM_OF_BOTH = listOf(BarItem.PROGRESS, BarItem.POINTS, BarItem.PIECES, BarItem.RESULT, BarItem.PLAYED)
 
 /**
@@ -181,21 +182,34 @@ fun PlayerScreen(
     LaunchedEffect(Unit) { while (true) { delay(1_000); now = System.currentTimeMillis() } }
 
     // The zoom buttons are for quick use while playing, so they keep what they set for this site without a second step.
-    val quickZoom: (Int) -> Unit = { direction ->
-        val next = profile.copy(zoom = zoomBy(profile.zoom, direction))
+    val keep: (DisplayProfile) -> Unit = { next ->
         draft = next
         onSaveDisplay(profiles.keyFor(currentUrl, resolved), next)
         justSaved = true
+    }
+    val quickZoom: (Int) -> Unit = { direction -> keep(profile.copy(zoom = zoomBy(profile.zoom, direction))) }
+    // Phone-shaped or wide, one press (a page shown as it is becomes phone-shaped first).
+    val toggleMode: () -> Unit = {
+        keep(profile.copy(mode = if (profile.mode == DisplayMode.PORTRAIT_FIT) DisplayMode.WIDE else DisplayMode.PORTRAIT_FIT))
+    }
+    // The always-visible UI to its next place: sides (phone-shaped only), top, bottom, both, a button.
+    val cycleUi: () -> Unit = {
+        val order = buildList {
+            if (profile.mode == DisplayMode.PORTRAIT_FIT) add(UiPlace.SIDES)
+            addAll(listOf(UiPlace.TOP, UiPlace.BOTTOM, UiPlace.BOTH, UiPlace.MINIMAL))
+        }
+        keep(profile.copy(ui = order[(order.indexOf(profile.place) + 1).mod(order.size)]))
     }
 
     val openResult: () -> Unit = { resultText = ""; resultCaptured = false; resultOpen = true }
     val chrome = ChromeData(
         title = session.title, elapsed = formatElapsed((now - startedAt) / 1000), info = info, played = played,
         showPlayed = !session.loginMode, zoom = if (profile.mode != DisplayMode.NATIVE) profile.zoom else null,
+        portrait = profile.mode == DisplayMode.PORTRAIT_FIT,
     )
     val actions = ChromeActions(
         onMenu = { sheetOpen = true }, onBack = onClose, onResult = if (result != null) openResult else null,
-        onTogglePlayed = onTogglePlayed, onZoom = quickZoom,
+        onTogglePlayed = onTogglePlayed, onZoom = quickZoom, onToggleMode = toggleMode, onCycleUi = cycleUi,
     )
 
     BackHandler {
@@ -246,7 +260,7 @@ fun PlayerScreen(
                             }
                         }
                     }
-                    Box(Modifier.size(layout.webWidth.dp, layout.webHeight.dp)) {
+                    Box(Modifier.size(layout.webWidth.dp, layout.webHeight.dp).tvPage()) {
                         key(generation) {
                             AndroidView(
                                 modifier = Modifier.fillMaxSize(),
@@ -308,6 +322,7 @@ fun PlayerScreen(
                         IdentityPanel(
                             layout.panelWidth.dp, session.title, chrome.elapsed, compact = layout.compactPanels,
                             onMenu = actions.onMenu, onBack = onClose, zoom = chrome.zoom, onZoom = quickZoom,
+                            portrait = chrome.portrait, onMode = toggleMode, onUi = cycleUi,
                         )
                     }
                 }

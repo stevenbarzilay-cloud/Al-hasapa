@@ -4,15 +4,15 @@ import android.content.Context
 import android.content.Intent
 import android.view.KeyEvent
 import android.view.View
-import android.widget.FrameLayout
 import android.webkit.WebChromeClient
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -29,7 +29,16 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
-/** The player on a television (a 960 x 540 dp screen with the television UI mode): the handle, the keyboard, the menu's TV buttons. */
+private class EdgePage : PageNav {
+    var result: PageResult = PageResult.Edge
+    override fun enter(dir: Dir?, cb: (PageResult) -> Unit) = cb(PageResult.Moved)
+    override fun move(dir: Dir, cb: (PageResult) -> Unit) = cb(result)
+    override fun activate(cb: (PageResult) -> Unit) = cb(PageResult.None)
+    override fun blur() {}
+    override fun tap(x: Float, y: Float) {}
+}
+
+/** The player on a television (a 960 x 540 dp screen with the television UI mode): the dock, the paw switch, the keyboard, the ring. */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [37], application = CouchApp::class, qualifiers = "w960dp-h540dp-television-xhdpi")
 class TvScreensTest {
@@ -37,36 +46,37 @@ class TvScreensTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var scenario: ActivityScenario<PlayerActivity>? = null
 
-    @After fun close() { scenario?.close() }
+    @After fun close() { scenario?.close(); TvController.PageNavOverride = null }
 
-    private fun launch() {
+    private fun launch(page: PageNav? = null) {
+        TvController.PageNavOverride = page
         scenario = ActivityScenario.launch(PlayerActivity.gameIntent(context, "wordle", null)); rule.waitForIdle()
     }
 
     private fun key(a: PlayerActivity, code: Int, action: Int = KeyEvent.ACTION_DOWN) = a.window.callback.dispatchKeyEvent(KeyEvent(0, 0, action, code, 0))
-
-    private fun pushCursorToTheBottom() {
-        scenario!!.onActivity { a ->
-            // The arrows get the cursor there; holding Down is what a person does.
-            a.window.callback.dispatchKeyEvent(KeyEvent(0, 0, KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN, 0))
-            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(4))
-            a.window.callback.dispatchKeyEvent(KeyEvent(0, 0, KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_DOWN, 0))
-        }
-        rule.waitForIdle()
-    }
+    private fun press(code: Int) { scenario!!.onActivity { a -> key(a, code); key(a, code, KeyEvent.ACTION_UP) }; rule.waitForIdle() }
 
     @Test
-    fun theKeyboardHandleRisesWhenTheCursorIsPushedToTheBottomEdgeAndNotBefore() {
+    fun aTelevisionAlwaysHasTheDockWithThePawSwitchAndTheKeyboardButton() {
         launch()
-        rule.onNode(hasContentDescription("פתיחת מקלדת")).assertDoesNotExist()
-        pushCursorToTheBottom()
+        rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertIsDisplayed()
         rule.onNode(hasContentDescription("פתיחת מקלדת")).assertIsDisplayed()
     }
 
     @Test
-    fun theHandleSlidesTheKeyboardUpAndBackClosesIt() {
+    fun thePawSwitchSaysClearlyWhichModeIsOn() {
         launch()
-        pushCursorToTheBottom()
+        rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).performClick(); rule.waitForIdle()
+        rule.onNode(hasContentDescription("כפה פועלת. לחיצה על הכפה חוזרת לניווט בין כפתורים")).assertIsDisplayed()
+        rule.onNodeWithText("מצב כפה: החצים מזיזים את הכפה · OK לחיצה · OK ארוך לגרירה").assertIsDisplayed()
+        rule.onNode(hasContentDescription("כפה פועלת. לחיצה על הכפה חוזרת לניווט בין כפתורים")).performClick(); rule.waitForIdle()
+        rule.onNodeWithText("מצב ניווט: החצים עוברים בין כפתורים · OK לוחץ").assertIsDisplayed()
+        rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertIsDisplayed()
+    }
+
+    @Test
+    fun theKeyboardButtonSlidesTheKeyboardUpAndBackClosesIt() {
+        launch()
         rule.onNode(hasContentDescription("פתיחת מקלדת")).performClick(); rule.waitForIdle()
         rule.onNode(hasContentDescription("q")).assertIsDisplayed()
         rule.onNode(hasContentDescription("סגירת מקלדת")).assertIsDisplayed()
@@ -85,19 +95,21 @@ class TvScreensTest {
     }
 
     @Test
-    fun theArrowsAreTakenByTheCursorOnATelevision() {
+    fun theArrowsAreTakenByTheFocusNavigation() {
         launch()
         scenario!!.onActivity { a -> assertTrue(key(a, KeyEvent.KEYCODE_DPAD_RIGHT)); assertTrue(key(a, KeyEvent.KEYCODE_DPAD_RIGHT, KeyEvent.ACTION_UP)) }
     }
 
     @Test
-    fun theMenuOffersTheKeyboardAndTheCursorSwitchOnATelevision() {
-        launch()
-        rule.onNode(hasContentDescription("תפריט")).performClick()
-        rule.onAllNodes(hasContentDescription("פתיחת מקלדת")).assertCountEquals(1)     // the menu's button (the handle is not up)
-        rule.onNodeWithText("סמן בשלט: פועל").assertExists()
-        rule.onNodeWithText("סמן בשלט: פועל").performScrollTo().performClick(); rule.waitForIdle()
-        rule.onNodeWithText("סמן בשלט: כבוי (ניווט רגיל)").assertExists()
+    fun atTheEdgeOfTheGameTheFocusRingLandsOnAButtonOfTheApp() {
+        launch(EdgePage())
+        val lit = SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "נבחר")
+        rule.onAllNodes(lit).assertCountEquals(0)
+        press(KeyEvent.KEYCODE_DPAD_DOWN)
+        rule.onAllNodes(lit).assertCountEquals(1)
+        // ...and it can be walked on from there: Up goes to the next button that way, still exactly one ring.
+        press(KeyEvent.KEYCODE_DPAD_UP)
+        rule.onAllNodes(lit).assertCountEquals(1)
     }
 
     @Test
@@ -121,7 +133,6 @@ class TvScreensTest {
             chrome.onHideCustomView()
             assertFalse(chrome.isShowing); assertTrue(hidden); assertNull(video.parent)
             chrome.onHideCustomView()                                   // harmless twice
-            assertTrue(FrameLayout(a).childCount == 0)
         }
     }
 }

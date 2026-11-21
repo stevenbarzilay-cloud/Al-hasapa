@@ -51,6 +51,7 @@ import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.tv.CouchWebView
 import app.couch.alhasapa.tv.LocalTv
 import app.couch.alhasapa.tv.TvTarget
+import app.couch.alhasapa.tv.tvPage
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.theme.Palette
 import kotlin.coroutines.resume
@@ -173,7 +174,8 @@ fun HubScreen(
         Modifier
             .fillMaxSize()
             .background(Palette.Cream)
-            .windowInsetsPadding(WindowInsets.safeDrawing),
+            .windowInsetsPadding(WindowInsets.safeDrawing)
+            .tvPage(),
     ) {
         val tv = LocalTv.current
         key(generation) {

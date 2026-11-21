@@ -105,13 +105,20 @@
     <string name="size_medium">בינוני</string>
     <string name="size_large">גדול</string>
     <string name="panel_progress_full">%1$d מתוך %2$d שיחקנו הערב</string>
-    <string name="tv_keyboard">מקלדת</string>
     <string name="tv_keyboard_open">פתיחת מקלדת</string>
     <string name="tv_keyboard_hint">מה שמקלידים מופיע כאן</string>
-    <string name="tv_cursor_on">סמן בשלט: פועל</string>
-    <string name="tv_cursor_off">סמן בשלט: כבוי (ניווט רגיל)</string>
     <string name="kb_space">רווח</string>
     <string name="kb_backspace">מחיקה</string>
     <string name="kb_enter">אנטר</string>
     <string name="kb_close">סגירת מקלדת</string>
+    <string name="tv_paw_on">כפה פועלת. לחיצה על הכפה חוזרת לניווט בין כפתורים</string>
+    <string name="tv_paw_off">להפעיל כפה (עכבר)</string>
+    <string name="tv_hint_paw">מצב כפה: החצים מזיזים את הכפה · OK לחיצה · OK ארוך לגרירה</string>
+    <string name="tv_hint_nav">מצב ניווט: החצים עוברים בין כפתורים · OK לוחץ</string>
+    <string name="tv_hint_none">אין כאן כפתורים לבחירה. אפשר להפעיל את הכפה בכפתור שבצד</string>
+    <string name="bar_mode_portrait">▯ אנכי</string>
+    <string name="bar_mode_wide">▭ אופקי</string>
+    <string name="bar_mode_desc">החלפה בין תצוגה אנכית לאופקית של המשחק</string>
+    <string name="bar_ui">ממשק</string>
+    <string name="bar_ui_desc">החלפת המקום של הממשק הקבוע</string>
 </resources>

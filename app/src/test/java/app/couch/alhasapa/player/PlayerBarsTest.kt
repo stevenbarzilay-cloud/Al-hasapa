@@ -11,7 +11,7 @@ class PlayerBarsTest {
 
     @Test
     fun aWideBarShowsEverything() {
-        assertEquals(all, fitItems(all, 1400f, UiSize.MEDIUM))
+        assertEquals(all, fitItems(all, 1700f, UiSize.MEDIUM))
     }
 
     @Test

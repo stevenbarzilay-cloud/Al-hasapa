@@ -71,7 +71,8 @@ class MainActivity : ComponentActivity() {
         })
         val reduceMotion = animationsRemoved(contentResolver)
         // Only on a real cold start (not after rotation or coming back), and never with "remove animations" on.
-        val playSplash = savedInstanceState == null && !reduceMotion
+        // On a TV the splash always plays: some boxes ship with the animation scale at zero, and the splash does not depend on it.
+        val playSplash = savedInstanceState == null && (!reduceMotion || tv.enabled)
         setContent {
             AlHasapaTheme {
               tv.Layer {

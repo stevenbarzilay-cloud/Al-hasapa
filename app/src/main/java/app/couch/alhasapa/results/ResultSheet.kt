@@ -46,6 +46,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.R
+import app.couch.alhasapa.tv.tvTarget
 import app.couch.alhasapa.catalog.Game
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.data.PieceStyle
@@ -198,7 +199,7 @@ private fun CreditChip(label: String, piece: PieceStyle?, selected: Boolean, mod
             .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) Palette.Ink else Palette.Tint)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .padding(horizontal = 8.dp)
             // One clean description, not the label plus the piece icon's own.
             .clearAndSetSemantics { role = Role.RadioButton; this.selected = selected; contentDescription = label; onClick { onClick(); true } },
@@ -218,7 +219,7 @@ private fun SheetAction(label: String, modifier: Modifier = Modifier, primary: B
             .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (primary) Palette.Ink else Palette.Tint)
-            .clickable(onClick = onClick)
+            .tvTarget(onClick)
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {

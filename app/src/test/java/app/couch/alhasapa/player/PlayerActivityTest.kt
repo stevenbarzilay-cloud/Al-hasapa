@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.couch.alhasapa.BuildConfig
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
 import java.time.LocalDate
@@ -127,6 +128,8 @@ class PlayerActivityTest {
 
     @Test
     fun weTickedItFromTheStripWritesToTheStateAndTogglesBack() {
+        // The TV build has a 72 dp dock on the left, which a 320 dp test screen cannot spare; TvScreensTest covers a real TV screen.
+        org.junit.Assume.assumeFalse(BuildConfig.TV)
         val today = CouchState.dayKey(LocalDate.now())
         assertNull(CouchState.entry(app.repo.snapshot(), today, "wordle"))
         launch(PlayerActivity.gameIntent(context, "wordle", null))

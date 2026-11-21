@@ -98,14 +98,20 @@ class RemoteLogicTest {
     // ---- the keyboard ----
 
     @Test
-    fun everyLayoutHasTheKeysATypingGameNeeds() {
+    fun everyLayoutHasTheKeysATypingGameNeedsInFourRows() {
+        for (l in KbLayout.entries) assertEquals("$l: the keyboard stays small", 4, KbLayouts.rows(l).size)
         val en = KbLayouts.rows(KbLayout.ENGLISH).flatten()
         for (c in 'a'..'z') assertTrue("$c", en.any { it is KbKey.Ch && it.lower == c.toString() })
-        for (c in '0'..'9') assertTrue("$c", en.any { it is KbKey.Ch && it.lower == c.toString() })
-        assertTrue(en.contains(KbKey.Backspace)); assertTrue(en.contains(KbKey.Enter)); assertTrue(en.contains(KbKey.Space)); assertTrue(en.contains(KbKey.Close))
+        assertTrue(en.contains(KbKey.Backspace)); assertTrue(en.contains(KbKey.Enter)); assertTrue(en.contains(KbKey.Space)); assertTrue(en.contains(KbKey.Shift))
+        val sym = KbLayouts.rows(KbLayout.SYMBOLS).flatten()
+        for (c in '0'..'9') assertTrue("$c is one switch away", sym.any { it is KbKey.Ch && it.lower == c.toString() })
         val he = KbLayouts.rows(KbLayout.HEBREW).flatten().filterIsInstance<KbKey.Ch>().map { it.lower }.toSet()
         for (c in "אבגדהוזחטיכלמנסעפצקרשתךםןףץ") assertTrue("$c", c.toString() in he)
-        for (l in KbLayout.entries) assertTrue(KbLayouts.rows(l).flatten().any { it is KbKey.Switch || l == KbLayout.ENGLISH })
+        for (l in KbLayout.entries) {
+            val others = KbLayout.entries.filter { it != l }
+            val switches = KbLayouts.rows(l).flatten().filterIsInstance<KbKey.Switch>().map { it.to }
+            assertEquals("$l reaches the other layouts", others.toSet(), switches.toSet())
+        }
     }
 
     @Test
@@ -124,14 +130,36 @@ class RemoteLogicTest {
     @Test
     fun theHighlightMovesWithTheArrowsAndKeepsItsPlaceAlongShorterRows() {
         val n = KeyboardNav(); n.reset()
-        assertEquals(1 to 0, n.row to n.col)
+        assertEquals(0 to 0, n.row to n.col)
         n.move(Dir.RIGHT); n.move(Dir.RIGHT); assertEquals(2, n.col)
-        n.move(Dir.DOWN); assertEquals(2, n.row)
+        n.move(Dir.DOWN); assertEquals(1, n.row)
         repeat(30) { n.move(Dir.RIGHT) }; assertEquals("stops at the end of the row", 9, n.col)
-        n.move(Dir.DOWN); n.move(Dir.DOWN); assertEquals(4, n.row)
-        n.move(Dir.DOWN); assertEquals("stops at the bottom", 4, n.row)
+        n.move(Dir.DOWN); n.move(Dir.DOWN); assertEquals(3, n.row)
+        n.move(Dir.DOWN); assertEquals("stops at the bottom", 3, n.row)
         repeat(10) { n.move(Dir.UP) }; assertEquals(0, n.row)
-        val rows = KbLayouts.rows(KbLayout.ENGLISH)
-        assertTrue(n.col < rows[0].size)
+        assertTrue(n.col < KbLayouts.rows(KbLayout.ENGLISH)[0].size)
+    }
+
+    /** Written for tools/tvnav_check.cjs, which runs the real script in Chromium. */
+    @Test
+    fun dumpTvNavScriptForTheBrowserCheck() {
+        val dir = java.io.File("build/display-scripts").apply { mkdirs() }
+        java.io.File(dir, "tvnav.js").writeText(TvNavScript.JS)
+        assertTrue(TvNavScript.JS.contains("__tvnav"))
+    }
+
+    @Test
+    fun theNavigationScriptNeverReadsWhatThePageSaysOrSendsAnything() {
+        for (banned in listOf("innerText", "textContent", "innerHTML", "value", "cookie", "localStorage", "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "eval("))
+            assertFalse("must not use $banned", TvNavScript.JS.contains(banned))
+    }
+
+    @Test
+    fun pageAnswersAreParsedAndAnythingElseIsNothing() {
+        fun p(json: String) = WebPageNav.parse("\"" + json.replace("\"", "\\\"") + "\"")
+        assertEquals(PageResult.Moved, p("{\"k\":\"moved\"}")); assertEquals(PageResult.Edge, p("{\"k\":\"edge\"}"))
+        assertEquals(PageResult.Scrolled, p("{\"k\":\"scrolled\"}")); assertEquals(PageResult.None, p("{\"k\":\"none\"}"))
+        assertEquals(PageResult.Tap(10f, 20f, true, false), p("{\"k\":\"tap\",\"x\":10,\"y\":20,\"ed\":true,\"pw\":false}"))
+        assertEquals(PageResult.None, WebPageNav.parse(null)); assertEquals(PageResult.None, WebPageNav.parse("null")); assertEquals(PageResult.None, WebPageNav.parse("garbage"))
     }
 }
