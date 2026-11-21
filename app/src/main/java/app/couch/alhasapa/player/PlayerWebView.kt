@@ -72,7 +72,7 @@ object PlayerWebView {
 }
 
 /**
- * Keeps one WebView showing its pages the way the display profile says: the injected script (viewport, light mode, banner CSS)
+ * Keeps one WebView showing its pages the way the display profile says: the injected script (light mode, banner CSS)
  * runs at document start where the WebView allows it, and is re-run on the live page whenever the profile changes.
  * [origins] are the origin rules the script may run on (the game's own sites).
  */
@@ -84,11 +84,8 @@ class DisplayInjector(private val view: WebView, private val origins: Set<String
     /** True when the script is registered to run before the page's own scripts. */
     val runsAtDocumentStart: Boolean get() = documentStart
 
-    fun apply(profile: DisplayProfile, layout: DisplayLayout) {
-        val next = DisplayScript.build(profile, layout)
-        // A page with a viewport meta is laid out at that width; without wide-viewport support the meta would be ignored.
-        view.settings.useWideViewPort = layout.virtualWidth != null
-        view.settings.loadWithOverviewMode = layout.virtualWidth != null
+    fun apply(profile: DisplayProfile) {
+        val next = DisplayScript.build(profile)
         if (next == script) return
         script = next
         runCatching { handler?.remove() }
@@ -163,6 +160,11 @@ class PlayerWebViewClient(
         if (!request.isForMainFrame) return false
         val decision = NavigationPolicy.decide(request.url.toString(), session.allowedHosts, session.roaming)
         if (decision == NavigationPolicy.Decision.Allow) return false
+        if (decision is NavigationPolicy.Decision.UpgradeToHttps) {
+            Diag.log("player: http -> https for ${request.url.host}")
+            view.loadUrl(decision.url)
+            return true
+        }
         Diag.log("player: refused ${request.url.host ?: request.url.scheme} (${decision::class.simpleName})")
         onBlocked(decision)
         return true
@@ -180,11 +182,18 @@ class PlayerWebViewClient(
 
     override fun onPageFinished(view: WebView, url: String) {
         Diag.log("player: page finished")
+        // What the page believes the screen is, so a wrong layout shows up in the log (and in the display sheet) as a number.
+        view.evaluateJavascript("innerWidth+'x'+innerHeight+' @'+devicePixelRatio") { Diag.log("player: the page sees ${it?.trim('\"')} css px") }
         onFinished(url)
     }
 
     override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
         if (!request.isForMainFrame) return
+        // A redirect to http:// that did not pass through shouldOverrideUrlLoading: try the same address over https once.
+        if (error.description?.toString()?.contains("ERR_CLEARTEXT_NOT_PERMITTED") == true && request.url.scheme == "http") {
+            val d = NavigationPolicy.decide(request.url.toString(), session.allowedHosts, session.roaming)
+            if (d is NavigationPolicy.Decision.UpgradeToHttps) { Diag.log("player: cleartext refused, retrying over https"); view.loadUrl(d.url); return }
+        }
         // -3 is ERR_ABORTED: the page replaced itself (a redirect); not a failure.
         if (error.errorCode == -3) return
         Log.e("AlHasapaPlayer", "load error ${error.errorCode} ${error.description} for ${request.url}")

@@ -151,6 +151,8 @@ private fun PanelFrame(width: Dp, modifier: Modifier, content: @Composable andro
 fun TuningSheet(
     profile: DisplayProfile,
     saved: Boolean,
+    /** What the page believes the screen is ("430×800"), once known. */
+    pageSees: String?,
     onChange: (DisplayProfile) -> Unit,
     onSave: () -> Unit,
     onReset: () -> Unit,
@@ -184,6 +186,7 @@ fun TuningSheet(
                     SheetButton("−", stringResource(R.string.display_zoom_out), Modifier.width(64.dp)) { onChange(profile.copy(zoom = (profile.zoom - ZOOM_STEP).coerceAtLeast(DisplayProfile.MIN_ZOOM))) }
                 }
             }
+            if (pageSees != null) Text(stringResource(R.string.display_page_sees, pageSees), fontSize = PanelText, color = Palette.Ink2)
             SheetButton(
                 if (saved) "✓ " + stringResource(R.string.display_saved) else stringResource(R.string.display_save),
                 null, Modifier.fillMaxWidth(), primary = !saved, onClick = onSave,

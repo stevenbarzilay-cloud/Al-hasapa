@@ -39,8 +39,17 @@ class NavigationPolicyTest {
     @Test
     fun roamingAllowsAnyWebPageForLoginButStillNoApps() {
         assertEquals(Decision.Allow, decide("https://accounts.some-sso.example/login", roaming = true))
-        assertEquals(Decision.Allow, decide("http://example.org", roaming = true))
+        assertEquals(Decision.UpgradeToHttps("https://example.org"), decide("http://example.org", roaming = true))
         assertTrue(decide("https://accounts.some-sso.example/login") is Decision.OffDomain)
+    }
+
+    @Test
+    fun plainHttpToAnAllowedSiteIsUpgradedToHttpsNotLoadedAndNotRefused() {
+        // The Haaretz page that showed "ERR_CLEARTEXT_NOT_PERMITTED": a redirect to http:// on the site's own domain.
+        val hosts = setOf("haaretz.co.il")
+        assertEquals(Decision.UpgradeToHttps("https://www.haaretz.co.il/riddles/5-letters?x=1#a"), NavigationPolicy.decide("http://www.haaretz.co.il/riddles/5-letters?x=1#a", hosts, false))
+        assertTrue("another site over http is still just another site", NavigationPolicy.decide("http://ads.example.net/x", hosts, false) is Decision.OffDomain)
+        assertEquals(Decision.Allow, NavigationPolicy.decide("https://www.haaretz.co.il/riddles", hosts, false))
     }
 
     @Test

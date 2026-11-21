@@ -84,4 +84,5 @@
     <string name="dnd_chip">נא לא להפריע</string>
     <string name="dnd_chip_hint">שהתראות לא יקפצו על הטלוויזיה</string>
     <string name="dnd_close">להסתיר</string>
+    <string name="display_page_sees">הדף חושב שהמסך הוא %1$s</string>
 </resources>

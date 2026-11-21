@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.0.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.0.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -59,11 +59,18 @@ TV display (`app/src/main/assets/display_profiles.json`, `display/`):
   scaled to the screen's height and centred, with a couch panel on each side: the game and the clock on one, the evening
   and the two of us on the other, all at 20 sp or more). Defaults follow the brief: Haaretz riddles and NYT Wordle,
   Connections, Strands, Pips and LinkedIn games are portrait-fit; the NYT daily crossword is wide; everything else is native.
-- Not by transform. The WebView is sized to the box and a script injected at document start sets the viewport
-  (`width=` the virtual width, scale fixed), so the page lays out for that screen and `100vh` really is the virtual
-  height (this is what fixes the Haaretz chain's board falling off the bottom: it needs about 775 CSS px of height and
-  now gets 800). The same script forces light mode and hides cookie and "get the app" banners (`css` in the defaults).
-  It never reads the page. If a WebView is too old for document-start scripts it runs on page start instead.
+- **How the page is sized.** The WebView itself is made phone-sized (430 dp wide, as tall as the box's shape needs) or
+  desktop-sized (1280 dp), inside a `ScaledFrame` that shrinks the finished picture to fit the box and maps touches back
+  through the same scale. The page therefore really lays out at 430 x ~800 CSS px, `100vh` really is the virtual
+  height, and nothing is negotiated with the page. (This is what fixes the Haaretz chain's board falling off the bottom:
+  it needs about 775 CSS px of height.) **1.0.0 got this wrong:** it set the viewport meta tag instead; the real WebView
+  ignored it, the page laid out at the narrow box's width (about 210 px) and the game was cropped at both sides. A test
+  now forbids the display script from touching the viewport. The display sheet shows "הדף חושב שהמסך הוא 430×800", and
+  the debug log has the same line per page, so a wrong layout is a number, not a guess.
+- The injected script only forces light mode and hides cookie and "get the app" banners (`css` in the defaults). It never
+  reads the page. Sign-in screens (the accounts screen) are always shown as they are, never shrunk.
+- **Plain http.** Android refuses cleartext traffic, and some pages redirect to `http://` (Haaretz did:
+  `ERR_CLEARTEXT_NOT_PERMITTED`). A main-frame `http://` link on an allowed site is now loaded over `https://` instead.
 - **Zoom** shrinks the virtual viewport (125% means 344 px wide instead of 430). **Safe area** keeps 2.5% free on every
   side for TVs that crop; the camera cut-out is respected on top of that.
 - Tuning is live: top edge, then "תצוגה" opens a sheet on the left; mode and zoom change the page as you press.
@@ -153,15 +160,17 @@ Do these in order; each one tells you which part to blame if it fails.
 
 1. **Opens.** The cats splash, then the hub (cream, the logo and tabs fixed). If it is blank or shows an error, send a
    screenshot: the debug build shows what happened on screen, and `adb logcat -s AlHasapaDiag AlHasapaHub` has more.
-2. **Accounts.** Hub, "החשבונות": log in to NYT, Haaretz, and LinkedIn once as Steve and once as Roni. Use email and
+2. **Accounts.** Hub, "החשבונות": log in here, in the app: a login made in Chrome does not carry over, on purpose (this
+   browser keeps its own cookies, so nothing from your personal Chrome shows on the TV). Log in to NYT, Haaretz, and LinkedIn once as Steve and once as Roni. Use email and
    password (Google refuses "continue with Google" inside any app, and this app does not work around that; use "לפתוח
    בכרום" if a site offers nothing else). The status shows "מחובר" once logged in. If Haaretz stays "לא ידוע", open "מה
    נשמר?" and tell me the cookie names it lists, so I can name the right one.
 3. **Logins survive.** Force-stop the app, open a game from each site: you are still logged in. LinkedIn as Steve and as
    Roni are different people. (If the accounts screen says the WebView is too old for two LinkedIn logins, update
    "Android System WebView" in Google Play.)
-4. **TV display.** Cast, open a Haaretz riddle (the chain): the board should fit, with a panel on each side. Tap the top
-   edge, "⚙ תצוגה", try "רחב" and "רגיל", change the zoom, "לשמור לאתר הזה", leave and come back: it is remembered.
+4. **TV display.** Cast, open a Haaretz riddle (the chain): the whole board should fit, nothing cut at the sides, with a
+   panel on each side. Tap the top edge, "⚙ תצוגה" (it says what size the page thinks the screen is: 430×800 in the phone-shaped mode), try "רחב" and
+   "רגיל", change the zoom, "לשמור לאתר הזה", leave and come back: it is remembered.
    NYT Wordle should also be a phone-shaped box; the NYT crossword wide.
 5. **Results.** Finish a Wordle, press the game's own Share: the result sheet should open filled in. If it does not, press
    "תוצאה" and paste. Try Share from a LinkedIn game and pick this app in the share list: it should ask who played.

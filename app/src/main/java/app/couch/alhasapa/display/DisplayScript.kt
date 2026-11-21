@@ -3,36 +3,27 @@ package app.couch.alhasapa.display
 import org.json.JSONObject
 
 /**
- * The script that makes a page believe it is on the screen the profile describes. It runs at document start (before the page's
- * own scripts), and again whenever the profile changes. Idempotent: running it twice is the same as once.
+ * The small script a display profile injects: light mode and the profile's banner CSS. It runs at document start (before the
+ * page's own scripts), and again whenever the profile changes. Idempotent: running it twice is the same as once.
  *
  * What it does, and all it does:
- *  - sets the viewport (`width=` the virtual width, scale fixed), so a page designed for a phone lays out as on a phone;
  *  - declares the page light-only (the TV reads best that way);
  *  - adds the profile's CSS (hide cookie banners, "get the app" bars).
+ * It does NOT size the page. In the first 1.0.0 it also set the viewport meta to make the page lay out at a phone's width; on the
+ * real WebView that was ignored and the page laid out at the narrow box's width, cutting the game off. The page is now sized the
+ * way a real phone does it: the WebView itself is that big (see ScaledFrame) and is shrunk to fit.
  * It never reads the page, never touches the game, and never sends anything anywhere.
  */
 object DisplayScript {
-    fun build(profile: DisplayProfile, layout: DisplayLayout): String {
-        val content = if (layout.virtualWidth != null && layout.scale != null) {
-            // Fixed scale: the page may not zoom or re-fit itself, it was sized for this box.
-            val s = "%.4f".format(java.util.Locale.ROOT, layout.scale)
-            "width=${layout.virtualWidth},initial-scale=$s,minimum-scale=$s,maximum-scale=$s,user-scalable=no"
-        } else null
+    fun build(profile: DisplayProfile): String {
         val css = buildString {
             if (!profile.dark) append(":root{color-scheme:light only}")
             if (profile.injectCss) append(profile.css)
         }
         return """
 (function(){
-  var VP=${quote(content)}, CSS=${quote(css)}, LIGHT=${!profile.dark};
+  var CSS=${quote(css)}, LIGHT=${!profile.dark};
   function head(){return document.head||document.documentElement}
-  function viewport(){
-    if(VP===null) return;
-    var m=document.querySelector('meta[name="viewport"]');
-    if(!m){m=document.createElement('meta');m.setAttribute('name','viewport');var h=head();if(!h)return;h.appendChild(m)}
-    if(m.getAttribute('content')!==VP) m.setAttribute('content',VP);
-  }
   function light(){
     if(!LIGHT) return;
     var m=document.querySelector('meta[name="color-scheme"]');
@@ -45,13 +36,13 @@ object DisplayScript {
     if(!s){s=document.createElement('style');s.id='couch-display-css';var h=head();if(!h)return;h.appendChild(s)}
     if(s.textContent!==CSS) s.textContent=CSS;
   }
-  function apply(){viewport();light();style()}
+  function apply(){light();style()}
   apply();
   if(window.__couchDisplayObs){window.__couchDisplayObs.disconnect()}
   var obs=new MutationObserver(apply);
   window.__couchDisplayObs=obs;
   obs.observe(document,{childList:true,subtree:true});
-  // The page is allowed to settle; after that the observer is no longer needed (a later viewport change is the page's own).
+  // The page is allowed to settle; after that the observer is no longer needed.
   window.addEventListener('load',function(){setTimeout(function(){obs.disconnect()},3000)},{once:true});
 })();
 """.trimIndent()

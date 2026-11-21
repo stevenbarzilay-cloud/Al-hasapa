@@ -60,6 +60,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import app.couch.alhasapa.R
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.display.DisplayLayout
+import app.couch.alhasapa.display.DisplayMode
+import app.couch.alhasapa.display.ScaledFrame
 import app.couch.alhasapa.display.DisplayProfile
 import app.couch.alhasapa.display.DisplayProfiles
 import app.couch.alhasapa.results.CaptureGate
@@ -121,7 +123,17 @@ fun PlayerScreen(
     var draft by remember(resolved.key) { mutableStateOf<DisplayProfile?>(null) }
     var justSaved by remember { mutableStateOf(false) }
     var sheetOpen by remember { mutableStateOf(false) }
-    val profile = draft ?: resolved.profile
+    // Logging in is always shown as it is: the sign-in forms are made for a whole screen, and a shrunk box hides half of them.
+    val profile = (draft ?: resolved.profile).let { if (session.loginMode) it.copy(mode = DisplayMode.NATIVE) else it }
+
+    // What the page believes the screen is, shown in the display sheet so a wrong layout is a number, not a guess.
+    var pageSees by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sheetOpen, profile.mode, profile.zoom, webView) {
+        if (sheetOpen) {
+            delay(500)                                       // let the page re-lay itself out first
+            webView?.evaluateJavascript("innerWidth+'x'+innerHeight") { pageSees = it?.trim('"')?.replace('x', '×') }
+        }
+    }
 
     // The result sheet: opened by the button, or by the game's own Share / Copy.
     var resultOpen by remember { mutableStateOf(false) }
@@ -191,7 +203,7 @@ fun PlayerScreen(
                 (maxWidth.value - 2 * marginX).coerceAtLeast(1f),
                 (maxHeight.value - 2 * marginY).coerceAtLeast(1f),
             )
-            LaunchedEffect(injector, profile, layout) { injector?.apply(profile, layout) }
+            LaunchedEffect(injector, profile) { injector?.apply(profile) }
 
             // Left and right here are the screen's own, whatever the language direction: the panels are placed by hand.
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
@@ -210,11 +222,11 @@ fun PlayerScreen(
                             AndroidView(
                                 modifier = Modifier.fillMaxSize(),
                                 factory = { ctx ->
-                                    WebView(ctx).apply {
+                                    val web = WebView(ctx).apply {
                                         usedProfile = PlayerWebView.configure(this, session.profile)
                                         Diag.log("player: webview created, profile ${session.profile} -> $usedProfile, display ${profile.mode.id}")
                                         val inj = DisplayInjector(this, DisplayInjector.originRules(session.allowedHosts, session.roaming))
-                                        inj.apply(profile, layout)                 // before the first load, so the first page is already right
+                                        inj.apply(profile)                          // before the first load, so the first page is already right
                                         injector = inj
                                         if (result != null) CaptureInjector.install(this, session, gate) { c -> onCaptured(c) }
                                         webViewClient = PlayerWebViewClient(
@@ -236,11 +248,18 @@ fun PlayerScreen(
                                         loadUrl(session.url)
                                         webView = this
                                     }
+                                    // The WebView lives inside a frame that makes it phone-sized (or desktop-sized) and shrinks it to the box.
+                                    ScaledFrame(ctx).apply {
+                                        addView(web)
+                                        virtualWidthDp = layout.virtualWidth
+                                    }
                                 },
-                                onRelease = { view ->
-                                    if (webView === view) { webView = null; injector = null }
+                                update = { frame -> frame.virtualWidthDp = layout.virtualWidth },
+                                onRelease = { frame ->
+                                    val view = frame.getChildAt(0) as? WebView
+                                    if (view != null && webView === view) { webView = null; injector = null }
                                     PlayerWebView.flushCookies(usedProfile)
-                                    view.destroy()
+                                    view?.destroy()
                                 },
                             )
                         }
@@ -287,6 +306,7 @@ fun PlayerScreen(
                     TuningSheet(
                         profile = profile,
                         saved = justSaved,
+                        pageSees = pageSees,
                         onChange = { draft = it; justSaved = false },
                         onSave = {
                             onSaveDisplay(profiles.keyFor(currentUrl, resolved), profile)

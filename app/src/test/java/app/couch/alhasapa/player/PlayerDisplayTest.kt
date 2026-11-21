@@ -14,11 +14,13 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.display.ScaledFrame
 import java.time.LocalDate
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -116,15 +118,50 @@ class PlayerDisplayTest {
         rule.onNodeWithText("95%").assertIsDisplayed()
     }
 
+    private fun frameOf(activity: PlayerActivity): ScaledFrame? {
+        fun walk(v: View): ScaledFrame? = when (v) {
+            is ScaledFrame -> v
+            is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { walk(v.getChildAt(it)) }
+            else -> null
+        }
+        return walk(activity.window.decorView)
+    }
+
     @Test
-    fun theWebViewIsToldToHonourThePagesViewportOnlyWhenTheProfileAsksForIt() {
+    fun aPhoneShapedGameIsLaidOutAtPhoneWidthAndShrunkToTheBox() {
         launch("wordle").onActivity { a ->
-            assertTrue("portrait-fit lays the page out at the virtual width", webViewOf(a)!!.settings.useWideViewPort)
+            val f = frameOf(a)
+            assertNotNull("the WebView lives in a scaled frame", f)
+            assertEquals("the page lays out 430 wide, as on a phone", 430, f!!.virtualWidthDp)
+            assertFalse("never through the viewport meta: the WebView's own size is the page's size", webViewOf(a)!!.settings.useWideViewPort)
         }
-        scenario!!.close()
-        launch("krillion").onActivity { a ->
-            assertFalse("native leaves the page alone", webViewOf(a)!!.settings.useWideViewPort)
-        }
+    }
+
+    @Test
+    fun aSiteShownAsItIsIsNotShrunk() {
+        launch("krillion").onActivity { a -> assertNull(frameOf(a)!!.virtualWidthDp) }
+    }
+
+    @Test
+    fun theCrosswordIsLaidOutAtDesktopWidth() {
+        launch("crossword").onActivity { a -> assertEquals(1280, frameOf(a)!!.virtualWidthDp) }
+    }
+
+    @Test
+    fun zoomChangesTheVirtualWidthLive() {
+        launch("wordle")
+        rule.onNodeWithText("⚙ תצוגה").performClick()
+        rule.onNodeWithText("+").performClick()
+        rule.waitForIdle()
+        scenario!!.onActivity { a -> assertEquals("430 / 1.05", 409, frameOf(a)!!.virtualWidthDp) }
+    }
+
+    @Test
+    fun signingInIsAlwaysShownAsItIsEvenOnASitePortraitFitByDefault() {
+        // The Haaretz sign-in form was cut off in the phone-shaped box. Login screens never shrink.
+        scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.loginIntent(context, "hz", "הארץ", ProfileNames.GAMES)); rule.waitForIdle()
+        scenario!!.onActivity { a -> assertNull(frameOf(a)!!.virtualWidthDp) }
+        rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()
     }
 
     @Test

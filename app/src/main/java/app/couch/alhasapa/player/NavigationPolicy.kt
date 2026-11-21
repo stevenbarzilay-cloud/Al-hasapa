@@ -13,6 +13,9 @@ object NavigationPolicy {
         data object Allow : Decision
         data class OffDomain(val host: String?) : Decision
         data class BlockedScheme(val scheme: String?) : Decision
+
+        /** A plain http link to a site we may visit: the same page over https (the app never allows cleartext traffic). */
+        data class UpgradeToHttps(val url: String) : Decision
     }
 
     /**
@@ -25,8 +28,11 @@ object NavigationPolicy {
         val uri = runCatching { URI(url.trim()) }.getOrNull() ?: return Decision.BlockedScheme(null)
         val scheme = uri.scheme?.lowercase()
         if (scheme != "https" && scheme != "http") return Decision.BlockedScheme(scheme)
-        if (roaming) return Decision.Allow
         val host = uri.host?.lowercase()
-        return if (Catalog.hostAllowed(host, allowedHosts)) Decision.Allow else Decision.OffDomain(host)
+        val allowed = roaming || Catalog.hostAllowed(host, allowedHosts)
+        if (!allowed) return Decision.OffDomain(host)
+        // Sites still redirect to http:// now and then (an old link, a campaign page). Android refuses cleartext, which showed up
+        // as "ERR_CLEARTEXT_NOT_PERMITTED" on Haaretz; the same page over https is what was meant.
+        return if (scheme == "http") Decision.UpgradeToHttps("https://" + url.trim().substring("http://".length)) else Decision.Allow
     }
 }
