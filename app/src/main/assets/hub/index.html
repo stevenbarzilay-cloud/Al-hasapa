@@ -97,6 +97,13 @@ img{max-width:100%;height:auto;display:block}
 .art .tr{background:var(--art-steve,#D94E38)}
 .art .tp{background:var(--art-roni,#E8A5B5)}
 :root.tint-r .art .tr,:root.tint-r .art .lift,:root.tint-p .art .tp{opacity:1}
+/* ---------- the links sheet ---------- */
+.urlrow{display:flex;flex-direction:column;gap:4px;padding:8px 0;border-bottom:1px solid var(--line)}
+.urlrow b{font-weight:600}
+.urlrow .tag{font-size:.75em;font-weight:500;border:1px dashed var(--red);color:var(--red);border-radius:5px;padding:0 6px;margin-inline-start:8px}
+.urlrow input{font-size:.85em;text-align:left}
+#ul{display:flex;flex-direction:column}
+.lib-head .tbtn{min-height:36px;font-size:.85em}
 /* ---------- our pieces: shape and colour per person ---------- */
 .who-card{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--line)}
 .who-card:first-of-type{border-top:0;padding-top:0}
@@ -413,86 +420,42 @@ footer .joke{font-style:italic}
 </div>
 <script>
 
-const G = q => "https://www.google.com/search?q=" + encodeURIComponent(q);
-const HZ = "https://www.haaretz.co.il/riddles";
-const SITES = {
-  nyt:{name:"NYT Games",color:"#e9e4d8"},
-  hz:{name:"הארץ משחקים",color:"#8fb7ff"},
-  kr:{name:"Krillion ומשפחה",color:"#7fd1c1"},
-  dl:{name:"Dialed",color:"#e3a6ff"},
-  mu:{name:"מוזיקה",color:"#ffb27a"},
-  tr:{name:"טריוויה והשוואות",color:"#f4d06f"},
-  he:{name:"בעברית",color:"#a8e6a1"},
-  wd:{name:"מילים",color:"#c9d6ff"},
-  geo:{name:"מקומות וזמנים",color:"#7fd6f0"},
-  odd:{name:"מוזרים ומקוריים",color:"#f09a8a"},
-  li:{name:"לינקדאין · ראש בראש",color:"#6cc3ff"}
-};
-/* lib: in our shelf from the start. why: shown on the discover card. */
-const GAMES = [
-  {id:"wordle",n:"Wordle",s:"nyt",k:"מילים",m:"W",u:"https://www.nytimes.com/games/wordle/index.html",d:"מילה באנגלית בשישה ניסיונות.",lib:1},
-  {id:"connections",n:"Connections",s:"nyt",k:"מילים",m:"Co",u:"https://www.nytimes.com/games/connections",d:"16 מילים, ארבע קבוצות, ארבע טעויות.",lib:1},
-  {id:"strands",n:"Strands",s:"nyt",k:"מילים",m:"St",u:"https://www.nytimes.com/games/strands",d:"מוצאים מילים בנושא שממלאות את כל הלוח.",lib:1},
-  {id:"mini",n:"The Mini",s:"nyt",k:"מילים",m:"Mi",u:"https://www.nytimes.com/crosswords/game/mini",d:"תשבץ קטנטן לדקה וחצי.",lib:1},
-  {id:"bee",n:"Spelling Bee",s:"nyt",k:"מילים",m:"SB",u:"https://www.nytimes.com/puzzles/spelling-bee",d:"שבע אותיות, כמה שיותר מילים.",lib:1},
-  {id:"pips",n:"Pips",s:"nyt",k:"היגיון",m:"Pi",u:"https://www.nytimes.com/games/pips",d:"מניחים דומינו לפי תנאים על הלוח.",lib:1},
-  {id:"letterboxed",n:"Letter Boxed",s:"nyt",k:"מילים",m:"LB",u:"https://www.nytimes.com/puzzles/letter-boxed",d:"מילים שמשתרשרות סביב ריבוע אותיות.",why:"עוד מ-NYT שעוד לא במאגר"},
-  {id:"tiles",n:"Tiles",s:"nyt",k:"היגיון",m:"Ti",u:"https://www.nytimes.com/puzzles/tiles",d:"משחק התאמת אריחים מרגיע.",why:"עוד מ-NYT, רגוע ויפה"},
-  {id:"crossword",n:"The Crossword",s:"nyt",k:"מילים",m:"Cr",u:"https://www.nytimes.com/crosswords/game/daily",d:"התשבץ הגדול, קשה יותר לקראת סוף השבוע.",why:"לערבי שבת ארוכים"},
-  {id:"midi",n:"The Midi",s:"nyt",k:"מילים",m:"Md",u:G("NYT The Midi crossword"),d:"התשבץ באמצע, בין המיני לגדול.",why:"אם המיני נגמר מהר מדי"},
-  {id:"connsports",n:"Connections: Sports",s:"nyt",k:"ידע",m:"CS",u:"https://www.nytimes.com/athletic/connections-sports-edition",d:"Connections עם קבוצות מעולם הספורט.",why:"וריאציה על משחק שאתם כבר אוהבים"},
-  {id:"nytsudoku",n:"Sudoku",s:"nyt",k:"מספרים",m:"Su",u:"https://www.nytimes.com/puzzles/sudoku",d:"שלוש רמות קושי ביום.",why:"מ-NYT"},
-  {id:"hz5",n:"5 אותיות",s:"hz",k:"מילים",m:"5",u:HZ+"/5-letters",d:"וורדעל בעברית.",lib:1},
-  {id:"hzconn",n:"מה הקשר?",s:"hz",k:"מילים",m:"מה",u:HZ,d:"ארבע קבוצות של ארבע מילים.",lib:1},
-  {id:"hzchain",n:"השרשרת",s:"hz",k:"היגיון",m:"שר",u:HZ+"/2026-06-07/ty-article-static/0000019d-f71f-df01-a3dd-f7bfe6eb0002",d:"מסלול של ארבעה צעדים בין שני קצוות.",lib:1},
-  {id:"hzsong",n:"איזה שיר!",s:"hz",k:"מוזיקה",m:"♪",u:HZ,d:"שיר עברי בתרגום מוזר, אפשר לשמוע רמז.",lib:1},
-  {id:"hzcover",n:"סיפור כיסוי",s:"hz",k:"היגיון",m:"סכ",u:HZ+"/2024-11-05/ty-article-static/.premium/00000191-8d8d-dd8c-addd-bdfd9cab0000",d:"מכסים עיגולים בצורות, בכמה שפחות צעדים.",lib:1},
-  {id:"hzwho",n:"מי אני?",s:"hz",k:"ידע",m:"מי",u:HZ,d:"תמונה מפוקסלת שמתבהרת לאט.",lib:1},
-  {id:"hzlogic",n:"הגיונית",s:"hz",k:"היגיון",m:"הג",u:HZ,d:"חידת היגיון מילולית יומית.",lib:1},
-  {id:"hzsnake",n:"שביל הנחש",s:"hz",k:"זיכרון",m:"נח",u:HZ+"/2024-11-16/ty-article-static/.premium/00000197-f3ca-dc05-a59f-f3efde110000",d:"חמש שניות לזכור את השביל ולצייר אותו.",lib:1},
-  {id:"hzmath",n:"אפשר חשבון",s:"hz",k:"מספרים",m:"+",u:HZ+"/2025-05-11/ty-article-static/.premium/00000193-6233-d893-a193-66b713200000",d:"מסמנים מספרים שמגיעים לסכום בכל שורה וטור.",lib:1},
-  {id:"hzsudoku",n:"סודוקו",s:"hz",k:"מספרים",m:"9",u:HZ,d:"סודוקו בשלוש רמות.",why:"מהארץ, עוד לא במאגר"},
-  {id:"hz20",n:"20 שאלות",s:"hz",k:"ידע",m:"20",u:HZ,d:"הטקס השבועי, פעם בשבוע.",why:"שבועי, טוב לסופ״ש ביחד"},
-  {id:"krillion",n:"Krillion",s:"kr",k:"ידע",m:"Kr",u:"https://krillion.io",d:"שבע שאלות פתוחות, התשובה הנדירה מנצחת.",lib:1},
-  {id:"noillirk",n:"Noillirk",s:"kr",k:"ידע",m:"No",u:G("Noillirk daily game"),d:"ההפך: התשובה הכי צפויה מנצחת.",lib:1},
-  {id:"dialed",n:"Dialed · צבע",s:"dl",k:"חושים",m:"◐",u:"https://dialed.gg",d:"רואים צבע לרגע ומשחזרים אותו מהזיכרון.",lib:1},
-  {id:"dialedsound",n:"Dialed · צליל",s:"dl",k:"חושים",m:"∿",u:"https://dialed.gg",d:"שומעים טון ומשחזרים את התדר.",lib:1},
-  {id:"bandle",n:"Bandle",s:"mu",k:"מוזיקה",m:"Ba",u:"https://bandle.app",d:"מזהים שיר כשהכלים נכנסים אחד אחד.",lib:1},
-  {id:"moreless",n:"More/Less",s:"tr",k:"ידע",m:"±",u:G("More/Less lessgames daily"),d:"מה יותר: חיפושים, האזנות, דירוגים.",lib:1},
-  {id:"meduyeket",n:"מדויקת",s:"he",k:"מילים",m:"מד",u:"https://meduyeket.net",d:"וורדל עברי ותיק ואהוב.",why:"אם אתם אוהבים את 5 אותיות"},
-  {id:"semantle-he",n:"סמנטעל",s:"he",k:"מילים",m:"סמ",u:"https://semantle.ishefi.com",d:"מנחשים מילה לפי קרבת משמעות, לא אותיות.",why:"טוב לשניים: מתווכחים על כיוון"},
-  {id:"semantle",n:"Semantle",s:"wd",k:"מילים",m:"Se",u:"https://semantle.com",d:"קרבת משמעות, באנגלית.",why:"הגרסה המקורית של סמנטעל"},
-  {id:"contexto",n:"Contexto",s:"wd",k:"מילים",m:"Cx",u:"https://contexto.me",d:"כל ניחוש מקבל דירוג לפי הקרבה למילה.",why:"דומה לסמנטעל, קליל יותר"},
-  {id:"waffle",n:"Waffle",s:"wd",k:"מילים",m:"Wa",u:"https://wafflegame.net",d:"מחליפים אותיות בתוך רשת עד שכל המילים מסתדרות.",why:"וורדל שהוא גם פאזל"},
-  {id:"squaredle",n:"Squaredle",s:"wd",k:"מילים",m:"Sq",u:"https://squaredle.app",d:"מוצאים מילים ברשת אותיות.",why:"קרוב ל-Strands"},
-  {id:"crosswordle",n:"Crosswordle",s:"wd",k:"מילים",m:"Cw",u:"https://crosswordle.com",d:"הכלאה של וורדל ותשבץ.",why:"שני אהובים במשחק אחד"},
-  {id:"worldle",n:"Worldle",s:"geo",k:"גיאוגרפיה",m:"Wo",u:"https://worldle.teuteuf.fr",d:"מזהים מדינה לפי הצללית שלה.",why:"ניחוש ביחד מול המפה"},
-  {id:"travle",n:"Travle",s:"geo",k:"גיאוגרפיה",m:"Tr",u:"https://travle.earth",d:"מוצאים מסלול בין שתי מדינות.",why:"דומה לרעיון של השרשרת"},
-  {id:"timeguessr",n:"TimeGuessr",s:"geo",k:"גיאוגרפיה",m:"TG",u:"https://timeguessr.com",d:"תמונה אחת: איפה ומתי צולמה.",why:"נראה מעולה על מסך גדול"},
-  {id:"framed",n:"Framed",s:"tr",k:"ידע",m:"Fr",u:"https://framed.wtf",d:"מזהים סרט לפי פריימים.",why:"מושלם לטלוויזיה"},
-  {id:"boxoffice",n:"Box Office Game",s:"tr",k:"ידע",m:"BO",u:"https://boxofficega.me",d:"מנחשים סרטים לפי רמזי קופות.",why:"וורדל של סרטים"},
-  {id:"cinematrix",n:"Cinematrix",s:"tr",k:"ידע",m:"Ci",u:G("Cinematrix daily movie grid"),d:"ממלאים טבלה בסרטים שמתאימים לשורה ולטור.",why:"דיונים טובים על הספה"},
-  {id:"codenames",n:"Codenames Daily",s:"wd",k:"מילים",m:"CN",u:G("Codenames Daily puzzle"),d:"חידות יומיות של אסוציאציות.",why:"קרוב ל-Connections"},
-  {id:"scrandle",n:"Scrandle",s:"odd",k:"ידע",m:"Sc",u:"https://scrandle.com",d:"עשרה זוגות אוכל אצטדיונים, מה הקהל העדיף.",why:"כמו Noillirk, רק עם אוכל"},
-  {id:"cutle",n:"Cutle",s:"odd",k:"חושים",m:"Cu",u:G("Cutle daily shape cut game"),d:"חותכים צורה עקומה לשני חצאים שווים.",why:"משחק עין כמו Dialed"},
-  {id:"coffeegolf",n:"Coffee Golf",s:"odd",k:"חושים",m:"CG",u:G("Coffee Golf daily game"),d:"מיני גולף יומי, כמה מכות.",why:"משהו לא מילולי לשבירת השגרה"},
-  {id:"queens",n:"Queens",s:"li",k:"היגיון",m:"Q",u:"https://www.linkedin.com/games/queens/",d:"כתר אחד בכל שורה, טור ואזור צבע.",lib:1},
-  {id:"tango",n:"Tango",s:"li",k:"היגיון",m:"Ta",u:"https://www.linkedin.com/games/tango/",d:"שמשות וירחים באיזון מושלם.",lib:1},
-  {id:"zip",n:"Zip",s:"li",k:"היגיון",m:"Zi",u:"https://www.linkedin.com/games/zip/",d:"מסלול אחד דרך כל המשבצות, לפי הסדר.",lib:1},
-  {id:"pinpoint",n:"Pinpoint",s:"li",k:"מילים",m:"Pp",u:"https://www.linkedin.com/games/pinpoint/",d:"מנחשים את הקטגוריה בכמה שפחות רמזים.",lib:1},
-  {id:"crossclimb",n:"Crossclimb",s:"li",k:"מילים",m:"Cc",u:"https://www.linkedin.com/games/crossclimb/",d:"סולם מילים שכל שלב בו משנה אות אחת.",why:"עוד מלינקדאין"},
-  {id:"minisudoku",n:"Mini Sudoku",s:"li",k:"מספרים",m:"MS",u:"https://www.linkedin.com/games/mini-sudoku/",d:"סודוקו 6x6 מהיר.",why:"עוד מלינקדאין, קצר וחד"},
-  {id:"patches",n:"Patches",s:"li",k:"היגיון",m:"Pa",u:"https://www.linkedin.com/games/",d:"פאזל טלאים יומי של לינקדאין.",why:"עוד מלינקדאין"},
-  {id:"wend",n:"Wend",s:"li",k:"היגיון",m:"We",u:"https://www.linkedin.com/games/",d:"עוד פאזל יומי של לינקדאין.",why:"עוד מלינקדאין"},
-];
+/* The catalogue (sites and games) comes from games.json, through the app or, in a plain browser, by fetch. */
+let SITES={}, GAMES=[], byId={};
+function setCatalog(c){
+  SITES=c.sites;GAMES=c.games;byId=Object.fromEntries(GAMES.map(g=>[g.id,g]));
+  /* u0 = the catalogue's own link, u = the one in use (the app already applies the person's links; a plain browser gets the raw file) */
+  for(const g of GAMES){g.u0=g.u0||g.u; if(state.urls&&state.urls[g.id]) g.u=state.urls[g.id]}
+}
 const KINDS = ["מילים","היגיון","ידע","מוזיקה","חושים","מספרים","זיכרון"];
-const byId = Object.fromEntries(GAMES.map(g=>[g.id,g]));
 
 /* ---------- state ---------- */
-const LS = "couch-games-v1";
-let state = {v:1,names:{a:"סטיב",b:"רוני"},prefs:{},log:{}};
-try{const s=JSON.parse(localStorage.getItem(LS)||"null"); if(s&&s.v===1) state=Object.assign(state,s);}catch(e){}
-let view="lib", filter="all", db=null, docRef=null, writing=false, dirty=false, saveTimer=null;
+/* ---------- storage ----------
+   In the app the state lives natively (window.couchNative, a bridge to the Android side): one JSON document, saved atomically,
+   with a revision so a stale save can never overwrite a newer change (say, a result saved from the player).
+   In a plain browser (tests, previews) it falls back to localStorage, so the page still works on its own. */
+const LS="couch-games-v1", NATIVE=window.couchNative||null;
+const DEFAULT_STATE=()=>({v:1,names:{a:"סטיב",b:"רוני"},prefs:{},log:{}});
+let state=DEFAULT_STATE(), stateRev=0;
+function readLocal(){try{const s=JSON.parse(localStorage.getItem(LS)||"null"); if(s&&s.v===1) return s}catch(e){} return null}
+function loadState(){
+  if(NATIVE){
+    try{
+      const r=JSON.parse(NATIVE.loadState());                 // {rev, fresh, state}
+      stateRev=Number(r.rev)||0;
+      if(!r.fresh&&r.state) return Object.assign(DEFAULT_STATE(),r.state);
+      const old=readLocal();                                   // first run on the native store: bring over what this page kept before
+      if(old){const n=Number(NATIVE.migrateState(JSON.stringify(old))); if(n>0) stateRev=n; return Object.assign(DEFAULT_STATE(),old)}
+      return DEFAULT_STATE();
+    }catch(e){(window.__errors||[]).push("loadState: "+e)}
+  }
+  return Object.assign(DEFAULT_STATE(),readLocal()||{});
+}
+state=loadState();
+let view="lib", filter="all";
+function reloadState(){state=loadState();applyTheme();render()}
+/* The app calls this when it comes back to the front, after something else (the player) may have changed the state. */
+window.__reloadState=()=>{ if(!document.getElementById("overlay").classList.contains("show")) reloadState() };
 
 const pad=n=>String(n).padStart(2,"0");
 const key=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
@@ -509,18 +472,12 @@ function save(){
   // prune log older than 400 days
   const cutoff=key(daysAgo(400));
   for(const k of Object.keys(state.log)) if(k<cutoff) delete state.log[k];
-  try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){}
-  if(!docRef) return;
-  dirty=true; clearTimeout(saveTimer); saveTimer=setTimeout(flush,700);
+  const json=JSON.stringify(state);
+  if(NATIVE){
+    let n=-1; try{n=Number(NATIVE.saveState(json,String(stateRev)))}catch(e){(window.__errors||[]).push("saveState: "+e)}
+    if(n>=0) stateRev=n; else {reloadState();toast("הנתונים התעדכנו מבחוץ. נסו שוב.")}
+  } else { try{localStorage.setItem(LS,json)}catch(e){} }
 }
-async function flush(){
-  if(!docRef||writing||!dirty) return;
-  writing=true; dirty=false; setSync("שומר…");
-  try{await docRef.set(JSON.parse(JSON.stringify(state))); setSync("נשמר בענן ✓");}
-  catch(e){ if(e&&e.code==="unavailable"){dirty=true;setTimeout(flush,1500+Math.random()*1000)} else setSync("שמור במכשיר בלבד"); }
-  writing=false; if(dirty) flush();
-}
-function setSync(t){document.getElementById("sync").textContent=t}
 
 /* ---------- helpers ---------- */
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -580,13 +537,8 @@ const IMG={
 /* ================= scoring =================
    Together games: one pasted result → couch points for the pair (2 for playing + up to 10 for the result).
    "מי פיצח?" is credit, not a win.  LinkedIn: each pastes their own result, the better one wins the duel. */
-const METRIC={wordle:"guesses",hz5:"guesses",meduyeket:"guesses",bandle:"guesses",worldle:"guesses",framed:"guesses",boxoffice:"guesses",travle:"guesses",
-  connections:"mistakes",hzconn:"mistakes",connsports:"mistakes",codenames:"mistakes",
-  strands:"hints",
-  mini:"time",midi:"time",crossword:"time",pips:"time",nytsudoku:"time",letterboxed:"words",
-  queens:"time",tango:"time",zip:"time",minisudoku:"time",crossclimb:"time",patches:"time",wend:"time",pinpoint:"guesses"};
 const isDuel=g=>g.s==="li";
-const metricOf=g=>METRIC[g.id]||"none";
+const metricOf=g=>g.metric||"none";
 const KIND_LABEL={guesses:"ניסיונות",mistakes:"טעויות",hints:"רמזים",time:"זמן",words:"מילים",none:"תוצאה"};
 const fmtT=s=>{s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+":"+String(m).padStart(2,"0"):m)+":"+String(x).padStart(2,"0")};
 function parseResult(text,kind){
@@ -678,7 +630,7 @@ function rowHTML(g){
     <span class="nm"><b>${esc(g.n)}</b><span>${esc(g.d)}</span></span>
     <span class="extra">${extra}</span>
     ${tick}
-    <a class="btn primary sm play" href="${esc(g.u)}" target="_blank" rel="noopener">${done&&!duel?"שוב":"לשחק"}</a>
+    <button class="btn primary sm play" type="button" data-play="${g.id}">${done&&!duel?"שוב":"לשחק"}</button>
   </li>`;
 }
 function renderHome(){
@@ -690,7 +642,7 @@ function renderHome(){
       <h2>${esc(f.n)}</h2>
       <p>${esc(f.d)}</p>
       <div class="acts">
-        <a class="btn primary main" href="${esc(f.u)}" target="_blank" rel="noopener">לשחק</a>
+        <button class="btn primary main" type="button" data-play="${f.id}">לשחק</button>
         <span class="text-acts"><button class="tbtn" data-act="mark">שיחקנו</button><button class="tbtn" data-act="shuffle">משהו אחר</button></span>
       </div></article>`
     :`<article class="feat"><span class="sym">${sym("ידע")}</span><span class="kicker">הערב</span><h2>סגרנו הכול.</h2><p>החתולים כבר ישנים. נשאר כוח? יש דברים מתחת לכריות.</p>
@@ -715,7 +667,7 @@ function renderHome(){
   const leftN=lib.filter(g=>!playedOn(g.id,t)).length;
   const coda=`<div class="coda">${IMG.cats}<b>${!groups?(filter==="left"?"אין מה להשלים הערב.":"אין פה כלום בסינון הזה."):(leftN?`זו כל הספרייה. נשארו ${leftN} להערב.`:"שיחקנו הכול. החתולים מאשרים.")}</b><span class="help">${!groups&&filter!=="left"?"נסו סינון אחר.":"מה שלא שיחקנו מחכה למחר."}</span></div>`;
   document.getElementById("v-home").innerHTML=`<div class="tonight">${feat}${side}</div>
-    <div class="lib-head" id="lib"><h2>הספרייה</h2><span class="help">${lib.length} משחקים</span>
+    <div class="lib-head" id="lib"><h2>הספרייה</h2><span class="help">${lib.length} משחקים</span><button class="tbtn" type="button" data-act="urls">הקישורים שלנו</button>
       <div class="filters" role="group" aria-label="סינון">${chips.map(([v,l])=>`<button class="f" data-filter="${esc(v)}" aria-pressed="${filter===v}">${esc(l)}</button>`).join("")}</div></div>
     <div class="groups">${groups}</div>${coda}`;
 }
@@ -733,7 +685,7 @@ function renderDisc(){
       <div class="acts">
         <button class="btn primary main" data-act="yes">להוסיף לערב</button>
         <span class="text-acts">
-          <a class="tbtn" href="${esc(g.u)}" target="_blank" rel="noopener">להציץ ↗</a>
+          <button class="tbtn" type="button" data-play="${g.id}">להציץ ↗</button>
           <button class="tbtn" data-act="later">לשמור להמשך</button>
           <button class="tbtn" data-act="no">לדלג</button>
         </span>
@@ -794,6 +746,10 @@ function renderStats(){
   </div>`;
 }
 
+function playGame(id){
+  if(NATIVE){ NATIVE.play(id); return }
+  const g=byId[id]; if(g) window.open(g.u,"_blank","noopener");        // plain browser: just open the link
+}
 function render(){renderMast(); if(view==="home")renderHome(); else if(view==="disc")renderDisc(); else renderStats(); document.getElementById("c-disc").textContent=queue().length; window.__ready=true; requestAnimationFrame(()=>window.updateHBar&&window.updateHBar())}
 function renderSide(){renderMast()}
 
@@ -829,10 +785,30 @@ function openResult(id){
   [ta,man,fail].forEach(x=>x.addEventListener("input",upd)); upd();
   document.getElementById("saveR").onclick=()=>{
     const p=current(); state.log[t]=state.log[t]||{}; const cur=state.log[t][id]||{w:""};
-    if(p){cur.r={v:p.v,max:p.max,fail:!!p.fail,kind,raw:ta.value.trim().slice(0,400)}} state.log[t][id]=cur;
+    if(p){cur.r={v:p.v,max:p.max,fail:!!p.fail,kind,raw:ta.value.trim().slice(0,400)}} cur.t=Date.now(); state.log[t][id]=cur;
     save();closeSheet();render();toast(p?"נשמר. "+(2+resultPts(id,cur.r,t))+" נקודות ספה.":"סומן בלי תוצאה.");
   };
   const c=document.getElementById("clearR"); if(c) c.onclick=()=>{delete state.log[t][id].r;save();closeSheet();render();toast("התוצאה נמחקה.")};
+}
+function openUrls(){
+  state.urls=state.urls||{};
+  const games=[...GAMES].sort((x,y)=>(!!y.placeholder-!!x.placeholder)||0);
+  const row=g=>`<div class="urlrow" data-id="${g.id}" data-name="${esc((g.n+" "+SITES[g.s].name).toLowerCase())}"><b>${esc(g.n)}${g.placeholder&&!state.urls[g.id]?'<span class="tag">קישור זמני</span>':""}</b>
+      <input type="url" inputmode="url" dir="ltr" autocomplete="off" spellcheck="false" aria-label="הקישור של ${esc(g.n)}" data-url="${g.id}" value="${esc(state.urls[g.id]||"")}" placeholder="${esc(g.u0.replace(/^https:\/\//,"").slice(0,60))}"></div>`;
+  openSheet(`<h3 id="sheetTitle">הקישורים שלנו</h3>
+    <p class="help" style="margin:0">הדביקו קישור ישיר לכל משחק, כמו הקישור של המשחק של היום. שדה ריק משאיר את הקישור המקורי.</p>
+    <input id="uf" type="search" placeholder="חיפוש משחק" aria-label="חיפוש משחק" autocomplete="off">
+    <div id="ul">${games.map(row).join("")}</div>
+    <div class="row-btns"><button class="btn primary main" id="saveU" type="button">שמירה</button><button class="tbtn" type="button" data-act="close">ביטול</button></div>`);
+  const uf=document.getElementById("uf");
+  uf.addEventListener("input",()=>{const q=uf.value.trim().toLowerCase();document.querySelectorAll("#ul .urlrow").forEach(r=>{r.hidden=!!q&&!r.dataset.name.includes(q)})});
+  document.getElementById("saveU").onclick=()=>{
+    const next={}; let bad=null;
+    document.querySelectorAll("#ul input[data-url]").forEach(i=>{const v=i.value.trim(); if(!v) return; if(!/^https:\/\/[^\s]+$/i.test(v)){bad=bad||byId[i.dataset.url].n;return} next[i.dataset.url]=v});
+    if(bad){toast("הקישור של "+bad+" צריך להתחיל ב-https://");return}
+    state.urls=next; for(const g of GAMES) g.u=next[g.id]||g.u0;
+    save();closeSheet();render();toast("הקישורים נשמרו.");
+  };
 }
 function openDuel(id){
   const g=byId[id], t=TODAY(), e=state.log[t]&&state.log[t][id], kind=metricOf(g), d=(e&&e.d)||{};
@@ -850,7 +826,7 @@ function openDuel(id){
   const upd=()=>{const a=get("a"),b=get("b");const w=duelWinner({d:{a,b}},kind);pv.innerHTML=[a?`${PIECE.s} ${esc(fmtVal(kind,a))}`:"",b?`${PIECE.r} ${esc(fmtVal(kind,b))}`:"",w?(w==="t"?"<b>תיקו</b>":`<b>${esc(nm(w))} לוקח את זה</b>`):""].filter(Boolean).join(" · ")};
   document.querySelectorAll("#sheet textarea, #sheet input").forEach(x=>x.addEventListener("input",upd)); upd();
   document.getElementById("saveD").onclick=()=>{const a=get("a"),b=get("b"); if(!a&&!b){closeSheet();return}
-    state.log[t]=state.log[t]||{}; state.log[t][id]={w:"",d:{...(a?{a}:{}),...(b?{b}:{})}}; save();closeSheet();render();
+    state.log[t]=state.log[t]||{}; const now=Date.now(); state.log[t][id]={w:"",t:now,d:{...(a?{a:{...a,t:now}}:{}),...(b?{b:{...b,t:now}}:{})}}; save();closeSheet();render();
     const w=duelWinner(state.log[t][id],kind); toast(w?(w==="t"?"תיקו. נדיר.":nm(w)+" לקח את "+g.n+"."):"נשמר. מחכים לצד השני.");};
   const c=document.getElementById("clearD"); if(c) c.onclick=()=>{delete state.log[t][id]; if(!Object.keys(state.log[t]).length) delete state.log[t]; save();closeSheet();render()};
 }
@@ -870,7 +846,7 @@ document.getElementById("who").addEventListener("click",()=>{
       <label for="jk">הבדיחות שלנו<span class="help">שורה לכל בדיחה. אחת מהן תופיע בתחתית בכל ערב.</span><textarea id="jk" placeholder="למשל: מי שמפסיד בוורדל מכין תה">${esc((state.jokes||[]).join("\n"))}</textarea></label>
       <div class="row-btns"><button class="btn primary main" type="submit">שמירה</button><button class="tbtn" type="button" data-act="close">ביטול</button></div>
     </form>
-    <div class="backup"><b>גיבוי והעברה לאפליקציה</b><span class="help">מעתיק את כל ההיסטוריה, השמות והבדיחות. מדביקים אותו באפליקציה החדשה.</span><button class="btn ghost sm" id="exp" type="button">להעתיק גיבוי</button><textarea id="expTxt" readonly hidden></textarea></div>`);
+    <div class="backup"><b>גיבוי והעברה</b><span class="help">מעתיק את כל ההיסטוריה, השמות והבדיחות, או מייבא גיבוי ומשלב אותו במה שכבר יש. שום דבר לא נמחק.</span><div class="row-btns"><button class="btn ghost sm" id="exp" type="button">להעתיק גיבוי</button><button class="btn ghost sm" id="imp" type="button">לייבא גיבוי</button></div><textarea id="impTxt" placeholder="מדביקים כאן את הגיבוי" hidden></textarea><button class="btn primary sm" id="impGo" type="button" hidden>לייבא עכשיו</button><textarea id="expTxt" readonly hidden></textarea></div>`);
   const form=document.getElementById("nf");
   const refresh=()=>{const p=cur();
     for(const w of ["a","b"]){const o=w==="a"?"b":"a", card=form.querySelector(`.who-card[data-w="${w}"]`), col=colorOf(p[w].color), sh=shapeOf(p[w].shape);
@@ -887,8 +863,17 @@ document.getElementById("who").addEventListener("click",()=>{
     state.names.a=document.getElementById("na").value.trim()||"סטיב";state.names.b=document.getElementById("nb").value.trim()||"רוני";
     state.jokes=document.getElementById("jk").value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,60);
     saved=true; save();closeSheet();render();toast("נשמר.")});
-  document.getElementById("exp").addEventListener("click",async()=>{const txt=JSON.stringify({app:"al-hasapa-shelanu",exported:new Date().toISOString(),state});
+  document.getElementById("exp").addEventListener("click",async()=>{
+    const txt=NATIVE?NATIVE.exportBackup():JSON.stringify({app:"al-hasapa-shelanu",exported:new Date().toISOString(),state});
+    if(NATIVE){NATIVE.copyText(txt);toast("הגיבוי הועתק.");return}
     try{await navigator.clipboard.writeText(txt);toast("הגיבוי הועתק.")}catch(e){const ta=document.getElementById("expTxt");ta.hidden=false;ta.value=txt;ta.focus();ta.select();toast("סמנו והעתיקו ידנית.")}});
+  document.getElementById("imp").addEventListener("click",()=>{const x=document.getElementById("impTxt");x.hidden=false;document.getElementById("impGo").hidden=false;x.focus()});
+  document.getElementById("impGo").addEventListener("click",()=>{
+    if(!NATIVE){toast("הייבוא זמין באפליקציה.");return}
+    let r; try{r=JSON.parse(NATIVE.importBackup(document.getElementById("impTxt").value))}catch(e){toast("משהו השתבש בייבוא.");return}
+    if(!r.ok){toast(r.message);return}
+    onSheetClose=null; closeSheet(); reloadState(); toast(r.message);
+  });
 });
 
 /* ================= interactions ================= */
@@ -896,23 +881,25 @@ function setView(v){view=v;document.querySelectorAll(".tab").forEach(t=>t.setAtt
   ["home","disc","stats"].forEach(x=>document.getElementById("v-"+x).hidden=x!==v);render();document.getElementById("scroller").scrollTo({top:0,left:0})}
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest(".tab");if(b)setView(b.dataset.view)});
 document.querySelector("main").addEventListener("click",e=>{
+  const pl=e.target.closest("[data-play]"); if(pl){playGame(pl.dataset.play);return}
   const go=e.target.closest("[data-goto]"); if(go){setView(go.dataset.goto);return}
   const f=e.target.closest("[data-filter]"); if(f){filter=f.dataset.filter;renderHome();document.getElementById("lib").scrollIntoView({block:"start"});return}
   const a=e.target.closest("[data-act]"); if(!a) return;
   const act=a.dataset.act, host=a.closest("[data-id]"), id=a.dataset.id||(host&&host.dataset.id), t=TODAY();
   if(act==="shuffle"){featOffset++;renderHome();return}
+  if(act==="urls"){openUrls();return}
   if(act==="result"){openResult(id);return}
   if(act==="duel"){openDuel(id);return}
   if(act==="mark"){
     state.log[t]=state.log[t]||{};
     const was=!!state.log[t][id];
     if(was){delete state.log[t][id]; if(!Object.keys(state.log[t]).length) delete state.log[t];}
-    else {state.log[t][id]={w:""}; toast(pickLine(["סומן. רוצים להדביק תוצאה?","יש. +2 נקודות ספה.","נרשם על הספה."]));}
+    else {state.log[t][id]={w:"",t:Date.now()}; toast(pickLine(["סומן. רוצים להדביק תוצאה?","יש. +2 נקודות ספה.","נרשם על הספה."]));}
     save(); render();
     if(!was){const b=document.querySelector(`.row[data-id="${id}"] .tick`); if(b) b.classList.add("pop");}
   } else if(act==="win"){
     const cur=state.log[t]&&state.log[t][id]; if(!cur) return;
-    cur.w=cur.w===a.dataset.w?"":a.dataset.w; save(); render();
+    cur.w=cur.w===a.dataset.w?"":a.dataset.w; cur.t=Date.now(); save(); render();
     if(cur.w) toast(cur.w==="t"?"פיצחנו ביחד.":nm(cur.w)+" פיצח את "+byId[id].n+".");
   } else if(act==="remove"){state.prefs[id]="no"; save(); render(); toast(byId[id].n+" ירד מהספה.")}
   else if(act==="restore"){delete state.prefs[id]; save(); render(); toast(byId[id].n+" חזר מתחת לכריות.")}
@@ -964,25 +951,16 @@ const scroller=document.getElementById("scroller");
   addEventListener("resize",()=>{if(!chip.hidden)fill()}); setInterval(()=>{if(!chip.hidden)fill()},1000);
 })();
 
-applyTheme();render();
-loadPieces().then(()=>{applyTheme();render()});
+(async()=>{
+  let c=null;
+  if(NATIVE){try{c=JSON.parse(NATIVE.loadCatalog())}catch(e){(window.__errors||[]).push("loadCatalog: "+e)}}
+  if(!c){try{const r=await fetch("../games.json");if(r.ok)c=await r.json()}catch(e){}}      // plain browser: the same file the app ships
+  if(c) setCatalog(c); else (window.__errors||[]).push("no game catalogue");
+  applyTheme();render();
+  loadPieces().then(()=>{applyTheme();render()});
+})();
 setInterval(renderMast,60000);
 
-/* ================= cloud sync ================= */
-(async()=>{
-  if(!window.claude||!window.claude.use) return;
-  try{db=await window.claude.use("db")}catch(e){db=null}
-  if(!db) return;
-  docRef=db.doc("couch/state");
-  const timer=setTimeout(()=>setSync("שמור במכשיר. הענן לא עונה."),10000);
-  docRef.onSnapshot(snap=>{
-    if(!snap.metadata.fromCache) clearTimeout(timer);
-    if(snap.exists){
-      if(snap.metadata.hasPendingWrites) return;
-      const d=snap.data(); if(d&&d.v===1){state=JSON.parse(JSON.stringify(d)); try{localStorage.setItem(LS,JSON.stringify(state))}catch(e){} if(!document.getElementById("overlay").classList.contains("show")) render(); setSync("מסונכרן")}
-    } else if(!snap.metadata.fromCache){dirty=true;flush()}
-  },()=>{clearTimeout(timer);setSync("שמור במכשיר בלבד")});
-})();
 </script>
 </body>
 </html>

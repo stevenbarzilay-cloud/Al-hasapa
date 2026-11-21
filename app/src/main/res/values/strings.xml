@@ -6,4 +6,11 @@
     <string name="splash_description">על הספה שלנו. שלושה חתולים ישנים על הספה הוורודה.</string>
     <string name="hub_error_title">משהו השתבש בטעינה של הספה.</string>
     <string name="hub_error_retry">לנסות שוב</string>
+    <string name="import_ok">יובא: %1$d חדשים, %2$d עודכנו, %3$d כבר היו.</string>
+    <string name="import_empty">אין מה לייבא. מדביקים את הגיבוי בתיבה.</string>
+    <string name="import_not_json">זה לא נראה כמו גיבוי.</string>
+    <string name="import_not_ours">זה לא גיבוי של על הספה שלנו.</string>
+    <string name="import_version">הגיבוי הזה מגרסה שלא מוכרת לי.</string>
+    <string name="import_too_big">הגיבוי גדול מדי.</string>
+    <string name="import_no_log">בגיבוי חסרה ההיסטוריה.</string>
 </resources>

@@ -12,6 +12,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.LifecycleEventObserver
+import android.widget.Toast
+import app.couch.alhasapa.bridge.HubBridge
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.AppRoot
@@ -36,12 +38,19 @@ class MainActivity : ComponentActivity() {
         // Lets `chrome://inspect` attach to the hub on a debug build. Never in release.
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 
+        val app = application as CouchApp
+        val bridge = HubBridge(this, app.repo, app.catalog, object : HubBridge.Actions {
+            override fun play(gameId: String) {
+                // The isolated player arrives in the next milestone; until then a game cannot be opened from here.
+                runOnUiThread { Toast.makeText(this@MainActivity, R.string.player_soon, Toast.LENGTH_SHORT).show() }
+            }
+        })
         val reduceMotion = animationsRemoved(contentResolver)
         // Only on a real cold start (not after rotation or coming back), and never with "remove animations" on.
         val playSplash = savedInstanceState == null && !reduceMotion
         setContent {
             AlHasapaTheme {
-                AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() })
+                AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() }, bridge = bridge)
             }
         }
         // Plain views, no Compose and no WebView: readable even if either of those fails. Debug builds only.

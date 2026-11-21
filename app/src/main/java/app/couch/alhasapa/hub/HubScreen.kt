@@ -46,6 +46,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.webkit.WebViewAssetLoader
 import app.couch.alhasapa.R
+import app.couch.alhasapa.bridge.HubBridge
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.theme.Palette
@@ -89,6 +90,7 @@ private const val PROBE_JS = """(function(){
 fun HubScreen(
     onExit: () -> Unit,
     reduceMotion: Boolean = false,
+    bridge: HubBridge? = null,
     onReady: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -158,7 +160,11 @@ fun HubScreen(
         if (view == null) onExit() else closeSheetOrExit(view, onExit)
     }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { webView?.onPause() }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { webView?.onResume() }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        webView?.onResume()
+        // Something else (the player, a shared result) may have changed the state while the hub was away.
+        webView?.evaluateJavascript("window.__reloadState && window.__reloadState()", null)
+    }
 
     Box(
         Modifier
@@ -176,6 +182,8 @@ fun HubScreen(
                         // layout height is 0, which collapses every percentage height. That blanked the hub in M0.1-M0.3.
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         configureHub()
+                        // Only ever our own bundled page is loaded in this WebView (everything else is refused), so it may talk to the app.
+                        bridge?.let { addJavascriptInterface(it, HubBridge.NAME) }
                         webChromeClient = console
                         webViewClient = HubWebViewClient(
                             ctx, assetLoader,

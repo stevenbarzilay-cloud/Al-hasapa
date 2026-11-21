@@ -8,10 +8,11 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Status:** milestone 0, second round (skeleton + phone feedback). The hub opens and works offline,
-the launcher icon and an animated splash use the three-cats illustration, and each of you can pick a
-shape and a colour for your piece (the whole interface follows the colour). Game links, accounts, TV
-mode, result capture and the real storage layer come in the next milestones.
+**Status:** milestone 1 (data layer). The state is one JSON document stored natively (atomic file, revisioned), the hub
+talks to it through a bridge, the game catalogue is `app/src/main/assets/games.json`, backups can be exported and
+imported (merged, newest wins, nothing deleted), and the team scoring is ported to Kotlin and tested against the
+prototype's own functions. Still to come: the isolated game player and accounts, TV mode, result capture and the
+share target.
 
 Hub notes:
 
@@ -93,9 +94,23 @@ install again.
 | `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `ui/` (animated splash), `ui/theme/` |
 | `app/src/main/assets/hub/` | The prototype's web UI, `pieces.json`, bundled fonts and images |
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
-| `tools/` | `make_illustration_masks.py`: regenerates the colour-family masks for the illustrations |
+| `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |
+| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (catalogue from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring) |
 | `THIRD_PARTY/` | Font license (SIL OFL 1.1) |
 | `couch-artifact/` | The original prototype and the Haaretz layout bug screenshots, kept verbatim |
+
+## Data
+
+- `StateRepository` owns the state (`filesDir/state.json`, replaced atomically). Every change bumps a revision; the hub saves
+  with the revision it last saw and a stale save is refused, so a change made natively (a result saved from the player)
+  is never overwritten by a page that was in the background. The hub reloads its state whenever the app returns to the front.
+- Schema = the prototype's (`v, names, prefs, jokes, log[day][game] = {w, r?, d?}`) plus additive `pieces`, `urls`, and a
+  `t` timestamp on entries. Unknown fields are preserved.
+- Import merges: per day and game the newer entry (`t`) wins, head-to-head sides merge side by side, a prototype backup
+  without timestamps lets the richer entry win, names changed from the default win, jokes are unioned, nothing is deleted.
+- First run migrates whatever the page kept in its own localStorage before this layer existed.
+- Deviation from the brief: a single atomic file instead of DataStore/Room. The page needs a synchronous read at boot and one
+  JSON document needs nothing more; the `StateStore` interface is the seam where sync could be added later.
 
 ## Principles that tests guard
 

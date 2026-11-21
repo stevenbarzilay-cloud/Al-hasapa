@@ -1,0 +1,721 @@
+{
+ "v": 1,
+ "_comment": "The game catalogue. The only thing you normally change is a game's \"u\" (its link), or edit it in the app. metric = how a result is scored: guesses | mistakes | hints | time | words | none. placeholder = a search link to replace with a direct one.",
+ "sites": {
+  "nyt": {
+   "id": "nyt",
+   "name": "NYT Games",
+   "color": "#e9e4d8",
+   "account": true,
+   "domains": [
+    "nytimes.com"
+   ],
+   "profile": "games",
+   "label": "NYT",
+   "loginUrl": "https://myaccount.nytimes.com/auth/login",
+   "sessionCookies": [
+    "NYT-S"
+   ]
+  },
+  "hz": {
+   "id": "hz",
+   "name": "הארץ משחקים",
+   "color": "#8fb7ff",
+   "account": true,
+   "domains": [
+    "haaretz.co.il",
+    "haaretz.com"
+   ],
+   "profile": "games",
+   "label": "הארץ",
+   "extraHosts": [
+    "piano.io",
+    "tinypass.com"
+   ],
+   "loginUrl": "https://www.haaretz.co.il/riddles",
+   "sessionCookies": []
+  },
+  "kr": {
+   "id": "kr",
+   "name": "Krillion ומשפחה",
+   "color": "#7fd1c1",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "dl": {
+   "id": "dl",
+   "name": "Dialed",
+   "color": "#e3a6ff",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "mu": {
+   "id": "mu",
+   "name": "מוזיקה",
+   "color": "#ffb27a",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "tr": {
+   "id": "tr",
+   "name": "טריוויה והשוואות",
+   "color": "#f4d06f",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "he": {
+   "id": "he",
+   "name": "בעברית",
+   "color": "#a8e6a1",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "wd": {
+   "id": "wd",
+   "name": "מילים",
+   "color": "#c9d6ff",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "geo": {
+   "id": "geo",
+   "name": "מקומות וזמנים",
+   "color": "#7fd6f0",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "odd": {
+   "id": "odd",
+   "name": "מוזרים ומקוריים",
+   "color": "#f09a8a",
+   "account": false,
+   "domains": [],
+   "profile": "games"
+  },
+  "li": {
+   "id": "li",
+   "name": "לינקדאין · ראש בראש",
+   "color": "#6cc3ff",
+   "account": true,
+   "domains": [
+    "linkedin.com"
+   ],
+   "profile": "player",
+   "label": "LinkedIn",
+   "loginUrl": "https://www.linkedin.com/login",
+   "sessionCookies": [
+    "li_at"
+   ]
+  }
+ },
+ "games": [
+  {
+   "id": "wordle",
+   "n": "Wordle",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "W",
+   "u": "https://www.nytimes.com/games/wordle/index.html",
+   "d": "מילה באנגלית בשישה ניסיונות.",
+   "metric": "guesses",
+   "lib": 1
+  },
+  {
+   "id": "connections",
+   "n": "Connections",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "Co",
+   "u": "https://www.nytimes.com/games/connections",
+   "d": "16 מילים, ארבע קבוצות, ארבע טעויות.",
+   "metric": "mistakes",
+   "lib": 1
+  },
+  {
+   "id": "strands",
+   "n": "Strands",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "St",
+   "u": "https://www.nytimes.com/games/strands",
+   "d": "מוצאים מילים בנושא שממלאות את כל הלוח.",
+   "metric": "hints",
+   "lib": 1
+  },
+  {
+   "id": "mini",
+   "n": "The Mini",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "Mi",
+   "u": "https://www.nytimes.com/crosswords/game/mini",
+   "d": "תשבץ קטנטן לדקה וחצי.",
+   "metric": "time",
+   "lib": 1
+  },
+  {
+   "id": "bee",
+   "n": "Spelling Bee",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "SB",
+   "u": "https://www.nytimes.com/puzzles/spelling-bee",
+   "d": "שבע אותיות, כמה שיותר מילים.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "pips",
+   "n": "Pips",
+   "s": "nyt",
+   "k": "היגיון",
+   "m": "Pi",
+   "u": "https://www.nytimes.com/games/pips",
+   "d": "מניחים דומינו לפי תנאים על הלוח.",
+   "metric": "time",
+   "lib": 1
+  },
+  {
+   "id": "letterboxed",
+   "n": "Letter Boxed",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "LB",
+   "u": "https://www.nytimes.com/puzzles/letter-boxed",
+   "d": "מילים שמשתרשרות סביב ריבוע אותיות.",
+   "metric": "words",
+   "why": "עוד מ-NYT שעוד לא במאגר"
+  },
+  {
+   "id": "tiles",
+   "n": "Tiles",
+   "s": "nyt",
+   "k": "היגיון",
+   "m": "Ti",
+   "u": "https://www.nytimes.com/puzzles/tiles",
+   "d": "משחק התאמת אריחים מרגיע.",
+   "metric": "none",
+   "why": "עוד מ-NYT, רגוע ויפה"
+  },
+  {
+   "id": "crossword",
+   "n": "The Crossword",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "Cr",
+   "u": "https://www.nytimes.com/crosswords/game/daily",
+   "d": "התשבץ הגדול, קשה יותר לקראת סוף השבוע.",
+   "metric": "time",
+   "why": "לערבי שבת ארוכים"
+  },
+  {
+   "id": "midi",
+   "n": "The Midi",
+   "s": "nyt",
+   "k": "מילים",
+   "m": "Md",
+   "u": "https://www.google.com/search?q=NYT%20The%20Midi%20crossword",
+   "d": "התשבץ באמצע, בין המיני לגדול.",
+   "metric": "time",
+   "why": "אם המיני נגמר מהר מדי",
+   "placeholder": true
+  },
+  {
+   "id": "connsports",
+   "n": "Connections: Sports",
+   "s": "nyt",
+   "k": "ידע",
+   "m": "CS",
+   "u": "https://www.nytimes.com/athletic/connections-sports-edition",
+   "d": "Connections עם קבוצות מעולם הספורט.",
+   "metric": "mistakes",
+   "why": "וריאציה על משחק שאתם כבר אוהבים"
+  },
+  {
+   "id": "nytsudoku",
+   "n": "Sudoku",
+   "s": "nyt",
+   "k": "מספרים",
+   "m": "Su",
+   "u": "https://www.nytimes.com/puzzles/sudoku",
+   "d": "שלוש רמות קושי ביום.",
+   "metric": "time",
+   "why": "מ-NYT"
+  },
+  {
+   "id": "hz5",
+   "n": "5 אותיות",
+   "s": "hz",
+   "k": "מילים",
+   "m": "5",
+   "u": "https://www.haaretz.co.il/riddles/5-letters",
+   "d": "וורדעל בעברית.",
+   "metric": "guesses",
+   "lib": 1
+  },
+  {
+   "id": "hzconn",
+   "n": "מה הקשר?",
+   "s": "hz",
+   "k": "מילים",
+   "m": "מה",
+   "u": "https://www.haaretz.co.il/riddles",
+   "d": "ארבע קבוצות של ארבע מילים.",
+   "metric": "mistakes",
+   "lib": 1
+  },
+  {
+   "id": "hzchain",
+   "n": "השרשרת",
+   "s": "hz",
+   "k": "היגיון",
+   "m": "שר",
+   "u": "https://www.haaretz.co.il/riddles/2026-06-07/ty-article-static/0000019d-f71f-df01-a3dd-f7bfe6eb0002",
+   "d": "מסלול של ארבעה צעדים בין שני קצוות.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "hzsong",
+   "n": "איזה שיר!",
+   "s": "hz",
+   "k": "מוזיקה",
+   "m": "♪",
+   "u": "https://www.haaretz.co.il/riddles",
+   "d": "שיר עברי בתרגום מוזר, אפשר לשמוע רמז.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "hzcover",
+   "n": "סיפור כיסוי",
+   "s": "hz",
+   "k": "היגיון",
+   "m": "סכ",
+   "u": "https://www.haaretz.co.il/riddles/2024-11-05/ty-article-static/.premium/00000191-8d8d-dd8c-addd-bdfd9cab0000",
+   "d": "מכסים עיגולים בצורות, בכמה שפחות צעדים.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "hzwho",
+   "n": "מי אני?",
+   "s": "hz",
+   "k": "ידע",
+   "m": "מי",
+   "u": "https://www.haaretz.co.il/riddles",
+   "d": "תמונה מפוקסלת שמתבהרת לאט.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "hzlogic",
+   "n": "הגיונית",
+   "s": "hz",
+   "k": "היגיון",
+   "m": "הג",
+   "u": "https://www.haaretz.co.il/riddles",
+   "d": "חידת היגיון מילולית יומית.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "hzsnake",
+   "n": "שביל הנחש",
+   "s": "hz",
+   "k": "זיכרון",
+   "m": "נח",
+   "u": "https://www.haaretz.co.il/riddles/2024-11-16/ty-article-static/.premium/00000197-f3ca-dc05-a59f-f3efde110000",
+   "d": "חמש שניות לזכור את השביל ולצייר אותו.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "hzmath",
+   "n": "אפשר חשבון",
+   "s": "hz",
+   "k": "מספרים",
+   "m": "+",
+   "u": "https://www.haaretz.co.il/riddles/2025-05-11/ty-article-static/.premium/00000193-6233-d893-a193-66b713200000",
+   "d": "מסמנים מספרים שמגיעים לסכום בכל שורה וטור.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "hzsudoku",
+   "n": "סודוקו",
+   "s": "hz",
+   "k": "מספרים",
+   "m": "9",
+   "u": "https://www.haaretz.co.il/riddles",
+   "d": "סודוקו בשלוש רמות.",
+   "metric": "none",
+   "why": "מהארץ, עוד לא במאגר"
+  },
+  {
+   "id": "hz20",
+   "n": "20 שאלות",
+   "s": "hz",
+   "k": "ידע",
+   "m": "20",
+   "u": "https://www.haaretz.co.il/riddles",
+   "d": "הטקס השבועי, פעם בשבוע.",
+   "metric": "none",
+   "why": "שבועי, טוב לסופ״ש ביחד"
+  },
+  {
+   "id": "krillion",
+   "n": "Krillion",
+   "s": "kr",
+   "k": "ידע",
+   "m": "Kr",
+   "u": "https://krillion.io",
+   "d": "שבע שאלות פתוחות, התשובה הנדירה מנצחת.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "noillirk",
+   "n": "Noillirk",
+   "s": "kr",
+   "k": "ידע",
+   "m": "No",
+   "u": "https://www.google.com/search?q=Noillirk%20daily%20game",
+   "d": "ההפך: התשובה הכי צפויה מנצחת.",
+   "metric": "none",
+   "lib": 1,
+   "placeholder": true
+  },
+  {
+   "id": "dialed",
+   "n": "Dialed · צבע",
+   "s": "dl",
+   "k": "חושים",
+   "m": "◐",
+   "u": "https://dialed.gg",
+   "d": "רואים צבע לרגע ומשחזרים אותו מהזיכרון.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "dialedsound",
+   "n": "Dialed · צליל",
+   "s": "dl",
+   "k": "חושים",
+   "m": "∿",
+   "u": "https://dialed.gg",
+   "d": "שומעים טון ומשחזרים את התדר.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "bandle",
+   "n": "Bandle",
+   "s": "mu",
+   "k": "מוזיקה",
+   "m": "Ba",
+   "u": "https://bandle.app",
+   "d": "מזהים שיר כשהכלים נכנסים אחד אחד.",
+   "metric": "guesses",
+   "lib": 1
+  },
+  {
+   "id": "moreless",
+   "n": "More/Less",
+   "s": "tr",
+   "k": "ידע",
+   "m": "±",
+   "u": "https://www.google.com/search?q=More%2FLess%20lessgames%20daily",
+   "d": "מה יותר: חיפושים, האזנות, דירוגים.",
+   "metric": "none",
+   "lib": 1,
+   "placeholder": true
+  },
+  {
+   "id": "meduyeket",
+   "n": "מדויקת",
+   "s": "he",
+   "k": "מילים",
+   "m": "מד",
+   "u": "https://meduyeket.net",
+   "d": "וורדל עברי ותיק ואהוב.",
+   "metric": "guesses",
+   "why": "אם אתם אוהבים את 5 אותיות"
+  },
+  {
+   "id": "semantle-he",
+   "n": "סמנטעל",
+   "s": "he",
+   "k": "מילים",
+   "m": "סמ",
+   "u": "https://semantle.ishefi.com",
+   "d": "מנחשים מילה לפי קרבת משמעות, לא אותיות.",
+   "metric": "none",
+   "why": "טוב לשניים: מתווכחים על כיוון"
+  },
+  {
+   "id": "semantle",
+   "n": "Semantle",
+   "s": "wd",
+   "k": "מילים",
+   "m": "Se",
+   "u": "https://semantle.com",
+   "d": "קרבת משמעות, באנגלית.",
+   "metric": "none",
+   "why": "הגרסה המקורית של סמנטעל"
+  },
+  {
+   "id": "contexto",
+   "n": "Contexto",
+   "s": "wd",
+   "k": "מילים",
+   "m": "Cx",
+   "u": "https://contexto.me",
+   "d": "כל ניחוש מקבל דירוג לפי הקרבה למילה.",
+   "metric": "none",
+   "why": "דומה לסמנטעל, קליל יותר"
+  },
+  {
+   "id": "waffle",
+   "n": "Waffle",
+   "s": "wd",
+   "k": "מילים",
+   "m": "Wa",
+   "u": "https://wafflegame.net",
+   "d": "מחליפים אותיות בתוך רשת עד שכל המילים מסתדרות.",
+   "metric": "none",
+   "why": "וורדל שהוא גם פאזל"
+  },
+  {
+   "id": "squaredle",
+   "n": "Squaredle",
+   "s": "wd",
+   "k": "מילים",
+   "m": "Sq",
+   "u": "https://squaredle.app",
+   "d": "מוצאים מילים ברשת אותיות.",
+   "metric": "none",
+   "why": "קרוב ל-Strands"
+  },
+  {
+   "id": "crosswordle",
+   "n": "Crosswordle",
+   "s": "wd",
+   "k": "מילים",
+   "m": "Cw",
+   "u": "https://crosswordle.com",
+   "d": "הכלאה של וורדל ותשבץ.",
+   "metric": "none",
+   "why": "שני אהובים במשחק אחד"
+  },
+  {
+   "id": "worldle",
+   "n": "Worldle",
+   "s": "geo",
+   "k": "גיאוגרפיה",
+   "m": "Wo",
+   "u": "https://worldle.teuteuf.fr",
+   "d": "מזהים מדינה לפי הצללית שלה.",
+   "metric": "guesses",
+   "why": "ניחוש ביחד מול המפה"
+  },
+  {
+   "id": "travle",
+   "n": "Travle",
+   "s": "geo",
+   "k": "גיאוגרפיה",
+   "m": "Tr",
+   "u": "https://travle.earth",
+   "d": "מוצאים מסלול בין שתי מדינות.",
+   "metric": "guesses",
+   "why": "דומה לרעיון של השרשרת"
+  },
+  {
+   "id": "timeguessr",
+   "n": "TimeGuessr",
+   "s": "geo",
+   "k": "גיאוגרפיה",
+   "m": "TG",
+   "u": "https://timeguessr.com",
+   "d": "תמונה אחת: איפה ומתי צולמה.",
+   "metric": "none",
+   "why": "נראה מעולה על מסך גדול"
+  },
+  {
+   "id": "framed",
+   "n": "Framed",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Fr",
+   "u": "https://framed.wtf",
+   "d": "מזהים סרט לפי פריימים.",
+   "metric": "guesses",
+   "why": "מושלם לטלוויזיה"
+  },
+  {
+   "id": "boxoffice",
+   "n": "Box Office Game",
+   "s": "tr",
+   "k": "ידע",
+   "m": "BO",
+   "u": "https://boxofficega.me",
+   "d": "מנחשים סרטים לפי רמזי קופות.",
+   "metric": "guesses",
+   "why": "וורדל של סרטים"
+  },
+  {
+   "id": "cinematrix",
+   "n": "Cinematrix",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Ci",
+   "u": "https://www.google.com/search?q=Cinematrix%20daily%20movie%20grid",
+   "d": "ממלאים טבלה בסרטים שמתאימים לשורה ולטור.",
+   "metric": "none",
+   "why": "דיונים טובים על הספה",
+   "placeholder": true
+  },
+  {
+   "id": "codenames",
+   "n": "Codenames Daily",
+   "s": "wd",
+   "k": "מילים",
+   "m": "CN",
+   "u": "https://www.google.com/search?q=Codenames%20Daily%20puzzle",
+   "d": "חידות יומיות של אסוציאציות.",
+   "metric": "mistakes",
+   "why": "קרוב ל-Connections",
+   "placeholder": true
+  },
+  {
+   "id": "scrandle",
+   "n": "Scrandle",
+   "s": "odd",
+   "k": "ידע",
+   "m": "Sc",
+   "u": "https://scrandle.com",
+   "d": "עשרה זוגות אוכל אצטדיונים, מה הקהל העדיף.",
+   "metric": "none",
+   "why": "כמו Noillirk, רק עם אוכל"
+  },
+  {
+   "id": "cutle",
+   "n": "Cutle",
+   "s": "odd",
+   "k": "חושים",
+   "m": "Cu",
+   "u": "https://www.google.com/search?q=Cutle%20daily%20shape%20cut%20game",
+   "d": "חותכים צורה עקומה לשני חצאים שווים.",
+   "metric": "none",
+   "why": "משחק עין כמו Dialed",
+   "placeholder": true
+  },
+  {
+   "id": "coffeegolf",
+   "n": "Coffee Golf",
+   "s": "odd",
+   "k": "חושים",
+   "m": "CG",
+   "u": "https://www.google.com/search?q=Coffee%20Golf%20daily%20game",
+   "d": "מיני גולף יומי, כמה מכות.",
+   "metric": "none",
+   "why": "משהו לא מילולי לשבירת השגרה",
+   "placeholder": true
+  },
+  {
+   "id": "queens",
+   "n": "Queens",
+   "s": "li",
+   "k": "היגיון",
+   "m": "Q",
+   "u": "https://www.linkedin.com/games/queens/",
+   "d": "כתר אחד בכל שורה, טור ואזור צבע.",
+   "metric": "time",
+   "lib": 1
+  },
+  {
+   "id": "tango",
+   "n": "Tango",
+   "s": "li",
+   "k": "היגיון",
+   "m": "Ta",
+   "u": "https://www.linkedin.com/games/tango/",
+   "d": "שמשות וירחים באיזון מושלם.",
+   "metric": "time",
+   "lib": 1
+  },
+  {
+   "id": "zip",
+   "n": "Zip",
+   "s": "li",
+   "k": "היגיון",
+   "m": "Zi",
+   "u": "https://www.linkedin.com/games/zip/",
+   "d": "מסלול אחד דרך כל המשבצות, לפי הסדר.",
+   "metric": "time",
+   "lib": 1
+  },
+  {
+   "id": "pinpoint",
+   "n": "Pinpoint",
+   "s": "li",
+   "k": "מילים",
+   "m": "Pp",
+   "u": "https://www.linkedin.com/games/pinpoint/",
+   "d": "מנחשים את הקטגוריה בכמה שפחות רמזים.",
+   "metric": "guesses",
+   "lib": 1
+  },
+  {
+   "id": "crossclimb",
+   "n": "Crossclimb",
+   "s": "li",
+   "k": "מילים",
+   "m": "Cc",
+   "u": "https://www.linkedin.com/games/crossclimb/",
+   "d": "סולם מילים שכל שלב בו משנה אות אחת.",
+   "metric": "time",
+   "why": "עוד מלינקדאין"
+  },
+  {
+   "id": "minisudoku",
+   "n": "Mini Sudoku",
+   "s": "li",
+   "k": "מספרים",
+   "m": "MS",
+   "u": "https://www.linkedin.com/games/mini-sudoku/",
+   "d": "סודוקו 6x6 מהיר.",
+   "metric": "time",
+   "why": "עוד מלינקדאין, קצר וחד"
+  },
+  {
+   "id": "patches",
+   "n": "Patches",
+   "s": "li",
+   "k": "היגיון",
+   "m": "Pa",
+   "u": "https://www.linkedin.com/games/",
+   "d": "פאזל טלאים יומי של לינקדאין.",
+   "metric": "time",
+   "why": "עוד מלינקדאין"
+  },
+  {
+   "id": "wend",
+   "n": "Wend",
+   "s": "li",
+   "k": "היגיון",
+   "m": "We",
+   "u": "https://www.linkedin.com/games/",
+   "d": "עוד פאזל יומי של לינקדאין.",
+   "metric": "time",
+   "why": "עוד מלינקדאין"
+  }
+ ]
+}

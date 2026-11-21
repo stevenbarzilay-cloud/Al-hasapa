@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import app.couch.alhasapa.bridge.HubBridge
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.hub.HubScreen
 
@@ -17,12 +18,12 @@ import app.couch.alhasapa.hub.HubScreen
  * lifts when the hub reports ready.
  */
 @Composable
-fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit) {
+fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, bridge: HubBridge? = null) {
     var hubReady by remember { mutableStateOf(false) }
     var splashDone by remember { mutableStateOf(!playSplash) }
     LaunchedEffect(Unit) { Diag.log("compose: first composition (splash=${playSplash})") }
     Box(Modifier.fillMaxSize()) {
-        HubScreen(onExit = onExit, reduceMotion = reduceMotion, onReady = { hubReady = true })
+        HubScreen(onExit = onExit, reduceMotion = reduceMotion, bridge = bridge, onReady = { hubReady = true })
         if (!splashDone) SplashScreen(hubReady = hubReady, onFinished = { splashDone = true })
     }
 }
