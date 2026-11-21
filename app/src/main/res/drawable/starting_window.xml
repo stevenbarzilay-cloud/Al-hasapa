@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- What a TV shows from the very first instant, before the app has started: the three cats on the cream background. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item><color android:color="@color/cream" /></item>
+    <item>
+        <bitmap android:src="@drawable/starting_cats" android:gravity="center" />
+    </item>
+</layer-list>

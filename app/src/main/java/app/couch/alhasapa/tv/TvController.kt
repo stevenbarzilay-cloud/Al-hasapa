@@ -46,6 +46,21 @@ class TvController(val enabled: Boolean, density: Float) {
     var focusedId by mutableStateOf<String?>(null); private set
     var hint by mutableStateOf<TvHint?>(null); private set
 
+    /** The name of the dock button the focus is on, shown at the foot of the dock. */
+    var focusLabel by mutableStateOf<String?>(null)
+
+    /** The dock in its narrow form (icons only) or its full one (the evening's numbers and every control). Kept across starts. */
+    var slim by mutableStateOf(false)
+    var onSlimChanged: (Boolean) -> Unit = {}
+
+    fun toggleSlim() { slim = !slim; onSlimChanged(slim) }
+
+    /** What a screen adds to the dock (the player puts the clock, the score and the game's controls there). */
+    var dockExtras by mutableStateOf<(@androidx.compose.runtime.Composable androidx.compose.foundation.layout.ColumnScope.(slim: Boolean) -> Unit)?>(null)
+
+    /** True when the remote's focus ring is on the app's button with this [id]. */
+    fun isFocused(id: String): Boolean = mode == InputMode.NAV && zone == Zone.NATIVE && focusedId == id
+
     /** The app's own buttons, registered by their position on screen (see [tvTarget]); and the page's area. */
     private val targets = LinkedHashMap<String, NavTarget>()
     private val actions = HashMap<String, () -> Unit>()
@@ -184,7 +199,11 @@ class TvController(val enabled: Boolean, density: Float) {
     /** OK: press what is focused. */
     fun activate() {
         if (zone == Zone.NATIVE) { focusedId?.let { actions[it]?.invoke() }; return }
-        if (pageBox == null) return
+        if (pageBox == null) {
+            // A screen with no page (the accounts list, the crash report): the first OK lands on the first button, the next one presses.
+            targets.values.minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { it.box.l })?.let { zone = Zone.NATIVE; focusedId = it.id }
+            return
+        }
         pageNav.activate { r ->
             when (r) {
                 is PageResult.Tap -> { pageNav.tap(r.x, r.y); if (r.editable) openKeyboard(r.password) }

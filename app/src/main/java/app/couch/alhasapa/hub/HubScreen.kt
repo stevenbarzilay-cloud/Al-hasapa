@@ -64,6 +64,10 @@ import org.json.JSONTokener
 /** The page must have finished loading within this long. */
 private const val HUB_LOAD_TIMEOUT_MS = 10_000L
 
+/** The same on a TV box, which is many times slower to start. */
+private const val SLOW_LOAD_TIMEOUT_MS = 60_000L
+private val SLOW_CHECK_AT_MS = longArrayOf(6_000, 12_000, 20_000)
+
 /** Moments (after the page reports it finished loading) at which the host checks that the hub is really on screen. */
 private val CHECK_AT_MS = longArrayOf(2_500, 5_000, 8_000)
 
@@ -98,6 +102,12 @@ fun HubScreen(
     onReady: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val tv = LocalTv.current
+    // A TV box takes many seconds to start a WebView: nothing may be called broken, or rebuilt, until it has had a fair time.
+    val slow = tv != null
+    val loadTimeout = if (slow) SLOW_LOAD_TIMEOUT_MS else HUB_LOAD_TIMEOUT_MS
+    val checkAt = if (slow) SLOW_CHECK_AT_MS else CHECK_AT_MS
+    val maxRebuilds = if (slow) 1 else MAX_REBUILDS
     val activity = remember(context) { context.findActivity() }
     val assetLoader = remember(context) {
         WebViewAssetLoader.Builder()
@@ -115,9 +125,9 @@ fun HubScreen(
 
     // 1) Did the page finish loading at all?
     LaunchedEffect(generation) {
-        delay(HUB_LOAD_TIMEOUT_MS)
+        delay(loadTimeout)
         if (!pageReady) {
-            Diag.markProblem("the page did not finish loading in ${HUB_LOAD_TIMEOUT_MS / 1000}s")
+            Diag.markProblem("the page did not finish loading in ${loadTimeout / 1000}s")
             loadError = "the page did not finish loading"
         }
     }
@@ -125,7 +135,7 @@ fun HubScreen(
     LaunchedEffect(generation, pageReady) {
         if (!pageReady) return@LaunchedEffect
         var elapsed = 0L
-        for (at in CHECK_AT_MS) {
+        for (at in checkAt) {
             delay(at - elapsed)
             elapsed = at
             val view = webView ?: return@LaunchedEffect
@@ -147,9 +157,9 @@ fun HubScreen(
                 return@LaunchedEffect
             }
             Diag.markProblem("the window is blank although the page says it drew itself")
-            if (rebuilds < MAX_REBUILDS) {
+            if (rebuilds < maxRebuilds) {
                 rebuilds++
-                Diag.log("recovery: rebuilding the WebView (try $rebuilds of $MAX_REBUILDS)")
+                Diag.log("recovery: rebuilding the WebView (try $rebuilds of $maxRebuilds)")
                 pageReady = false
                 generation++
             } else {
@@ -177,7 +187,6 @@ fun HubScreen(
             .windowInsetsPadding(WindowInsets.safeDrawing)
             .tvPage(),
     ) {
-        val tv = LocalTv.current
         key(generation) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
@@ -205,7 +214,7 @@ fun HubScreen(
                             },
                             onLoadError = { Diag.markProblem("load error: $it"); loadError = it },
                         ) { Diag.markProblem("the render process died"); pageReady = false; generation++ }
-                        loadUrl(HubOrigin.url(reduceMotion))
+                        loadUrl(HubOrigin.url(reduceMotion, tv != null))
                         Diag.log("webview: loadUrl")
                         webView = this
                     }

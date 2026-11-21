@@ -238,6 +238,8 @@ fun TuningSheet(
                     PanPad { dx, dy -> onChange(profile.copy(panX = (profile.panX + dx).coerceIn(0.0, 1.0), panY = (profile.panY + dy).coerceIn(0.0, 1.0))) }
                 }
             }
+            // On a TV the frame is the dock at the left edge, so there is nothing to place.
+            if (app.couch.alhasapa.tv.LocalTv.current == null) {
             // The always-visible UI: where it sits and how much room it takes. It can be made small or just a button, never removed.
             Text(stringResource(R.string.menu_ui_place), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
             val place = profile.place
@@ -255,6 +257,7 @@ fun TuningSheet(
                 ModeChip(stringResource(R.string.size_small), profile.size == UiSize.SMALL, Modifier.weight(1f)) { onChange(profile.copy(uiSize = UiSize.SMALL)) }
                 ModeChip(stringResource(R.string.size_medium), profile.size == UiSize.MEDIUM, Modifier.weight(1f)) { onChange(profile.copy(uiSize = UiSize.MEDIUM)) }
                 ModeChip(stringResource(R.string.size_large), profile.size == UiSize.LARGE, Modifier.weight(1f)) { onChange(profile.copy(uiSize = UiSize.LARGE)) }
+            }
             }
             Text(stringResource(R.string.display_margin), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

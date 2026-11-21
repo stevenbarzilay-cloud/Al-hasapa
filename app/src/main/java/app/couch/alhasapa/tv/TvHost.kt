@@ -16,7 +16,11 @@ import androidx.lifecycle.LifecycleEventObserver
  */
 class TvHost(private val activity: ComponentActivity) {
     val enabled: Boolean = TvMode.isTelevision(activity)
-    val controller = TvController(enabled, activity.resources.displayMetrics.density)
+    val controller = TvController(enabled, activity.resources.displayMetrics.density).also { c ->
+        val prefs = activity.getSharedPreferences("tv", android.content.Context.MODE_PRIVATE)
+        c.slim = prefs.getBoolean("slim", false)
+        c.onSlimChanged = { prefs.edit().putBoolean("slim", it).apply() }
+    }
 
     init {
         // Keys are taken at the window, before the focused view (a WebView would eat the arrows). Not an Activity override:

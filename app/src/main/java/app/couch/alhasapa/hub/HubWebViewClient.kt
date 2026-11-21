@@ -22,8 +22,15 @@ object HubOrigin {
     const val HOST = "appassets.androidplatform.net"
     private const val PAGE = "https://$HOST/assets/hub/index.html"
 
-    /** `rm=1` tells the hub the system's "remove animations" is on, so it switches its own animations off. */
-    fun url(reduceMotion: Boolean): String = if (reduceMotion) "$PAGE?rm=1" else PAGE
+    /**
+     * `rm=1` tells the hub the system's "remove animations" is on, so it switches its own animations off. `tv=1` is a TV box: the same, and
+     * also without the recolouring layers of the illustrations (blend modes over big images are a lot for a weak GPU).
+     */
+    fun url(reduceMotion: Boolean, tv: Boolean = false): String = when {
+        tv -> "$PAGE?rm=1&tv=1"
+        reduceMotion -> "$PAGE?rm=1"
+        else -> PAGE
+    }
 }
 
 /**

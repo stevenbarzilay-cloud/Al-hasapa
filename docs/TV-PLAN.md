@@ -75,6 +75,10 @@ What it can do, honestly:
    **Revised in 1.3.0 after the first try on the box:** the default is now *navigate* (a focus ring that walks between buttons and
    through pages, scrolling at the ends), and the paw is an explicit second mode with its own always-visible button in a dock on the
    left edge; quick buttons for zoom, phone-shaped/wide and the UI's place; a smaller keyboard that makes the game area shrink.
+   **Revised again in 1.4 after the second try:** the focused button is filled with colour instead of ringed; one dock at the left edge
+   holds the game's whole frame (clock, score, zoom, shape, frame size, paw, keyboard, menu, back, result, "we played") so there are no
+   bars or panels around the game; the TV gets an optimised release build, a static starting window instead of the animated splash,
+   a lighter hub, a crash screen with startup timings, and a settings tab to edit game links and add games from inside the app.
 2. **Accounts and sync** (needs the backend decision below).
 3. **Several users and avatars, and the animation set** (ANIMATION-IDEAS.md).
 

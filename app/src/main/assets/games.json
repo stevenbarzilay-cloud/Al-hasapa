@@ -113,6 +113,14 @@
    "sessionCookies": [
     "li_at"
    ]
+  },
+  "my": {
+   "id": "my",
+   "name": "המשחקים שלנו",
+   "color": "#e6dcc8",
+   "account": false,
+   "domains": [],
+   "profile": "games"
   }
  },
  "games": [

@@ -21,7 +21,10 @@ import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.data.PiecesConfig
 import app.couch.alhasapa.player.PlayerActivity
 import app.couch.alhasapa.ui.WhoPlaysDialog
+import app.couch.alhasapa.diag.CrashReport
 import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.diag.Startup
+import app.couch.alhasapa.ui.CrashScreen
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.tv.TvHost
 import app.couch.alhasapa.ui.AppRoot
@@ -38,6 +41,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must come before super.onCreate. The system splash is the first instants of a cold start;
         // the animated in-app splash continues from it.
+        Startup.mark("activity created")
         installSplashScreen()
         super.onCreate(savedInstanceState)
         tv = TvHost(this)
@@ -56,7 +60,7 @@ class MainActivity : ComponentActivity() {
 
         val app = application as CouchApp
         val pieces = PiecesConfig.load(this)
-        val bridge = HubBridge(this, app.repo, app.catalog, object : HubBridge.Actions {
+        val bridge = HubBridge(this, app.repo, { app.catalog }, object : HubBridge.Actions {
             override fun play(gameId: String) {
                 runOnUiThread {
                     val game = app.catalog.game(gameId) ?: return@runOnUiThread
@@ -73,9 +77,13 @@ class MainActivity : ComponentActivity() {
         // Only on a real cold start (not after rotation or coming back), and never with "remove animations" on.
         // On a TV the splash always plays: some boxes ship with the animation scale at zero, and the splash does not depend on it.
         val playSplash = savedInstanceState == null && (!reduceMotion || tv.enabled)
+        // If the last run crashed, say so first, with the reason in text that can be photographed.
+        var crash by mutableStateOf(CrashReport.pending(this))
         setContent {
             AlHasapaTheme {
               tv.Layer {
+                val report = crash
+                if (report != null) { CrashScreen(report) { CrashReport.clear(this@MainActivity); crash = null }; return@Layer }
                 AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() }, bridge = bridge)
                 whoPlaysFor?.let { id ->
                     val game = app.catalog.game(id)

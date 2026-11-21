@@ -20,6 +20,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -62,7 +67,10 @@ import app.couch.alhasapa.ui.theme.Palette
 val LocalTv = compositionLocalOf<TvController?> { null }
 
 /** Width of the strip at the left edge that holds the paw and keyboard buttons. */
-private val DockWidth = 72.dp
+private val DockWidth = 80.dp
+
+/** The same, when a game fills it with the clock, the score and every control. */
+private val DockWidthFull = 184.dp
 
 /**
  * Wraps a screen for the TV: a slim dock on the left edge (the paw button, which switches between moving a focus ring and the free
@@ -101,41 +109,79 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
     }
 }
 
-/** The strip at the left edge: always there, always the same two buttons, so the way of controlling things is never a mystery. */
+/**
+ * The strip at the left edge, always there. On its own (the hub, the accounts) it holds the two buttons that are never far away: the paw, and
+ * the keyboard. In a game the screen adds to it (the clock, the score, the controls of the game), so the game's frame is one quiet column
+ * on the left and the game keeps the whole middle.
+ */
 @Composable
 private fun TvDock(c: TvController) {
-    val paw = c.mode == InputMode.PAW
-    val pawLabel = stringResource(if (paw) R.string.tv_paw_on else R.string.tv_paw_off)
-    val keyboardLabel = stringResource(R.string.tv_keyboard_open)
+    val extras = c.dockExtras
+    val wide = extras != null && !c.slim
     Column(
         Modifier
-            .width(DockWidth)
+            .width(if (wide) DockWidthFull else DockWidth)
             .fillMaxHeight()
             .background(Palette.Card)
             .border(BorderStroke(1.dp, Palette.Line2))
+            .verticalScroll(rememberScrollState())
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
     ) {
-        // The mouse: lit (dark, red paw) while it is on, so it is obvious from across the room.
-        Box(
-            Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(if (paw) Palette.Ink else Palette.Tint)
-                .tvTarget { c.togglePaw() }
-                .semantics { role = Role.Switch; selected = paw; contentDescription = pawLabel },
-            contentAlignment = Alignment.Center,
-        ) { PawIcon(34.dp, if (paw) Palette.Red else Palette.Ink, outline = if (paw) Palette.Cream else Palette.Tint) }
-        Box(
-            Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(Palette.Tint)
-                .tvTarget { if (c.keyboardOpen) c.closeKeyboard() else c.openKeyboard() }
-                .semantics { role = Role.Button; contentDescription = keyboardLabel },
-            contentAlignment = Alignment.Center,
-        ) { Text("⌨", fontSize = 28.sp, color = Palette.Ink) }
+        if (extras != null) extras(c.slim) else {
+            Spacer(Modifier.weight(1f))
+            PawButton(c)
+            KeyboardButton(c)
+            Spacer(Modifier.weight(1f))
+        }
+        // The name of what the focus is on: the buttons are glyphs, and the glyph is not always enough.
+        if (wide) {
+            val label = c.focusLabel
+            Text(label.orEmpty(), fontSize = 20.sp, color = Palette.Ink2, textAlign = TextAlign.Center, maxLines = 2, modifier = Modifier.heightIn(min = 52.dp))
+        }
+    }
+}
+
+/** A round-cornered button of the dock. [content] draws its glyph, given whether the remote's focus is on it (the glyph then goes cream on the red). */
+@Composable
+fun DockButton(
+    label: String,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    wide: Boolean = false,
+    onClick: () -> Unit,
+    content: @Composable (lit: Boolean) -> Unit,
+) {
+    val c = LocalTv.current
+    val id = remember { newTvId() }
+    val lit = c?.isFocused(id) == true
+    Box(
+        modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) Palette.Ink else Palette.Tint)
+            .tvTarget(id, label, onClick)
+            .semantics { role = if (selected) Role.Switch else Role.Button; this.selected = selected; contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { content(lit) }
+}
+
+/** The paw (mouse) switch: dark with a red paw while it is on. */
+@Composable
+fun PawButton(c: TvController, modifier: Modifier = Modifier.width(64.dp)) {
+    val paw = c.mode == InputMode.PAW
+    val label = stringResource(if (paw) R.string.tv_paw_on else R.string.tv_paw_off)
+    DockButton(label, modifier, selected = paw, onClick = { c.togglePaw() }) { lit ->
+        PawIcon(32.dp, if (lit) Palette.Cream else if (paw) Palette.Red else Palette.Ink, outline = if (paw && !lit) Palette.Cream else Color.Transparent)
+    }
+}
+
+@Composable
+fun KeyboardButton(c: TvController, modifier: Modifier = Modifier.width(64.dp)) {
+    val label = stringResource(R.string.tv_keyboard_open)
+    DockButton(label, modifier, onClick = { if (c.keyboardOpen) c.closeKeyboard() else c.openKeyboard() }) { lit ->
+        Text("⌨", fontSize = 28.sp, color = if (lit) Palette.Cream else Palette.Ink)
     }
 }
 
@@ -273,8 +319,8 @@ private fun KeyCap(c: TvController, key: KbKey, row: Int, col: Int, height: Dp, 
             .height(height)
             .graphicsLayer { val s = if (on) 1.07f else 1f; scaleX = s; scaleY = s }
             .clip(shape)
-            .background(if (on) Palette.Ink else base)
-            .border(BorderStroke(if (on) 3.dp else 1.dp, if (on) Palette.Red else Palette.Line2), shape)
+            .background(if (on) (if (key == KbKey.Enter) Palette.Ink else Palette.Red) else base)
+            .border(BorderStroke(1.dp, if (on) Color.Transparent else Palette.Line2), shape)
             .tvKey { c.highlight(row, col); c.press(key) }
             .semantics { role = Role.Button; contentDescription = description },
         contentAlignment = Alignment.Center,

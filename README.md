@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.3.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.4.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -147,7 +147,8 @@ update the Android Gradle Plugin or the SDK, let it.
 
 ```sh
 ./gradlew :app:assemblePhoneDebug   # -> app/build/outputs/apk/phone/debug/app-phone-debug.apk   (the phone app)
-./gradlew :app:assembleTvDebug      # -> app/build/outputs/apk/tv/debug/app-tv-debug.apk         (the Android TV app)
+./gradlew :app:assembleTvDebug      # -> app/build/outputs/apk/tv/debug/app-tv-debug.apk         (the Android TV app, debug)
+./gradlew :app:assembleTvRelease    # -> app/build/outputs/apk/tv/release/app-tv-release.apk     (the TV app, optimised: use this on the box)
 ./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest   # unit tests (JVM, no device needed)
 ./gradlew :app:lintPhoneDebug :app:lintTvDebug                   # -> app/build/reports/lint-results-*.html
 ```
@@ -192,38 +193,65 @@ adb install -r app-tv-debug.apk
 Without a computer: put the APK on a USB stick and open it with a file manager app from the Play Store, or use "Send Files to TV".
 Later versions install over the old one (same key), so the logins stay.
 
-**The remote: two modes, always visible.** A slim dock on the left edge of every screen holds two round buttons: the **paw** and
-the **keyboard**.
+**Use the release build on the box.** `assembleTvRelease` is the same app with R8 shrinking (about 4 MB instead of 33) and no debug
+overhead, signed with the same committed key, so it installs over a debug build and keeps the logins. The debug build is for development;
+on a weak TV box it is noticeably slower to start and to scroll.
 
-- **Navigate (the default).** The arrows move a bright red ring from button to button, in the direction pressed, like Tab: through
-  the app's own buttons (☰, back, zoom, "we played", the menu), and *into the pages* too: the hub's buttons, the games' buttons,
-  links and fields (a small script finds what can be pressed; it only reads where things are, never what they say). **OK** presses
-  what is ringed (as a real tap at its centre, so every game gets the touches it expects). When there is nothing further, the page
-  **scrolls**; at the end of the page the ring moves to the app's bars and panels, and back. Down from a bar goes into the game,
-  Up from the game goes to the bar.
+**The remote: two modes, always visible.** A dock on the left edge of every screen holds the **paw** and the **keyboard**; in a game it
+also holds everything about the game's frame (below).
+
+- **Navigate (the default).** The arrows move the highlight from button to button, in the direction pressed, like Tab: through the
+  app's own buttons, and *into the pages* too: the hub's buttons, the games' buttons, links and fields (a small script finds what can
+  be pressed; it only reads where things are, never what they say). The focused button is **filled with colour** (a red fill in the
+  button's own shape, no square ring); on a page the highlight is a translucent red fill in the element's own shape. **OK** presses
+  what is highlighted (as a real tap at its centre, so every game gets the touches it expects). When there is nothing further, the
+  page **scrolls**; at the end of the page the highlight moves on to the dock, and back. Left from the game goes to the dock.
 - **Paw (the mouse), only when needed.** Press the paw button (a dark circle with a red paw while it is on, and a message at the
   top says which mode you are in): the arrows now move a free paw print, slowly at first and faster the longer an arrow is held,
   **OK** taps where it is, **hold OK** puts the finger down (the paw turns red) so the arrows drag, hold OK again to lift. Use it for
-  games with nothing to select (a canvas, a grid you swipe across). If a page has nothing the ring can land on, the app says so
+  games with nothing to select (a canvas, a grid you swipe across). If a page has nothing the highlight can land on, the app says so
   and points at the paw. The paw button switches back.
-- **Back** and **Home** are the system's. The Mi Box remote has no Menu key, so the menu is the ☰ button, reached with the ring.
+- **Back** and **Home** are the system's. The Mi Box remote has no Menu key, so the menu is the ☰ button in the dock.
 
-**Quick buttons while playing** (on the bars or panels, reachable with the ring, no menu needed): zoom out and in (it keeps the
-zoom for that game), **▯ אנכי / ▭ אופקי** (phone-shaped or wide, one press), and **ממשק** (moves the always-visible UI: sides,
-top, bottom, top and bottom, or just a button).
+**The dock in a game (one frame, not bars and panels).** On a TV there are no bars above and below the game and no side panels. The
+whole frame is the dock at the left, and the game keeps the middle: the clock with the logo, the evening's score and the two of
+us; **−** and **+** (zoom, kept per site); **▯ / ▭** (phone-shaped or wide); **▣ / ◧** (the frame itself: full, or slim with only
+the buttons as icons; remembered); the paw; the keyboard; ☰ and ↩; and, with words, "result" and "we played". Every button says what
+it is at the top of the dock while it is highlighted.
 
 **The keyboard.** The keyboard button in the dock (or the remote's Play/Pause key, or a text field taking focus) slides it up
 from the bottom. It is small: four rows and a slim header that shows what you typed, about a third of the screen, and the game
 area shrinks to make room, so you still see the game while you type. English, Hebrew and symbols (digits are on the symbols
 layout); Shift makes one capital; the arrows move a highlight, OK types, **Back** or ✕ closes it. A password field shows dots. Letters
 go in as real key presses (a game that listens for keys, like Wordle, just works); Hebrew and symbols are inserted as text. The
-system keyboard is kept away so the two never fight. Sign-in works the same way: ring the field, OK, type, ring "Sign in".
+system keyboard is kept away so the two never fight. Sign-in works the same way: highlight the field, OK, type, highlight "Sign in".
 
 **Sound and video** play as on the phone, and a game's full-screen video fills the screen (Back leaves it).
 
-What cannot be checked without the box: how the ring moves around real pages (it is tested in Chromium on a sample page, not on every game), how fast the paw feels, whether the keyboard reaches the page on this WebView, and whether
+What cannot be checked without the box: how the highlight moves around real pages (it is tested in Chromium on a sample page, not on every game), how fast the paw feels, whether the keyboard reaches the page on this WebView, and whether
 the WebView on the Mi Box is recent enough for the games. The Mi Box's own WebView version matters most (Settings, Apps, show system
 apps, Android System WebView): the oldest ones cannot run some modern pages.
+
+**Starting up and crashes (1.4).** On the TV the splash is no longer animated: the system's own starting window shows the cats at
+once, and the hub fades in when it is ready (the animated splash made a weak GPU stutter, and before it the screen stayed blank
+for seconds). The hub itself runs in a lighter mode on the TV (no blurs, shadows or long animations). If the app ever crashes, the
+next start opens a screen with what happened and the timings of the last start (it reaches nothing outside the device; the same
+text is under Settings, "על האפליקציה", with a copy button), so one screenshot tells us what failed.
+
+## Settings and your own games (1.4)
+
+The hub has a **הגדרות** tab (on the phone and the TV):
+
+- **The links of the games.** Every game has a field with its link. Paste a direct link (such as today's puzzle), save, and the
+  game opens there from then on; an empty field restores the built-in link. Games that still open only a site's main page are
+  marked "עמוד ראשי בלבד", and temporary placeholders are marked "קישור זמני".
+- **Add a game.** A name, an https:// link, a kind, how a result is counted (none, tries, time, hints) and whether it goes straight on
+  the shelf. Your own games live under the site "שלנו", are played in the same isolated player, keep their results and points,
+  and travel inside the backup. Delete one with "למחוק את המשחק הזה".
+- **Add several at once.** One game per line: `name | https://link | kind` (the kind is optional).
+- **Accounts** (NYT, Haaretz, the two LinkedIn logins) and **About** (version, device, startup times, the last crash).
+
+Google sign-in is not offered anywhere, because Google blocks it inside an embedded browser; use email and password.
 
 ## Check on the phone
 
@@ -256,12 +284,12 @@ marks them "קישור זמני"; replace them under "הקישורים שלנו"
 | Path | What |
 | --- | --- |
 | `app/src/tv/` | What is only in the TV build: the TV launcher entry and its banner |
-| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `tv/` (the remote's cursor, the keyboard, full-screen video), `ui/` (splash, theme) |
+| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `tv/` (the remote's focus navigation, the paw, the keyboard, the dock, full-screen video), `diag/` (startup timings, crash report), `ui/` (splash, loading cover, crash screen, theme) |
 | `app/src/main/assets/hub/` | The prototype's web UI, `pieces.json`, bundled fonts and images |
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |
 | `app/src/main/assets/display_profiles.json` | How each site is shown on the TV (mode, zoom, banner CSS) |
-| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (catalogue from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring), `display_check.cjs` and `capture_check.cjs` (the injected scripts, run in real Chromium) |
+| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (catalogue from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring), `display_check.cjs`, `capture_check.cjs`, `tvnav_check.cjs` and `hub_settings_check.cjs` (the injected scripts and the hub's settings page, run in real Chromium) |
 | `THIRD_PARTY/` | Font license (SIL OFL 1.1) |
 | `couch-artifact/` | The original prototype and the Haaretz layout bug screenshots, kept verbatim |
 

@@ -79,6 +79,7 @@ import app.couch.alhasapa.results.ResultSupport
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import app.couch.alhasapa.ui.theme.Palette
@@ -212,6 +213,12 @@ fun PlayerScreen(
         onTogglePlayed = onTogglePlayed, onZoom = quickZoom, onToggleMode = toggleMode, onCycleUi = cycleUi,
     )
 
+    // On a TV the game's frame lives in the dock at the left edge.
+    if (tv != null) {
+        SideEffect { tv.dockExtras = { slim -> PlayerTvDock(slim, tv, chrome, actions) } }
+        DisposableEffect(tv) { onDispose { tv.dockExtras = null } }
+    }
+
     BackHandler {
         val view = webView
         when {
@@ -232,8 +239,9 @@ fun PlayerScreen(
     Box(Modifier.fillMaxSize().background(Palette.Cream).windowInsetsPadding(WindowInsets.displayCutout)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val (marginX, marginY) = DisplayLayout.safeInsets(profile, maxWidth.value, maxHeight.value)
+            // On a TV the whole frame (clock, score, controls) is the dock at the left edge, so no bars and no panels around the game.
             val layout = DisplayLayout.compute(
-                profile,
+                if (tv != null) profile.copy(ui = UiPlace.MINIMAL) else profile,
                 (maxWidth.value - 2 * marginX).coerceAtLeast(1f),
                 (maxHeight.value - 2 * marginY).coerceAtLeast(1f),
             )
@@ -333,7 +341,7 @@ fun PlayerScreen(
             }
 
             // The minimal UI is one button; it floats over the game's corner and is never taken away.
-            if (layout.place == UiPlace.MINIMAL) {
+            if (layout.place == UiPlace.MINIMAL && tv == null) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                     FloatingMenuButton(actions.onMenu, Modifier.align(Alignment.TopEnd).padding(12.dp))
                 }

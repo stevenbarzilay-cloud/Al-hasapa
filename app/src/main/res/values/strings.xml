@@ -121,4 +121,10 @@
     <string name="bar_mode_desc">החלפה בין תצוגה אנכית לאופקית של המשחק</string>
     <string name="bar_ui">ממשק</string>
     <string name="bar_ui_desc">החלפת המקום של הממשק הקבוע</string>
+    <string name="crash_title">האפליקציה קרסה בפעם הקודמת</string>
+    <string name="crash_body">זה נשמר כדי שאפשר יהיה לתקן. אפשר לצלם את המסך ולשלוח, ואז להמשיך.</string>
+    <string name="crash_continue">להמשיך</string>
+    <string name="panel_points_short">%1$d נק׳</string>
+    <string name="tv_frame_slim">מסגרת צרה (רק כפתורים)</string>
+    <string name="tv_frame_full">מסגרת מלאה (עם השעון והניקוד)</string>
 </resources>

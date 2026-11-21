@@ -6,6 +6,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -17,7 +18,7 @@ class CatalogTest {
         assertEquals(54, catalog.games.size)
         assertEquals("ids are unique", catalog.games.size, catalog.games.map { it.id }.toSet().size)
         for (g in catalog.games) assertNotNull("${g.id} needs its site ${g.s}", catalog.sites[g.s])
-        assertEquals(11, catalog.sites.size)
+        assertEquals(12, catalog.sites.size)
     }
 
     @Test
@@ -97,4 +98,40 @@ class CatalogTest {
         assertEquals("games", catalog.sites["nyt"]!!.profile)
         assertNull(catalog.sites["kr"]!!.loginUrl)
     }
+
+    @Test
+    fun gamesAddedInTheSettingsJoinTheCatalogueAndBadOnesAreSkipped() {
+        val custom = org.json.JSONArray("""[
+          {"id":"c1","n":"Ours","s":"my","k":"מילים","m":"O","u":"https://games.example.org/x","metric":"time","lib":1},
+          {"id":"bad1","n":"","s":"my","u":"https://x.example"},
+          {"id":"bad2","n":"Plain http","s":"my","u":"http://x.example"},
+          {"id":"wordle","n":"Duplicate of a built-in","s":"my","u":"https://x.example"},
+          {"id":"c3","n":"On a site that does not exist","s":"nope","u":"https://y.example/play"},
+          "not an object"]""")
+        val c = catalog.withCustom(custom)
+        assertEquals("two good ones", catalog.games.size + 2, c.games.size)
+        val g = c.game("c1")!!
+        assertEquals("time", g.metric); assertTrue(g.lib); assertEquals("my", g.s)
+        assertEquals("a site that does not exist becomes our own", "my", c.game("c3")!!.s)
+        assertNull(c.game("bad1")); assertNull(c.game("bad2"))
+        assertEquals("a built-in keeps its place", "Wordle", c.game("wordle")!!.n)
+        assertTrue("the player may stay on the new game's own site", c.allowedHosts(g, g.u).contains("games.example.org"))
+        assertEquals(DecisionAllow, NavigationPolicyProbe.decide(g.u, c.allowedHosts(g, g.u)))
+        assertSame("nothing to add is the same catalogue", catalog, catalog.withCustom(null))
+        assertSame(catalog, catalog.withCustom(org.json.JSONArray()))
+    }
+
+    @Test
+    fun theHubGetsOurGamesToo() {
+        val c = catalog.withCustom(org.json.JSONArray("""[{"id":"c1","n":"Ours","s":"my","k":"ידע","m":"O","u":"https://games.example.org/x","metric":"none"}]"""))
+        val hub = JSONObject(c.toHubJson(null))
+        assertTrue(hub.getJSONObject("sites").has("my"))
+        val ids = (0 until hub.getJSONArray("games").length()).map { hub.getJSONArray("games").getJSONObject(it).getString("id") }
+        assertTrue("c1" in ids)
+    }
+}
+
+private val DecisionAllow = app.couch.alhasapa.player.NavigationPolicy.Decision.Allow
+private object NavigationPolicyProbe {
+    fun decide(url: String, hosts: Set<String>) = app.couch.alhasapa.player.NavigationPolicy.decide(url, hosts, false)
 }

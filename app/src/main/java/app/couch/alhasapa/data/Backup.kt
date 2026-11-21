@@ -96,11 +96,24 @@ object Backup {
         mergeMissing(local, incoming, "prefs")
         mergeMissing(local, incoming, "urls")
         mergeMissing(local, incoming, "displays")
+        // our own games: the union, local first (an id that exists on both sides stays as it is here)
+        mergeCustom(local, incoming)
         // pieces: keep this phone's choice if it has one
         if (!local.has("pieces") && incoming.has("pieces")) local.put("pieces", incoming.get("pieces"))
         // anything else the other side knows (a newer app's fields) is kept if we have nothing under that name
         for (k in incoming.keys()) if (!local.has(k)) local.put(k, incoming.get(k))
         return Merged(local, Stats(inLog.length(), added, updated, kept, 0))
+    }
+
+    private fun mergeCustom(local: JSONObject, incoming: JSONObject) {
+        val inc = incoming.optJSONArray("custom") ?: return
+        val loc = local.optJSONArray("custom") ?: JSONArray().also { local.put("custom", it) }
+        val have = (0 until loc.length()).mapNotNull { loc.optJSONObject(it)?.optString("id") }.toMutableSet()
+        for (i in 0 until inc.length()) {
+            val o = inc.optJSONObject(i) ?: continue
+            val id = o.optString("id")
+            if (id.isNotBlank() && have.add(id)) loc.put(o)
+        }
     }
 
     private fun mergeMissing(local: JSONObject, incoming: JSONObject, key: String) {

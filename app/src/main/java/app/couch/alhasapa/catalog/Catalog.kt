@@ -93,7 +93,31 @@ class Catalog(val sites: Map<String, Site>, val games: List<Game>) {
         return JSONObject().put("sites", s).put("games", g).toString()
     }
 
+    /**
+     * The same catalogue plus the games the person added (state.custom): each needs an id, a name and an https link; an unknown site
+     * becomes "my" (our own games); an id that already exists is ignored. Anything malformed is skipped, never fatal.
+     */
+    fun withCustom(custom: JSONArray?): Catalog {
+        if (custom == null || custom.length() == 0) return this
+        val seen = games.map { it.id }.toMutableSet()
+        val extra = ArrayList<Game>()
+        for (i in 0 until custom.length()) {
+            val o = custom.optJSONObject(i) ?: continue
+            val g = runCatching { parseGame(o, defaultSite = "my") }.getOrNull() ?: continue
+            if (!g.u.startsWith("https://") || g.n.isBlank() || !seen.add(g.id)) continue
+            extra += if (g.s in sites) g else g.copy(s = "my")
+        }
+        return if (extra.isEmpty()) this else Catalog(sites, games + extra)
+    }
+
     companion object {
+        fun parseGame(o: JSONObject, defaultSite: String? = null): Game = Game(
+            id = o.getString("id"), n = o.getString("n"), s = if (defaultSite != null) o.optString("s", defaultSite) else o.getString("s"),
+            k = o.optString("k"), m = o.optString("m"), u = o.getString("u"), d = o.optString("d"),
+            lib = o.optInt("lib", 0) == 1, why = o.optString("why").takeIf { it.isNotBlank() },
+            metric = o.optString("metric", "none"), placeholder = o.optBoolean("placeholder", false),
+        )
+
         fun parse(json: String): Catalog {
             val root = JSONObject(json)
             val sites = LinkedHashMap<String, Site>()
@@ -116,13 +140,7 @@ class Catalog(val sites: Map<String, Site>, val games: List<Game>) {
             val games = ArrayList<Game>()
             val ga = root.getJSONArray("games")
             for (i in 0 until ga.length()) {
-                val o = ga.getJSONObject(i)
-                games += Game(
-                    id = o.getString("id"), n = o.getString("n"), s = o.getString("s"), k = o.optString("k"),
-                    m = o.optString("m"), u = o.getString("u"), d = o.optString("d"),
-                    lib = o.optInt("lib", 0) == 1, why = o.optString("why").takeIf { it.isNotBlank() },
-                    metric = o.optString("metric", "none"), placeholder = o.optBoolean("placeholder", false),
-                )
+                games += parseGame(ga.getJSONObject(i))
             }
             return Catalog(sites, games)
         }

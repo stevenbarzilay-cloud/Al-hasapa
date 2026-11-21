@@ -17,12 +17,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.semantics.semantics
@@ -39,23 +36,31 @@ private val ids = AtomicInteger()
  * can land on it, and it wears a bright ring while the remote's focus is on it (or while it has plain Android focus, for dialogs
  * that the remote's focus cannot reach). Drop-in for `clickable`: put it where the `clickable` was, after clip and background.
  */
-fun Modifier.tvTarget(onClick: () -> Unit): Modifier = composed {
+fun Modifier.tvTarget(onClick: () -> Unit): Modifier = tvTarget(null, null, onClick)
+
+/** A fresh id for a button that wants to know for itself whether the remote's focus is on it (see [TvController.isFocused]). */
+fun newTvId(): String = "t" + ids.incrementAndGet()
+
+/** As [tvTarget], with the button's own [id] (so it can draw itself differently when focused) and a [label] shown in the dock while focused. */
+fun Modifier.tvTarget(id: String?, label: String?, onClick: () -> Unit): Modifier = composed {
     val tv = LocalTv.current
-    val id = remember { "t" + ids.incrementAndGet() }
+    val myId = remember { id ?: newTvId() }
     val latest by rememberUpdatedState(onClick)
     var androidFocused by remember { mutableStateOf(false) }
-    val remote = tv != null && tv.mode == InputMode.NAV && tv.zone == Zone.NATIVE && tv.focusedId == id
+    val remote = tv != null && tv.isFocused(myId)
     val lit = remote || androidFocused
     val bring = remember { BringIntoViewRequester() }
-    if (tv != null) DisposableEffect(tv, id) { onDispose { tv.unregister(id) } }
+    if (tv != null) DisposableEffect(tv, myId) { onDispose { tv.unregister(myId) } }
     LaunchedEffect(remote) { if (remote) bring.bringIntoView() }
+    LaunchedEffect(remote, label) { if (remote && label != null) tv?.focusLabel = label }
     this
         .bringIntoViewRequester(bring)
-        .onGloballyPositioned { c -> tv?.register(id, c.boundsInWindow().toBox()) { latest() } }
+        .onGloballyPositioned { c -> tv?.register(myId, c.boundsInWindow().toBox()) { latest() } }
         .onFocusChanged { androidFocused = it.isFocused }
         .drawWithContent {
+            // The button itself takes the colour, in its own shape (the clip is earlier in the chain), under its label or icon.
+            if (lit) drawRect(Palette.Red)
             drawContent()
-            if (lit) drawFocusRing()
         }
         .semantics { if (lit) stateDescription = "נבחר" }
         .clickable(onClick = onClick)
@@ -69,13 +74,6 @@ fun Modifier.tvPage(): Modifier = composed {
 }
 
 private fun androidx.compose.ui.geometry.Rect.toBox() = Box(left, top, right, bottom)
-
-private fun DrawScope.drawFocusRing() {
-    val w = 4.dp.toPx()
-    val r = 12.dp.toPx()
-    drawRoundRect(Palette.Cream, topLeft = Offset(0f, 0f), size = size, cornerRadius = CornerRadius(r), style = Stroke(w + 4.dp.toPx()))
-    drawRoundRect(Palette.Red, topLeft = Offset(w / 2f, w / 2f), size = Size(size.width - w, size.height - w), cornerRadius = CornerRadius(r), style = Stroke(w))
-}
 
 /** A cat's paw print: the pad and four toes. Its centre is the point that a tap lands on. */
 @Composable

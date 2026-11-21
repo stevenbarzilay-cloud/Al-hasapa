@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- On a TV the window itself shows the cats from the first instant (see LoadingCover): the box takes many seconds to start. -->
+    <style name="Theme.AlHasapa" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/starting_window</item>
+        <item name="android:colorBackground">@color/cream</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="o_mr1">true</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="q">false</item>
+    </style>
+
+    <style name="Theme.AlHasapa.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/cream</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+        <item name="postSplashScreenTheme">@style/Theme.AlHasapa</item>
+        <item name="android:windowBackground">@drawable/starting_window</item>
+    </style>
+</resources>

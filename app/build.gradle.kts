@@ -16,8 +16,8 @@ android {
     defaultConfig {
         applicationId = "app.couch.alhasapa"
         targetSdk = 37
-        versionCode = 16
-        versionName = "1.3.0"
+        versionCode = 17
+        versionName = "1.4.0"
     }
 
     // Two builds from one codebase: the phone app, and the Android TV app (a Xiaomi Mi Box runs Android TV 8.1 or 9, so the TV
@@ -53,7 +53,14 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // A release build is what a TV box needs: the debug build is ten times slower to start (unoptimised Compose, a 36 MB dex that
+            // has to be loaded whole), which is the 10 to 15 seconds of waiting on the Mi Box. R8 shrinks the code to a fraction and
+            // optimises it; the names are kept (-dontobfuscate in the rules) so a crash report still reads.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // The same committed key as the debug build, so a release APK installs OVER a debug one (and the logins survive).
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

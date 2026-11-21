@@ -8,6 +8,8 @@ import app.couch.alhasapa.R
 import app.couch.alhasapa.catalog.Catalog
 import app.couch.alhasapa.data.Backup
 import app.couch.alhasapa.data.StateRepository
+import app.couch.alhasapa.diag.CrashReport
+import app.couch.alhasapa.diag.Startup
 import org.json.JSONObject
 
 /**
@@ -19,9 +21,15 @@ import org.json.JSONObject
 class HubBridge(
     private val context: Context,
     private val repo: StateRepository,
-    private val catalog: Catalog,
+    private val catalogOf: () -> Catalog,
     private val actions: Actions,
 ) {
+    /** For a fixed catalogue (tests). */
+    constructor(context: Context, repo: StateRepository, catalog: Catalog, actions: Actions) : this(context, repo, { catalog }, actions)
+
+    /** The catalogue as it is now: it grows when a game is added in the settings page. */
+    private val catalog: Catalog get() = catalogOf()
+
     interface Actions {
         /** Open this game in the isolated player. */
         fun play(gameId: String)
@@ -57,6 +65,14 @@ class HubBridge(
 
     @JavascriptInterface
     fun openAccounts() = actions.openAccounts()
+
+    /** What the settings page shows about the app: versions, device, how long the last start took, and the last crash if there was one. */
+    @JavascriptInterface
+    fun diagnostics(): String = buildString {
+        appendLine(Startup.environment(context))
+        Startup.last(context)?.let { appendLine(); appendLine("--- the last start ---"); appendLine(it) }
+        CrashReport.pending(context)?.let { appendLine(); appendLine("--- the last crash ---"); appendLine(it.take(1_500)) }
+    }.trim()
 
     @JavascriptInterface
     fun exportBackup(): String = repo.exportBackup()

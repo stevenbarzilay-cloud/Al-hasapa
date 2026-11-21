@@ -73,7 +73,7 @@ class HubBridgeTest {
     fun theCatalogueReachesThePageWithThePersonsLinksApplied() {
         var c = JSONObject(bridge.loadCatalog())
         assertEquals(54, c.getJSONArray("games").length())
-        assertEquals(11, c.getJSONObject("sites").length())
+        assertEquals("eleven sites and our own", 12, c.getJSONObject("sites").length())
         fun game(id: String) = (0 until c.getJSONArray("games").length()).map { c.getJSONArray("games").getJSONObject(it) }.first { it.getString("id") == id }
         assertEquals(game("hzchain").getString("u0"), game("hzchain").getString("u"))
         val doc = CouchState.empty().put("urls", JSONObject().put("hzchain", "https://www.haaretz.co.il/riddles/today"))
@@ -125,5 +125,23 @@ class HubBridgeTest {
         assertEquals("ok", bridge.copyText("hello couch"))
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         assertEquals("hello couch", cm.primaryClip!!.getItemAt(0).text.toString())
+    }
+
+    @Test
+    fun aGameAddedInTheSettingsCanBePlayedAndTheNextCatalogueHasIt() {
+        var cat = Catalog.load(context)
+        val b = HubBridge(context, repo, { cat }, object : HubBridge.Actions { override fun play(gameId: String) { played += gameId }; override fun openAccounts() {} })
+        b.play("c9")
+        assertFalse("not known yet", "c9" in played)
+        cat = cat.withCustom(org.json.JSONArray("""[{"id":"c9","n":"Ours","s":"my","k":"ידע","m":"O","u":"https://games.example.org/x","metric":"none"}]"""))
+        b.play("c9")
+        assertTrue("c9" in played)
+        assertEquals(55, JSONObject(b.loadCatalog()).getJSONArray("games").length())
+    }
+
+    @Test
+    fun theDiagnosticsTheSettingsPageShowsAreTextWithTheVersionAndNothingPrivate() {
+        val d = bridge.diagnostics()
+        assertTrue(d.isNotBlank()); assertFalse(d.contains("@"))
     }
 }

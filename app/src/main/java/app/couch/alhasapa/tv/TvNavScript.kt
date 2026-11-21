@@ -83,13 +83,15 @@ object TvNavScript {
   function ensureRing(){
     if(ring&&ring.isConnected) return ring;
     ring=document.createElement('div'); ring.id='couch-tv-ring';
-    ring.style.cssText='position:fixed;z-index:2147483647;pointer-events:none;border:4px solid #D94E38;border-radius:12px;box-shadow:0 0 0 3px #F2EBDD,0 0 14px 6px rgba(217,78,56,.45);box-sizing:border-box;left:0;top:0;width:0;height:0;display:none';
+    // Not a box drawn around the element: a tint laid over it, in its own shape (its own rounded corners), with a thin edge.
+    ring.style.cssText='position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;left:0;top:0;width:0;height:0;display:none;background:rgba(217,78,56,.30);box-shadow:inset 0 0 0 3px rgba(217,78,56,.95)';
     (document.body||document.documentElement).appendChild(ring); return ring;
   }
   function place(){
     if(!cur||!cur.isConnected){ if(ring) ring.style.display='none'; return; }
     var r=cur.getBoundingClientRect(), g=ensureRing();
-    g.style.display='block'; g.style.left=(r.left-5)+'px'; g.style.top=(r.top-5)+'px'; g.style.width=(r.width+10)+'px'; g.style.height=(r.height+10)+'px';
+    g.style.display='block'; g.style.left=r.left+'px'; g.style.top=r.top+'px'; g.style.width=r.width+'px'; g.style.height=r.height+'px';
+    try{ g.style.borderRadius=getComputedStyle(cur).borderRadius||'0'; }catch(x){}
   }
   function loop(){ if(!cur){ looping=false; return; } place(); requestAnimationFrame(loop); }
   function setCur(e){

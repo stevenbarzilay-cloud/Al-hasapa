@@ -21,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import app.couch.alhasapa.bridge.HubBridge
 import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.diag.Startup
+import app.couch.alhasapa.tv.LocalTv
 import app.couch.alhasapa.hub.HubScreen
 
 /**
@@ -34,10 +36,20 @@ fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, brid
     var resumes by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumes++ }      // casting may start while the app was away
     val signals = dndSignals ?: DndSignals.real(LocalContext.current)
-    LaunchedEffect(Unit) { Diag.log("compose: first composition (splash=${playSplash})") }
+    LaunchedEffect(Unit) { Startup.mark("first composition"); Diag.log("compose: first composition (splash=${playSplash})") }
+    val tv = LocalTv.current
+    val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
-        HubScreen(onExit = onExit, reduceMotion = reduceMotion, bridge = bridge, onReady = { hubReady = true })
-        if (!splashDone) SplashScreen(hubReady = hubReady, onFinished = { splashDone = true })
+        HubScreen(onExit = onExit, reduceMotion = reduceMotion, bridge = bridge, onReady = {
+            if (!hubReady) { Startup.mark("hub ready"); Startup.save(context) }
+            hubReady = true
+        })
+        if (!splashDone) {
+            // A TV box is too slow to start for an animated splash to be anything but choppy: it shows the cats, still, where the
+            // system's starting window already put them, and fades to the hub.
+            if (tv != null) LoadingCover(hubReady = hubReady, onFinished = { splashDone = true })
+            else SplashScreen(hubReady = hubReady, onFinished = { splashDone = true })
+        }
         // Once per evening, while casting: a nudge to turn on Do Not Disturb. Not while the splash plays.
         if (splashDone) DndChipHost(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp), signals, recheck = resumes)
     }

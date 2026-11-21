@@ -10,7 +10,10 @@ import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
@@ -147,7 +150,8 @@ class PlayerActivityTest {
     @Test
     fun theLoginScreenHasNoWePlayedButton() {
         launch(PlayerActivity.loginIntent(context, "li", "LinkedIn", ProfileNames.RONI))
-        rule.onNodeWithText("חזרה").assertIsDisplayed()
+        // Back is a bar button on the phone and a dock button (named by its description) on a television.
+        rule.onAllNodes(hasText("חזרה") or hasContentDescription("חזרה")).onFirst().assertIsDisplayed()
         rule.onNodeWithText("שיחקנו").assertDoesNotExist()
     }
 }

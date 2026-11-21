@@ -159,4 +159,13 @@ class BackupTest {
         }
         assertEquals(days.size * 2 + days.count { days.indexOf(it) % 2 == 1 }, m.stats.added)
     }
+
+    @Test
+    fun ourOwnGamesAreUnitedAndAnIdOnBothSidesStaysAsItIsHere() {
+        val local = JSONObject("""{"v":1,"names":{"a":"x","b":"y"},"prefs":{},"log":{},"custom":[{"id":"c1","n":"Mine","u":"https://m.example"}]}""")
+        val incoming = JSONObject("""{"v":1,"names":{"a":"x","b":"y"},"prefs":{},"log":{},"custom":[{"id":"c1","n":"Theirs","u":"https://t.example"},{"id":"c2","n":"Other","u":"https://o.example"}]}""")
+        val merged = Backup.merge(local, incoming).state.getJSONArray("custom")
+        assertEquals(2, merged.length())
+        assertEquals("Mine", merged.getJSONObject(0).getString("n")); assertEquals("c2", merged.getJSONObject(1).getString("id"))
+    }
 }

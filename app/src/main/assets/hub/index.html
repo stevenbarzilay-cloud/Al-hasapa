@@ -85,6 +85,9 @@ img{max-width:100%;height:auto;display:block}
 .dbg{position:fixed;inset-inline-start:6px;top:6px;z-index:70;background:var(--ink);color:var(--cream);font:11px/1.35 ui-monospace,monospace;padding:3px 7px;border-radius:6px;opacity:.9;pointer-events:none;direction:ltr;max-width:calc(100vw - 12px)}
 .dbg[hidden]{display:none}
 .reduce-motion *,.reduce-motion *::before,.reduce-motion *::after{animation:none!important;transition:none!important}
+/* A TV box: no recolouring layers over the illustrations (blend modes on big images are heavy for a weak GPU), no shadows, no smooth scrolling. */
+.tv .art .tint,.tv .art .lift{display:none!important}
+.tv *{box-shadow:none!important;text-shadow:none!important;scroll-behavior:auto!important}
 /* ---------- illustrations follow the pieces' colours ----------
    Each picture is the untouched original plus two layers, one per colour family in the art (the red family is Steve's
    shirt, mug and cushions; the pink family is Roni's shirt and the couch). A layer is a flat colour, cut out by a soft
@@ -371,6 +374,23 @@ footer .joke{font-style:italic}
 .backup .btn{align-self:flex-start}
 @media (max-width:520px){.duelgrid{grid-template-columns:1fr}}
 @media (max-width:720px){.row.is-duel .extra:empty{display:none}.count .pts{margin-inline-start:0;width:100%}}
+
+/* ---------- settings ---------- */
+.set{padding:clamp(18px,2.4vw,28px) 0 40px;display:grid;gap:28px;max-width:780px}
+.set .panel{grid-column:auto}
+.set input,.set select,.set textarea{width:100%;background:var(--card);border:1px solid var(--line-2);border-radius:10px;padding:10px 12px;color:var(--ink);min-height:48px;font-weight:400}
+.set textarea{min-height:110px;resize:vertical}
+.set select{appearance:none;-webkit-appearance:none}
+.set .field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.set .field>span{font-weight:600}
+.set .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.set label.inline{display:flex;align-items:center;gap:10px;min-height:48px}
+.set label.inline input{width:22px;min-height:22px;height:22px}
+.set .row-btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.set pre{direction:ltr;text-align:left;white-space:pre-wrap;word-break:break-word;font-size:.8em;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin:0 0 10px;user-select:text}
+.set .urlrow{padding:10px 0}
+.set .urlrow .tbtn{align-self:flex-start;color:var(--red);min-height:40px}
+.tv .set input,.tv .set select,.tv .set textarea{min-height:56px}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -396,6 +416,9 @@ footer .joke{font-style:italic}
       <button class="tab" role="tab" aria-selected="false" data-view="stats">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-7M11 20V6M17 20v-10M3 20h18"/></svg>
         השקע בספה</button>
+      <button class="tab" role="tab" aria-selected="false" data-view="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+        הגדרות</button>
     </div>
   </div>
 </nav>
@@ -405,6 +428,7 @@ footer .joke{font-style:italic}
   <section id="v-home"></section>
   <section id="v-disc" hidden></section>
   <section id="v-stats" hidden></section>
+  <section id="v-settings" hidden></section>
 </main>
 <footer><div class="wrap"><span class="joke" id="footnote"></span><span id="sync">שמור במכשיר</span></div></footer>
 </div>
@@ -746,11 +770,108 @@ function renderStats(){
   </div>`;
 }
 
+
+/* ================= settings: our links, our own games, what the app says about itself ================= */
+const METRICS=[["none","בלי ניקוד"],["guesses","ניסיונות (פחות זה יותר טוב)"],["mistakes","טעויות"],["hints","רמזים"],["time","זמן"],["words","מילים"]];
+const MAIN_PAGES=["https://www.haaretz.co.il/riddles","https://www.haaretz.co.il/riddles/"];
+const isCustom=g=>g.s==="my";
+const HTTPS=/^https:\/\/[^\s]+$/i;
+const validUrl=v=>{ if(!HTTPS.test(v)) return false; try{ new URL(v); return true }catch(e){ return false } };
+function renderSettings(){
+  state.urls=state.urls||{};
+  const games=[...GAMES].sort((x,y)=>(isCustom(y)-isCustom(x))||(!!y.placeholder-!!x.placeholder));
+  const row=g=>{
+    const cur=state.urls[g.id]||"", eff=cur||g.u0, site=SITES[g.s]?SITES[g.s].name:"";
+    return `<div class="urlrow" data-id="${g.id}" data-name="${esc((g.n+" "+site).toLowerCase())}">
+      <b>${esc(g.n)} <span class="help">${esc(site)}</span>${g.placeholder&&!cur?'<span class="tag">קישור זמני</span>':""}${MAIN_PAGES.includes(eff)?'<span class="tag">עמוד ראשי בלבד</span>':""}</b>
+      <input type="url" inputmode="url" dir="ltr" autocomplete="off" spellcheck="false" aria-label="הקישור של ${esc(g.n)}" data-url="${g.id}" value="${esc(cur||(isCustom(g)?g.u0:""))}" placeholder="${esc(g.u0.replace(/^https:\/\//,"").slice(0,60))}">
+      ${isCustom(g)?`<button class="tbtn" type="button" data-act="delcustom" data-id="${g.id}">למחוק את המשחק הזה</button>`:""}</div>`};
+  const diag=NATIVE&&NATIVE.diagnostics?NATIVE.diagnostics():"בדפדפן רגיל אין נתוני מכשיר.";
+  document.getElementById("v-settings").innerHTML=`<div class="set">
+    <div class="panel"><h3>הקישורים של המשחקים</h3>
+      <p class="help" style="margin:0 0 8px">הדביקו קישור ישיר לכל משחק, כמו הקישור של המשחק של היום. שדה ריק משאיר את הקישור המקורי. קישורים צריכים להתחיל ב-https://</p>
+      <input id="uf" type="search" placeholder="חיפוש משחק" aria-label="חיפוש משחק" autocomplete="off" style="margin-bottom:6px">
+      <div id="ul">${games.map(row).join("")}</div>
+      <div class="row-btns"><button class="btn primary" type="button" data-act="saveLinks">שמירת הקישורים</button></div></div>
+    <div class="panel"><h3>להוסיף משחק</h3>
+      <div class="field"><span>שם המשחק</span><input id="ngName" type="text" maxlength="40" autocomplete="off"></div>
+      <div class="field"><span>הקישור (מתחיל ב-https://)</span><input id="ngUrl" type="url" inputmode="url" dir="ltr" autocomplete="off" spellcheck="false" placeholder="https://"></div>
+      <div class="grid2">
+        <div class="field"><span>סוג</span><select id="ngKind">${KINDS.map(k=>`<option>${esc(k)}</option>`).join("")}</select></div>
+        <div class="field"><span>איך סופרים תוצאה</span><select id="ngMetric">${METRICS.map(m=>`<option value="${m[0]}">${esc(m[1])}</option>`).join("")}</select></div>
+      </div>
+      <label class="inline"><input type="checkbox" id="ngLib" checked> להוסיף ישר לספה</label>
+      <div class="row-btns"><button class="btn primary" type="button" data-act="addGame">הוספה</button></div></div>
+    <div class="panel"><h3>להוסיף כמה משחקים בבת אחת</h3>
+      <p class="help" style="margin:0 0 8px">שורה לכל משחק: שם, קו אנכי, קישור. אפשר להוסיף אחריו קו אנכי וסוג. למשל: <span dir="ltr">מילים בשש | https://example.com/play | מילים</span></p>
+      <textarea id="manyTxt" dir="auto" spellcheck="false" aria-label="רשימת משחקים"></textarea>
+      <div class="row-btns"><button class="btn primary" type="button" data-act="addMany">הוספת כולם</button></div></div>
+    <div class="panel"><h3>החשבונות</h3>
+      <p class="help" style="margin:0 0 8px">התחברות ל-NYT, להארץ ולשני חשבונות הלינקדאין. נשמרת רק באפליקציה הזאת.</p>
+      <div class="row-btns"><button class="btn" type="button" data-act="accounts">לחשבונות</button></div></div>
+    <div class="panel"><h3>על האפליקציה</h3>
+      <p class="help" style="margin:0 0 8px">גרסה, מכשיר, כמה זמן לקחה ההפעלה האחרונה, ומה קרה אם האפליקציה קרסה. אם משהו לא עובד, צלמו את זה.</p>
+      <pre id="diag">${esc(diag)}</pre>
+      <div class="row-btns"><button class="btn" type="button" data-act="copydiag">להעתיק</button></div></div>
+  </div>`;
+  const uf=document.getElementById("uf");
+  uf.addEventListener("input",()=>{const q=uf.value.trim().toLowerCase();document.querySelectorAll("#ul .urlrow").forEach(r=>{r.hidden=!!q&&!r.dataset.name.includes(q)})});
+}
+function saveLinks(){
+  const next={}; let bad=null;
+  document.querySelectorAll("#ul input[data-url]").forEach(i=>{
+    const v=i.value.trim(), g=byId[i.dataset.url]; if(!v||!g) return;
+    if(!validUrl(v)){bad=bad||g.n;return}
+    if(v!==g.u0) next[g.id]=v;
+  });
+  if(bad){toast("הקישור של "+bad+" צריך להתחיל ב-https://");return}
+  state.urls=next; for(const g of GAMES) g.u=next[g.id]||g.u0;
+  save(); render(); toast("הקישורים נשמרו.");
+}
+function newCustom(name,url,kind,metric,lib){
+  const g={id:"c"+Date.now().toString(36)+Math.floor(Math.random()*1296).toString(36),n:name,s:"my",k:KINDS.includes(kind)?kind:KINDS[0],m:([...name][0]||"?").toUpperCase(),u:url,d:"",metric:metric||"none"};
+  state.custom=state.custom||[];
+  state.custom.push({id:g.id,n:g.n,s:g.s,k:g.k,m:g.m,u:g.u,d:g.d,metric:g.metric,lib:lib?1:0});
+  const full=Object.assign({},g,{u0:g.u}); if(lib) full.lib=1;
+  GAMES.push(full); byId[g.id]=full; if(lib){state.prefs[g.id]="yes"}
+  return full;
+}
+function addGameFromForm(){
+  const name=document.getElementById("ngName").value.trim(), url=document.getElementById("ngUrl").value.trim();
+  if(!name){toast("צריך שם למשחק.");return}
+  if(!validUrl(url)){toast("הקישור צריך להתחיל ב-https://");return}
+  newCustom(name,url,document.getElementById("ngKind").value,document.getElementById("ngMetric").value,document.getElementById("ngLib").checked);
+  save(); render(); toast("נוסף: "+name+".");
+}
+function addMany(){
+  const lines=document.getElementById("manyTxt").value.split(/\n/).map(l=>l.trim()).filter(Boolean);
+  let ok=0; const bad=[];
+  for(const l of lines){
+    const parts=l.split("|").map(x=>x.trim());
+    if(parts.length<2||!parts[0]||!validUrl(parts[1])){bad.push(l.slice(0,30));continue}
+    newCustom(parts[0],parts[1],parts[2],"none",true); ok++;
+  }
+  if(ok) save();
+  render();
+  toast(ok?("נוספו "+ok+" משחקים"+(bad.length?", ו-"+bad.length+" שורות לא הובנו.":".")):"לא הובנה אף שורה. צריך: שם | https://...");
+}
+function delCustom(id){
+  const g=byId[id]; if(!g||!isCustom(g)) return;
+  state.custom=(state.custom||[]).filter(x=>x.id!==id);
+  delete state.prefs[id]; if(state.urls) delete state.urls[id];
+  const i=GAMES.indexOf(g); if(i>=0) GAMES.splice(i,1); delete byId[id];
+  save(); render(); toast("המשחק ירד.");
+}
+function copyDiag(){
+  const t=(document.getElementById("diag")||{}).textContent||"";
+  if(NATIVE&&NATIVE.copyText){NATIVE.copyText(t);toast("הועתק.")} else toast("אפשר לסמן ולהעתיק ידנית.");
+}
+
 function playGame(id){
   if(NATIVE){ NATIVE.play(id); return }
   const g=byId[id]; if(g) window.open(g.u,"_blank","noopener");        // plain browser: just open the link
 }
-function render(){renderMast(); if(view==="home")renderHome(); else if(view==="disc")renderDisc(); else renderStats(); document.getElementById("c-disc").textContent=queue().length; window.__ready=true; requestAnimationFrame(()=>window.updateHBar&&window.updateHBar())}
+function render(){renderMast(); if(view==="home")renderHome(); else if(view==="disc")renderDisc(); else if(view==="settings")renderSettings(); else renderStats(); document.getElementById("c-disc").textContent=queue().length; window.__ready=true; requestAnimationFrame(()=>window.updateHBar&&window.updateHBar())}
 function renderSide(){renderMast()}
 
 /* ================= sheets ================= */
@@ -878,7 +999,7 @@ document.getElementById("who").addEventListener("click",()=>{
 
 /* ================= interactions ================= */
 function setView(v){view=v;document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.view===v));
-  ["home","disc","stats"].forEach(x=>document.getElementById("v-"+x).hidden=x!==v);render();document.getElementById("scroller").scrollTo({top:0,left:0})}
+  ["home","disc","stats","settings"].forEach(x=>document.getElementById("v-"+x).hidden=x!==v);render();document.getElementById("scroller").scrollTo({top:0,left:0})}
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest(".tab");if(b)setView(b.dataset.view)});
 document.querySelector("main").addEventListener("click",e=>{
   const pl=e.target.closest("[data-play]"); if(pl){playGame(pl.dataset.play);return}
@@ -888,7 +1009,12 @@ document.querySelector("main").addEventListener("click",e=>{
   const act=a.dataset.act, host=a.closest("[data-id]"), id=a.dataset.id||(host&&host.dataset.id), t=TODAY();
   if(act==="shuffle"){featOffset++;renderHome();return}
   if(act==="accounts"){NATIVE?NATIVE.openAccounts():toast("החשבונות זמינים באפליקציה.");return}
-  if(act==="urls"){openUrls();return}
+  if(act==="urls"){setView("settings");return}
+  if(act==="saveLinks"){saveLinks();return}
+  if(act==="addGame"){addGameFromForm();return}
+  if(act==="addMany"){addMany();return}
+  if(act==="delcustom"){delCustom(id);return}
+  if(act==="copydiag"){copyDiag();return}
   if(act==="result"){openResult(id);return}
   if(act==="duel"){openDuel(id);return}
   if(act==="mark"){
@@ -909,6 +1035,7 @@ document.querySelector("main").addEventListener("click",e=>{
 
 /* ================= shell helpers ================= */
 if(/[?&]rm=1\b/.test(location.search)) document.documentElement.classList.add("reduce-motion");
+if(/[?&]tv=1\b/.test(location.search)) document.documentElement.classList.add("tv","reduce-motion");
 const scroller=document.getElementById("scroller");
 /* Horizontal scroll indicator. Physical (left/right) maths on purpose, so RTL cannot confuse it. */
 (function(){

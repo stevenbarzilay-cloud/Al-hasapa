@@ -16,6 +16,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.couch.alhasapa.BuildConfig
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.display.ScaledFrame
@@ -44,6 +45,9 @@ class PlayerDisplayTest {
 
     @After fun close() { scenario?.close() }
 
+    /** On a television the bars and panels are replaced by the dock (see PlayerTvDockTest), so these phone layouts do not exist there. */
+    private fun phoneOnly() = org.junit.Assume.assumeFalse(BuildConfig.TV)
+
     private fun launch(gameId: String, who: String? = null): ActivityScenario<PlayerActivity> =
         ActivityScenario.launch<PlayerActivity>(PlayerActivity.gameIntent(context, gameId, who)).also { scenario = it; rule.waitForIdle() }
 
@@ -58,6 +62,7 @@ class PlayerDisplayTest {
 
     @Test
     fun aPhoneShapedGameShowsTheCouchPanelsAtItsSides() {
+        phoneOnly()
         launch("wordle")
         rule.onNodeWithText("על הספה שלנו").assertIsDisplayed()                // identity panel
         rule.onNodeWithText("0").assertIsDisplayed()                            // played tonight
@@ -68,6 +73,7 @@ class PlayerDisplayTest {
 
     @Test
     fun theProgressPanelFollowsTheEvening() {
+        phoneOnly()
         val today = CouchState.dayKey(LocalDate.now())
         app.repo.update { CouchState.setEntry(it, today, "connections", JSONObject().put("w", "").put("t", 1_800_000_000_000L)) }
         launch("wordle")
@@ -95,6 +101,7 @@ class PlayerDisplayTest {
 
     @Test
     fun theTuningSheetChangesTheViewLiveAndOnlyKeepsWhatIsSaved() {
+        phoneOnly()
         launch("wordle")
         rule.onNode(hasContentDescription("תפריט")).performClick()
         rule.onNodeWithText("רגיל").performClick()
@@ -219,6 +226,7 @@ class PlayerDisplayTest {
 
     @Test
     fun theUiCanBeMovedToABarThenShrunkToJustAButtonAndTheMenuIsNeverLost() {
+        phoneOnly()
         launch("wordle")
         rule.onNodeWithText("על הספה שלנו").assertIsDisplayed()                  // panels first
         menu().performClick()
@@ -234,6 +242,7 @@ class PlayerDisplayTest {
 
     @Test
     fun theTopAndBottomUiSplitsTheItemsBetweenTheTwoBars() {
+        phoneOnly()
         app.repo.update { it.put("displays", JSONObject().put("nytimes.com/games/wordle", JSONObject().put("ui", "both").put("uiSize", "m"))) }
         launch("wordle")
         menu().assertIsDisplayed()
