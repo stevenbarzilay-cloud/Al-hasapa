@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only what XML needs (window background, launcher icon). Every other color is defined once, with its
+     role, in ui/theme/Theme.kt (Palette), which mirrors couch-artifact/index.html :root. -->
+<resources>
+    <color name="cream">#F2EBDD</color>
+    <color name="ic_background">#F2EBDD</color>
+</resources>

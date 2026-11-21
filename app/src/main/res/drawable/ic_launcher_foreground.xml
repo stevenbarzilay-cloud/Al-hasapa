@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Steve's red circle and Roni's pink triangle, inside the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#D94E38"
+        android:strokeColor="#30232D"
+        android:strokeWidth="2.6"
+        android:pathData="M40,58m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+    <path
+        android:fillColor="#E8A5B5"
+        android:strokeColor="#30232D"
+        android:strokeWidth="2.6"
+        android:strokeLineJoin="round"
+        android:pathData="M68,38L84,70L52,70Z" />
+</vector>

@@ -1,0 +1,17 @@
+# Gradle / Android Studio
+.gradle/
+build/
+*.iml
+.idea/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Never commit real personal data (backups exported from the app) or real signing keys.
+# The one exception is the shared debug key below: it exists so updates install over each other.
+*.keystore
+!app/debug.keystore
+*.jks
+/private/
+backup-*.json

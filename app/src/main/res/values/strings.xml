@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This is a Hebrew-only app, so the default resources are Hebrew. -->
+<resources>
+    <string name="app_name">על הספה שלנו</string>
+    <string name="player_soon">הנגן מגיע בשלב הבא. בינתיים אפשר לשוטט בספה.</string>
+</resources>
