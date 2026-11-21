@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.0.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.0.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -71,8 +71,18 @@ TV display (`app/src/main/assets/display_profiles.json`, `display/`):
   reads the page. Sign-in screens (the accounts screen) are always shown as they are, never shrunk.
 - **Plain http.** Android refuses cleartext traffic, and some pages redirect to `http://` (Haaretz did:
   `ERR_CLEARTEXT_NOT_PERMITTED`). A main-frame `http://` link on an allowed site is now loaded over `https://` instead.
-- **Zoom** shrinks the virtual viewport (125% means 344 px wide instead of 430). **Safe area** keeps 2.5% free on every
-  side for TVs that crop; the camera cut-out is respected on top of that.
+- **Zoom** has two parts that you never have to tell apart. Up to 140% the page is told its screen is smaller (125% means
+  344 px wide instead of 430) and lays itself out again: nothing is cropped. A phone-sized page breaks if squeezed
+  much further, so from 140% to 300% the finished picture is magnified instead: it gets bigger and the edges are cropped, and
+  the arrows in the display sheet move which part of the page stays in view (kept per site). The strip at the top has "−" and "+"
+  that keep what they set for that site at once; the display sheet has the same plus the arrows.
+- **How big the game can be.** In portrait-fit the game's size is set by the screen's height (a 430 x 800 page on a 390 dp
+  tall screen is about half size); the panels only use what is left over. So the panels never take size from the game, but
+  they are still responsive: full above 280 dp each, essentials only (the game, the clock, the count, the result button) down to
+  150 dp, gone below that, and "פאנלים בצדדים" in the display sheet turns them off for a site. "רחב" uses the whole screen
+  (the page believes it is a 1280 px desktop window), which makes the content larger than portrait-fit when the site's
+  desktop layout works at that height. The TV margin (0 / 2.5 / 5%) is in the sheet too: 0 gives about 5% more game.
+- **Safe area** keeps 2.5% free on every side for TVs that crop (the camera cut-out is respected on top of that).
 - Tuning is live: top edge, then "תצוגה" opens a sheet on the left; mode and zoom change the page as you press.
   "לשמור לאתר הזה" stores it under host + path prefix (the longest match wins; stored in the state as `displays`,
   survives backups); "לחזור לברירת המחדל" removes it again.

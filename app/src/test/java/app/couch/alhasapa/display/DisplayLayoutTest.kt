@@ -81,4 +81,41 @@ class DisplayLayoutTest {
         assertEquals(22.85f, dx, 0.01f); assertEquals(10.275f, dy, 0.01f)
         assertNotNull(dx)
     }
+
+    @Test
+    fun zoomUpToTheReflowLimitRelayoutsThePageAndNeverCropsIt() {
+        val l = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, zoom = 140), w, h)
+        assertEquals("430 / 1.4", 307, l.virtualWidth); assertEquals(1f, l.magnify, 0f)
+    }
+
+    @Test
+    fun zoomBeyondTheLimitMagnifiesThePictureInsteadOfSqueezingThePageFurther() {
+        // A page cannot be asked to fit a screen narrower than the smallest phones, so the rest of the zoom is magnification.
+        val l = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, zoom = 210), w, h)
+        assertEquals("the page is re-laid out only as far as 140%", 307, l.virtualWidth)
+        assertEquals(1.5f, l.magnify, 0.0001f)
+        val wide = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.WIDE, zoom = 280), w, h)
+        assertEquals(1280 * 100 / 140, wide.virtualWidth); assertEquals(2f, wide.magnify, 0.0001f)
+        assertEquals("native has no zoom", 1f, DisplayLayout.compute(DisplayProfile(zoom = 250), w, h).magnify, 0f)
+    }
+
+    @Test
+    fun panelsShrinkToTheEssentialsBeforeTheyDisappear() {
+        // The box is as tall as the screen allows, so what is left of the width is what the panels get.
+        val roomy = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), 868f, 390f)
+        assertTrue(roomy.hasPanels); assertFalse("329 dp each: the full panels", roomy.compactPanels)
+        val tight = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), 560f, 390f)
+        assertTrue(tight.hasPanels); assertTrue("175 dp each: essentials only", tight.compactPanels)
+        assertEquals(DisplayLayout.FULL_PANEL_DP > tight.panelWidth, true)
+        val none = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), 480f, 390f)
+        assertFalse("under 150 dp each: no panels", none.hasPanels); assertFalse(none.compactPanels)
+    }
+
+    @Test
+    fun panelsCanBeSwitchedOffAndTheGameIsNoSmallerForIt() {
+        val on = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), w, h)
+        val off = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, panels = false), w, h)
+        assertTrue(on.hasPanels); assertFalse(off.hasPanels)
+        assertEquals("the game's size depends on the screen's height, not on the panels", on.webWidth, off.webWidth, 0.01f)
+    }
 }

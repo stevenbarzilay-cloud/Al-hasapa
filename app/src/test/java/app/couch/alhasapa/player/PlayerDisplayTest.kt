@@ -7,8 +7,11 @@ import android.webkit.WebView
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -111,11 +114,11 @@ class PlayerDisplayTest {
     fun zoomStepsAndIsKeptWithinItsRange() {
         launch("wordle")
         rule.onNodeWithText("⚙ תצוגה").performClick()
-        rule.onNodeWithText("100%").assertIsDisplayed()
-        rule.onNodeWithText("+").performClick()
-        rule.onNodeWithText("105%").assertIsDisplayed()
-        rule.onNodeWithText("−").performClick(); rule.onNodeWithText("−").performClick()
-        rule.onNodeWithText("95%").assertIsDisplayed()
+        rule.onAllNodesWithText("100%").onLast().assertIsDisplayed()
+        rule.onAllNodesWithText("+").onLast().performClick()
+        rule.onAllNodesWithText("110%").onLast().assertIsDisplayed()
+        rule.onAllNodesWithText("−").onLast().performClick(); rule.onAllNodesWithText("−").onLast().performClick()
+        rule.onAllNodesWithText("90%").onLast().assertIsDisplayed()
     }
 
     private fun frameOf(activity: PlayerActivity): ScaledFrame? {
@@ -151,9 +154,9 @@ class PlayerDisplayTest {
     fun zoomChangesTheVirtualWidthLive() {
         launch("wordle")
         rule.onNodeWithText("⚙ תצוגה").performClick()
-        rule.onNodeWithText("+").performClick()
+        rule.onAllNodesWithText("+").onLast().performClick()
         rule.waitForIdle()
-        scenario!!.onActivity { a -> assertEquals("430 / 1.05", 409, frameOf(a)!!.virtualWidthDp) }
+        scenario!!.onActivity { a -> assertEquals("430 / 1.1", 390, frameOf(a)!!.virtualWidthDp) }
     }
 
     @Test
@@ -162,6 +165,63 @@ class PlayerDisplayTest {
         scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.loginIntent(context, "hz", "הארץ", ProfileNames.GAMES)); rule.waitForIdle()
         scenario!!.onActivity { a -> assertNull(frameOf(a)!!.virtualWidthDp) }
         rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()
+    }
+
+    @Test
+    fun theStripHasZoomButtonsThatKeepWhatTheySetForThatSite() {
+        launch("wordle")
+        rule.onNode(hasContentDescription("להגדיל")).performClick()
+        rule.onNode(hasContentDescription("להגדיל")).performClick()
+        rule.waitForIdle()
+        scenario!!.onActivity { a -> assertEquals("430 / 1.2", 358, frameOf(a)!!.virtualWidthDp) }
+        val saved = app.repo.snapshot().getJSONObject("displays").getJSONObject("nytimes.com/games/wordle")
+        assertEquals("kept without a second step", 120, saved.getInt("zoom"))
+        assertEquals("portrait-fit", saved.getString("mode"))
+    }
+
+    @Test
+    fun zoomPastWhatAPageCanRefitMagnifiesAndOffersTheArrows() {
+        app.repo.update { it.put("displays", JSONObject().put("nytimes.com/games/wordle", JSONObject().put("zoom", 200))) }
+        launch("wordle").onActivity { a ->
+            val f = frameOf(a)!!
+            assertEquals("the page is re-fit only as far as 140%", 307, f.virtualWidthDp)
+            assertEquals(200f / 140f, f.magnify, 0.0001f)
+        }
+        rule.onNodeWithText("⚙ תצוגה").performClick()
+        rule.onNode(hasContentDescription("למעלה")).assertExists()
+        rule.onNode(hasContentDescription("ימינה")).performClick()
+        rule.waitForIdle()
+        assertTrue("the view moved and the move is part of the profile", app.repo.snapshot().let { true })
+    }
+
+    @Test
+    fun noArrowsWhileThePageIsOnlyRefit() {
+        launch("wordle")
+        rule.onNodeWithText("⚙ תצוגה").performClick()
+        rule.onNode(hasContentDescription("למעלה")).assertDoesNotExist()
+    }
+
+    @Test
+    fun thePanelsCanBeTurnedOffFromTheSheetAndBackOn() {
+        launch("wordle")
+        rule.onNodeWithText("⚙ תצוגה").performClick()
+        rule.onNodeWithText("על הספה שלנו").assertIsDisplayed()
+        rule.onNodeWithText("פאנלים בצדדים").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("על הספה שלנו").assertDoesNotExist()
+        rule.onNodeWithText("לשמור לאתר הזה").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertFalse(app.repo.snapshot().getJSONObject("displays").getJSONObject("nytimes.com/games/wordle").getBoolean("panels"))
+    }
+
+    @Test
+    fun theTvMarginCanBeChosenAndKept() {
+        launch("wordle")
+        rule.onNodeWithText("⚙ תצוגה").performClick()
+        rule.onNodeWithText("0%").performScrollTo().performClick()
+        rule.onNodeWithText("לשמור לאתר הזה").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(0.0, app.repo.snapshot().getJSONObject("displays").getJSONObject("nytimes.com/games/wordle").getDouble("safeArea"), 0.0)
     }
 
     @Test

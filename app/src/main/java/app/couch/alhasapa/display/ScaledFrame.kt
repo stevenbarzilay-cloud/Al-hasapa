@@ -24,7 +24,24 @@ class ScaledFrame(context: Context) : FrameLayout(context) {
             if (field != value) { field = value; requestLayout() }
         }
 
-    /** The scale used by the last measure (1 when not shrinking). */
+    /** Zoom of the finished picture beyond the fit (1 = none). Above 1 the edges are cropped and [focusX]/[focusY] pick the part kept. */
+    var magnify: Float = 1f
+        set(value) {
+            val v = value.coerceAtLeast(1f)
+            if (field != v) { field = v; requestLayout() }
+        }
+
+    /** Where in the page (0..1 across, 0..1 down) the magnified view is centred. */
+    fun setFocus(x: Float, y: Float) {
+        val fx = x.coerceIn(0f, 1f)
+        val fy = y.coerceIn(0f, 1f)
+        if (fx != focusX || fy != focusY) { focusX = fx; focusY = fy; requestLayout() }
+    }
+
+    private var focusX = 0.5f
+    private var focusY = 0.5f
+
+    /** The scale used by the last measure (1 when not shrinking), before [magnify]. */
     var scale: Float = 1f
         private set
 
@@ -56,9 +73,17 @@ class ScaledFrame(context: Context) : FrameLayout(context) {
     }
 
     private fun applyScale(child: View) {
+        val s = scale * magnify
+        val contentW = child.measuredWidth * s
+        val contentH = child.measuredHeight * s
+        // Magnified: keep the focus point at the middle of the box, but never slide past the page's own edges.
+        val tx = if (magnify <= 1f || contentW <= width) 0f else (width / 2f - focusX * contentW).coerceIn(width - contentW, 0f)
+        val ty = if (magnify <= 1f || contentH <= height) 0f else (height / 2f - focusY * contentH).coerceIn(height - contentH, 0f)
         child.pivotX = 0f
         child.pivotY = 0f
-        child.scaleX = scale
-        child.scaleY = scale
+        child.scaleX = s
+        child.scaleY = s
+        child.translationX = tx
+        child.translationY = ty
     }
 }

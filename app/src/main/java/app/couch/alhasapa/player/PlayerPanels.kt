@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -52,36 +53,39 @@ private val PanelText = 20.sp
 
 /** The panel beside the game (the one on the right, where a Hebrew reader begins): whose couch, which game, how long. */
 @Composable
-fun IdentityPanel(width: Dp, title: String, elapsed: String, modifier: Modifier = Modifier) {
-    PanelFrame(width, modifier) {
-        Image(
-            painterResource(R.drawable.ic_launcher_foreground), contentDescription = null,
-            modifier = Modifier.size(minOf(96.dp, width - 24.dp)),
-        )
-        Text(stringResource(R.string.panel_logo), fontSize = PanelText, color = Palette.Ink2, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(16.dp))
-        Text(title, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center, lineHeight = 30.sp)
+fun IdentityPanel(width: Dp, title: String, elapsed: String, modifier: Modifier = Modifier, compact: Boolean = false) {
+    PanelFrame(width, modifier, compact) {
+        // Narrow panels keep what matters while playing (the game and the clock) and drop the decoration.
+        if (!compact) {
+            Image(
+                painterResource(R.drawable.ic_launcher_foreground), contentDescription = null,
+                modifier = Modifier.size(minOf(96.dp, width - 24.dp)),
+            )
+            Text(stringResource(R.string.panel_logo), fontSize = PanelText, color = Palette.Ink2, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+        }
+        Text(title, fontSize = if (compact) 22.sp else 26.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center, lineHeight = if (compact) 26.sp else 30.sp)
         Spacer(Modifier.height(12.dp))
         // Digits read left to right even in a Hebrew sentence, so the clock sits in its own left-to-right run.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Text(elapsed, fontSize = 34.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = elapsed })
+            Text(elapsed, fontSize = if (compact) 28.sp else 34.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = elapsed })
         }
     }
 }
 
 /** The panel on the other side: the evening so far and the two of us. */
 @Composable
-fun ProgressPanel(width: Dp, info: PlayerInfo, modifier: Modifier = Modifier, bottom: @Composable () -> Unit = {}) {
-    PanelFrame(width, modifier) {
-        Text("${info.done}", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Palette.Red, lineHeight = 60.sp)
+fun ProgressPanel(width: Dp, info: PlayerInfo, modifier: Modifier = Modifier, compact: Boolean = false, bottom: @Composable () -> Unit = {}) {
+    PanelFrame(width, modifier, compact) {
+        Text("${info.done}", fontSize = if (compact) 44.sp else 56.sp, fontWeight = FontWeight.Bold, color = Palette.Red, lineHeight = if (compact) 48.sp else 60.sp)
         Text(stringResource(R.string.panel_progress, info.total), fontSize = PanelText, color = Palette.Ink, textAlign = TextAlign.Center)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.panel_points, info.points), fontSize = PanelText, fontWeight = FontWeight.SemiBold, color = Palette.Ink, textAlign = TextAlign.Center)
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
         Person(info.pieceA, info.nameA, active = info.who == "a")
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(if (compact) 4.dp else 8.dp))
         Person(info.pieceB, info.nameB, active = info.who == "b")
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
         bottom()
     }
 }
@@ -123,19 +127,19 @@ private fun Person(style: app.couch.alhasapa.data.PieceStyle, name: String, acti
 }
 
 @Composable
-private fun PanelFrame(width: Dp, modifier: Modifier, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+private fun PanelFrame(width: Dp, modifier: Modifier, compact: Boolean, content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     // Both panels are right to left inside, whichever side of the screen they stand on.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
             modifier
                 .width(width)
                 .fillMaxHeight()
-                .padding(8.dp)
+                .padding(if (compact) 4.dp else 8.dp)
                 .clip(RoundedCornerShape(20.dp))
                 .background(Palette.Card)
                 .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(20.dp))
                 .verticalScroll(rememberScrollState())
-                .padding(12.dp),
+                .padding(if (compact) 8.dp else 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
             content = content,
@@ -158,6 +162,8 @@ fun TuningSheet(
     onReset: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The picture is magnified past what the page can re-fit, so the view can be moved. */
+    magnified: Boolean = false,
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
@@ -181,9 +187,32 @@ fun TuningSheet(
             if (profile.mode != DisplayMode.NATIVE) {
                 Text(stringResource(R.string.display_zoom), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                    SheetButton("+", stringResource(R.string.display_zoom_in), Modifier.width(64.dp)) { onChange(profile.copy(zoom = (profile.zoom + ZOOM_STEP).coerceAtMost(DisplayProfile.MAX_ZOOM))) }
+                    SheetButton("+", stringResource(R.string.display_zoom_in), Modifier.width(64.dp)) { onChange(profile.copy(zoom = zoomBy(profile.zoom, +1))) }
                     Text(stringResource(R.string.display_zoom_value, profile.zoom), fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
-                    SheetButton("−", stringResource(R.string.display_zoom_out), Modifier.width(64.dp)) { onChange(profile.copy(zoom = (profile.zoom - ZOOM_STEP).coerceAtLeast(DisplayProfile.MIN_ZOOM))) }
+                    SheetButton("−", stringResource(R.string.display_zoom_out), Modifier.width(64.dp)) { onChange(profile.copy(zoom = zoomBy(profile.zoom, -1))) }
+                }
+                if (magnified) {
+                    Text(stringResource(R.string.display_pan), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
+                    Text(stringResource(R.string.display_pan_hint), fontSize = PanelText, color = Palette.Ink2)
+                    PanPad { dx, dy -> onChange(profile.copy(panX = (profile.panX + dx).coerceIn(0.0, 1.0), panY = (profile.panY + dy).coerceIn(0.0, 1.0))) }
+                }
+                if (profile.mode == DisplayMode.PORTRAIT_FIT) {
+                    Row(
+                        Modifier.fillMaxWidth().heightIn(min = 56.dp)
+                            .toggleable(value = profile.panels, role = Role.Switch, onValueChange = { onChange(profile.copy(panels = it)) }),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(stringResource(R.string.display_panels), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
+                        androidx.compose.material3.Switch(checked = profile.panels, onCheckedChange = null)
+                    }
+                }
+            }
+            Text(stringResource(R.string.display_margin), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (m in MARGINS) {
+                    val label = stringResource(R.string.display_margin_value, if (m == m.toInt().toDouble()) m.toInt().toString() else m.toString())
+                    ModeChip(label, profile.safeArea == m, Modifier.weight(1f)) { onChange(profile.copy(safeArea = m)) }
                 }
             }
             if (pageSees != null) Text(stringResource(R.string.display_page_sees, pageSees), fontSize = PanelText, color = Palette.Ink2)
@@ -197,7 +226,32 @@ fun TuningSheet(
     }
 }
 
-const val ZOOM_STEP = 5
+/** One press of a zoom button. */
+const val ZOOM_STEP = 10
+
+/** The TV safe-area choices: nothing, the usual, and a wide one for TVs that crop. */
+private val MARGINS = listOf(0.0, 2.5, 5.0)
+
+/** The zoom after one step up (+1) or down (-1), kept on the steps and inside the allowed range. */
+fun zoomBy(zoom: Int, direction: Int): Int =
+    ((zoom + direction * ZOOM_STEP) / ZOOM_STEP * ZOOM_STEP).coerceIn(DisplayProfile.MIN_ZOOM, DisplayProfile.MAX_ZOOM)
+
+private const val PAN_STEP = 0.12
+
+/** Four arrows that move the magnified view over the page. Left and right are the screen's own. */
+@Composable
+private fun PanPad(onPan: (dx: Double, dy: Double) -> Unit) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SheetButton("▲", stringResource(R.string.display_pan_up), Modifier.width(64.dp)) { onPan(0.0, -PAN_STEP) }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                SheetButton("◀", stringResource(R.string.display_pan_left), Modifier.width(64.dp)) { onPan(-PAN_STEP, 0.0) }
+                SheetButton("▼", stringResource(R.string.display_pan_down), Modifier.width(64.dp)) { onPan(0.0, PAN_STEP) }
+                SheetButton("▶", stringResource(R.string.display_pan_right), Modifier.width(64.dp)) { onPan(PAN_STEP, 0.0) }
+            }
+        }
+    }
+}
 
 @Composable
 private fun ModeChip(label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {

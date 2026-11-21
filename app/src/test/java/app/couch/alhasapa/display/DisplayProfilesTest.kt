@@ -72,4 +72,14 @@ class DisplayProfilesTest {
         assertTrue(d.css.contains("onetrust")); assertTrue(d.css.contains("smartbanner"))
         assertEquals(2.5, d.safeArea, 0.0); assertFalse(d.dark); assertTrue(d.injectCss)
     }
+
+    @Test
+    fun panelsAndPanSurviveBeingSavedAndLoaded() {
+        val p = DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, zoom = 230, panels = false, panX = 0.3, panY = 0.8, safeArea = 0.0)
+        val back = DisplayProfile().overlay(p.toJson())
+        assertEquals(p, back)
+        val clamped = DisplayProfile().overlay(JSONObject().put("panX", 7).put("panY", -2))
+        assertEquals(1.0, clamped.panX, 0.0); assertEquals(0.0, clamped.panY, 0.0)
+        assertEquals(300, DisplayProfile.MAX_ZOOM)
+    }
 }

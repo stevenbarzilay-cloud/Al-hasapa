@@ -85,4 +85,13 @@
     <string name="dnd_chip_hint">שהתראות לא יקפצו על הטלוויזיה</string>
     <string name="dnd_close">להסתיר</string>
     <string name="display_page_sees">הדף חושב שהמסך הוא %1$s</string>
+    <string name="display_panels">פאנלים בצדדים</string>
+    <string name="display_margin">שוליים לטלוויזיה</string>
+    <string name="display_margin_value">%1$s%%</string>
+    <string name="display_pan">הזזה</string>
+    <string name="display_pan_hint">מעל 140% התמונה מוגדלת והקצוות נחתכים. מזיזים עם החצים.</string>
+    <string name="display_pan_up">למעלה</string>
+    <string name="display_pan_down">למטה</string>
+    <string name="display_pan_left">שמאלה</string>
+    <string name="display_pan_right">ימינה</string>
 </resources>

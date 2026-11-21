@@ -65,4 +65,36 @@ class ScaledFrameTest {
         val (f, c) = frame(0, 0, 430)
         assertEquals(1f, f.scale, 0f); assertEquals(0, c.measuredWidth)
     }
+
+    private fun magnified(w: Int, h: Int, mag: Float, fx: Float, fy: Float): Pair<ScaledFrame, View> {
+        val child = View(context)
+        val f = ScaledFrame(context).apply { addView(child); virtualWidthDp = 430; magnify = mag; setFocus(fx, fy) }
+        f.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+        f.layout(0, 0, w, h)
+        return f to child
+    }
+
+    @Test
+    fun magnifyingGrowsThePictureAndCentresTheFocus() {
+        val (_, c) = magnified(210, 390, 2f, 0.5f, 0.5f)
+        assertEquals("fit scale x magnify", 2f * 210f / 430f, c.scaleX, 0.0001f)
+        // The page's centre lands on the box's centre.
+        assertEquals(105f, 0.5f * c.measuredWidth * c.scaleX + c.translationX, 0.5f)
+        assertEquals(195f, 0.5f * c.measuredHeight * c.scaleY + c.translationY, 1f)
+    }
+
+    @Test
+    fun theViewNeverSlidesPastThePagesEdges() {
+        val (_, c) = magnified(210, 390, 2f, 0f, 0f)
+        assertEquals("focus at the top-left: the page's corner is the box's corner", 0f, c.translationX, 0f); assertEquals(0f, c.translationY, 0f)
+        val (_, d) = magnified(210, 390, 2f, 1f, 1f)
+        assertEquals(210f, d.measuredWidth * d.scaleX + d.translationX, 0.5f)
+        assertEquals(390f, d.measuredHeight * d.scaleY + d.translationY, 1f)
+    }
+
+    @Test
+    fun noMagnificationMeansNoTranslation() {
+        val (_, c) = magnified(210, 390, 1f, 0.9f, 0.9f)
+        assertEquals(0f, c.translationX, 0f); assertEquals(0f, c.translationY, 0f)
+    }
 }

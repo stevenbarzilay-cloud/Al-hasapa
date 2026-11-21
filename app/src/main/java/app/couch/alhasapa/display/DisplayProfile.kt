@@ -13,7 +13,9 @@ enum class DisplayMode(val id: String) {
 
 /**
  * How one site is shown. The virtual viewport (vw x vh, in CSS px) is what the page believes the screen is: 430 x 800 is a
- * phone held upright, 1280 is a desktop window. zoom is a percentage of that (more zoom = a smaller virtual viewport).
+ * phone held upright, 1280 is a desktop window. zoom is a percentage of that (more zoom = a smaller virtual viewport) up to
+ * [DisplayLayout.REFLOW_MAX_ZOOM], the most a page can usefully be squeezed; beyond that the picture is magnified instead, which
+ * crops the edges, and [panX]/[panY] say which part of the page stays in view.
  */
 data class DisplayProfile(
     val mode: DisplayMode = DisplayMode.NATIVE,
@@ -27,9 +29,15 @@ data class DisplayProfile(
     val vh: Int = 800,
     /** CSS injected at document start to hide banners and the like. */
     val css: String = "",
+    /** The couch panels beside a phone-shaped game (the evening so far, the clock). Off = the game alone. */
+    val panels: Boolean = true,
+    /** Where the view is centred on the page when zoomed in past what the page can re-fit (0..1 across and down). */
+    val panX: Double = 0.5,
+    val panY: Double = 0.5,
 ) {
     fun toJson(): JSONObject = JSONObject().put("mode", mode.id).put("zoom", zoom).put("injectCss", injectCss)
         .put("safeArea", safeArea).put("dark", dark).put("vw", vw).put("vh", vh)
+        .put("panels", panels).put("panX", panX).put("panY", panY)
 
     /** This profile with the fields present in [o] replaced (what a saved override or a profile entry says). */
     fun overlay(o: JSONObject): DisplayProfile = copy(
@@ -41,11 +49,14 @@ data class DisplayProfile(
         vw = if (o.has("vw")) o.optInt("vw", vw).coerceIn(200, 3000) else vw,
         vh = if (o.has("vh")) o.optInt("vh", vh).coerceIn(200, 3000) else vh,
         css = if (o.has("css")) o.optString("css") else css,
+        panels = if (o.has("panels")) o.optBoolean("panels", panels) else panels,
+        panX = if (o.has("panX")) o.optDouble("panX", panX).coerceIn(0.0, 1.0) else panX,
+        panY = if (o.has("panY")) o.optDouble("panY", panY).coerceIn(0.0, 1.0) else panY,
     )
 
     companion object {
         const val MIN_ZOOM = 50
-        const val MAX_ZOOM = 200
+        const val MAX_ZOOM = 300
     }
 }
 

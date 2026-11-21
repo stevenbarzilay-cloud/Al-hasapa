@@ -179,6 +179,14 @@ fun PlayerScreen(
         stripVisible = false
     }
 
+    // The zoom buttons in the strip are for quick use while playing, so they keep what they set for this site without a second step.
+    val quickZoom: (Int) -> Unit = { direction ->
+        val next = profile.copy(zoom = zoomBy(profile.zoom, direction))
+        draft = next
+        onSaveDisplay(profiles.keyFor(currentUrl, resolved), next)
+        justSaved = true
+    }
+
     BackHandler {
         val view = webView
         when {
@@ -213,7 +221,7 @@ fun PlayerScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (layout.hasPanels) {
-                        ProgressPanel(layout.panelWidth.dp, info) {
+                        ProgressPanel(layout.panelWidth.dp, info, compact = layout.compactPanels) {
                             if (result != null) PanelButton(stringResource(R.string.player_result)) { resultText = ""; resultCaptured = false; resultOpen = true }
                         }
                     }
@@ -252,9 +260,15 @@ fun PlayerScreen(
                                     ScaledFrame(ctx).apply {
                                         addView(web)
                                         virtualWidthDp = layout.virtualWidth
+                                        magnify = layout.magnify
+                                        setFocus(profile.panX.toFloat(), profile.panY.toFloat())
                                     }
                                 },
-                                update = { frame -> frame.virtualWidthDp = layout.virtualWidth },
+                                update = { frame ->
+                                    frame.virtualWidthDp = layout.virtualWidth
+                                    frame.magnify = layout.magnify
+                                    frame.setFocus(profile.panX.toFloat(), profile.panY.toFloat())
+                                },
                                 onRelease = { frame ->
                                     val view = frame.getChildAt(0) as? WebView
                                     if (view != null && webView === view) { webView = null; injector = null }
@@ -265,7 +279,7 @@ fun PlayerScreen(
                         }
                     }
                     if (layout.hasPanels) {
-                        IdentityPanel(layout.panelWidth.dp, session.title, formatElapsed((now - startedAt) / 1000))
+                        IdentityPanel(layout.panelWidth.dp, session.title, formatElapsed((now - startedAt) / 1000), compact = layout.compactPanels)
                     }
                 }
             }
@@ -289,6 +303,8 @@ fun PlayerScreen(
                     onTogglePlayed = { onTogglePlayed(); stripTick++ },
                     onDisplay = { sheetOpen = true },
                     onResult = if (result != null) ({ resultText = ""; resultCaptured = false; resultOpen = true }) else null,
+                    zoom = if (profile.mode != DisplayMode.NATIVE) profile.zoom else null,
+                    onZoom = quickZoom,
                 )
             }
 
@@ -307,6 +323,7 @@ fun PlayerScreen(
                         profile = profile,
                         saved = justSaved,
                         pageSees = pageSees,
+                        magnified = layout.magnify > 1f,
                         onChange = { draft = it; justSaved = false },
                         onSave = {
                             onSaveDisplay(profiles.keyFor(currentUrl, resolved), profile)
@@ -353,7 +370,12 @@ fun PlayerScreen(
 }
 
 @Composable
-private fun ControlStrip(title: String, showPlayed: Boolean, played: Boolean, onBack: () -> Unit, onTogglePlayed: () -> Unit, onDisplay: () -> Unit, onResult: (() -> Unit)?) {
+private fun ControlStrip(
+    title: String, showPlayed: Boolean, played: Boolean, onBack: () -> Unit, onTogglePlayed: () -> Unit, onDisplay: () -> Unit,
+    onResult: (() -> Unit)?, zoom: Int?, onZoom: (Int) -> Unit,
+) {
+    // The phone is always sideways here (900+ dp), where everything fits; on a narrow window the zoom buttons give way.
+    val roomy = androidx.compose.ui.platform.LocalWindowInfo.current.containerSize.width / androidx.compose.ui.platform.LocalDensity.current.density >= 600f
     Row(
         Modifier
             .fillMaxWidth()
@@ -365,6 +387,12 @@ private fun ControlStrip(title: String, showPlayed: Boolean, played: Boolean, on
     ) {
         StripButton(stringResource(R.string.player_back), onClick = onBack)
         StripButton("⚙ " + stringResource(R.string.player_display), onClick = onDisplay)
+        if (zoom != null && roomy) {
+            // Quick zoom, always one tap away: the whole point of the app is a game big enough to see from the couch.
+            StripButton("−", onClick = { onZoom(-1) }, description = stringResource(R.string.display_zoom_out))
+            Text(stringResource(R.string.display_zoom_value, zoom), color = Palette.Cream, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            StripButton("+", onClick = { onZoom(+1) }, description = stringResource(R.string.display_zoom_in))
+        }
         Text(
             title, color = Palette.Cream, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1,
@@ -378,7 +406,7 @@ private fun ControlStrip(title: String, showPlayed: Boolean, played: Boolean, on
 }
 
 @Composable
-private fun StripButton(label: String, onClick: () -> Unit, highlighted: Boolean = false) {
+private fun StripButton(label: String, onClick: () -> Unit, highlighted: Boolean = false, description: String = label) {
     Box(
         Modifier
             .heightIn(min = 48.dp)
@@ -387,7 +415,7 @@ private fun StripButton(label: String, onClick: () -> Unit, highlighted: Boolean
             .background(if (highlighted) Palette.Cream else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp)
-            .semantics { role = Role.Button; contentDescription = label },
+            .semantics { role = Role.Button; contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = if (highlighted) Palette.Ink else Palette.Cream, fontSize = 20.sp, fontWeight = FontWeight.Medium)

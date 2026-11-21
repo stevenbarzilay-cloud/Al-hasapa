@@ -72,6 +72,14 @@ class AccessibilityAuditTest {
     }
 
     @Test
+    fun theMagnifiedViewWithItsArrows() {
+        (context as CouchApp).repo.update { it.put("displays", org.json.JSONObject().put("nytimes.com/games/wordle", org.json.JSONObject().put("zoom", 220))) }
+        scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.gameIntent(context, "wordle", null)); rule.waitForIdle()
+        rule.onNodeWithText("⚙ תצוגה").performClick(); rule.waitForIdle()
+        audit("tuning sheet with the pan arrows")
+    }
+
+    @Test
     fun theHeadToHeadSheet() {
         scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.gameIntent(context, "queens", "a")); rule.waitForIdle()
         rule.onAllNodesWithText("תוצאה").onFirst().performClick(); rule.waitForIdle()
@@ -95,11 +103,10 @@ class AccessibilityAuditTest {
     fun textInThePlayerPanelsIsTwentySpOrMore() {
         // The brief: at least 20 sp in the panels read from the couch. Everything in them is set in PlayerPanels.kt.
         val src = File("src/main/java/app/couch/alhasapa/player/PlayerPanels.kt").readText()
-        val uses = Regex("fontSize = (\\w+)(?:\\.sp)?").findAll(src).map { it.groupValues[1] }.toList()
-        assertTrue("found the font sizes", uses.size > 8)
-        val literal = uses.mapNotNull { it.toIntOrNull() }
-        assertTrue("every size is PanelText or a number of 20 or more: $uses", uses.all { it == "PanelText" || (it.toIntOrNull() ?: 0) >= 20 })
-        assertTrue(literal.all { it >= 20 })
+        val sizes = src.lines().filter { it.contains("fontSize") }.flatMap { l -> Regex("(\\d+)\\.sp").findAll(l).map { it.groupValues[1].toInt() }.toList() }
+        assertTrue("found the font sizes", sizes.size > 8)
+        assertTrue("every size in the panels is 20 sp or more: $sizes", sizes.all { it >= 20 })
+        assertTrue("every fontSize is a literal of 20+ or PanelText", src.lines().filter { it.contains("fontSize") }.none { Regex("fontSize = (?!PanelText|if|\\d)").containsMatchIn(it) })
         assertTrue("PanelText is 20.sp", Regex("PanelText = 20\\.sp").containsMatchIn(src))
     }
 }
