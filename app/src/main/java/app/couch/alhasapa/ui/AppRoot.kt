@@ -41,7 +41,7 @@ fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, brid
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
         HubScreen(onExit = onExit, reduceMotion = reduceMotion, bridge = bridge, onReady = {
-            if (!hubReady) { Startup.mark("hub ready"); Startup.save(context) }
+            if (!hubReady) { Startup.mark("hub ready"); Startup.save(context); app.couch.alhasapa.diag.Flight.log("start: " + Startup.summary().replace("\n", "; ")) }
             hubReady = true
         })
         if (!splashDone) {
@@ -51,6 +51,7 @@ fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, brid
             else SplashScreen(hubReady = hubReady, onFinished = { splashDone = true })
         }
         // Once per evening, while casting: a nudge to turn on Do Not Disturb. Not while the splash plays.
-        if (splashDone) DndChipHost(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp), signals, recheck = resumes)
+        // Not on a TV: there is no casting there.
+        if (splashDone && tv == null) DndChipHost(Modifier.align(Alignment.TopCenter).statusBarsPadding().padding(top = 8.dp), signals, recheck = resumes)
     }
 }

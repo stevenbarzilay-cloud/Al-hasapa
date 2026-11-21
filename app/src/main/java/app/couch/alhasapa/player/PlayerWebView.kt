@@ -11,6 +11,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.net.toUri
 import androidx.webkit.ScriptHandler
 import androidx.webkit.WebMessageCompat
 import androidx.webkit.WebViewCompat.WebMessageListener
@@ -66,9 +67,16 @@ object PlayerWebView {
         return used
     }
 
+    /**
+     * Writes the profile's cookies (the logins) to disk. The cookie jar is looked up here, on the main thread (profiles must be), and
+     * written on a thread of its own: writing blocks until it is done, and on a slow box that froze the screen when a game was left.
+     */
     fun flushCookies(profile: String) {
-        runCatching { WebProfiles.cookies(profile).flush() }
+        val jar = runCatching { WebProfiles.cookies(profile) }.getOrNull() ?: return
+        flusher.execute { runCatching { jar.flush() } }
     }
+
+    private val flusher = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "cookie-flush").apply { isDaemon = true } }
 }
 
 /**
@@ -182,6 +190,7 @@ class PlayerWebViewClient(
 
     override fun onPageFinished(view: WebView, url: String) {
         Diag.log("player: page finished")
+        app.couch.alhasapa.diag.Flight.log("player: page loaded (${url.toUri().host})")
         // What the page believes the screen is, so a wrong layout shows up in the log (and in the display sheet) as a number.
         view.evaluateJavascript("innerWidth+'x'+innerHeight+' @'+devicePixelRatio") { Diag.log("player: the page sees ${it?.trim('\"')} css px") }
         onFinished(url)
@@ -202,7 +211,10 @@ class PlayerWebViewClient(
     }
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+        // Returning true keeps the app alive (false would take it down with the page); the screen builds a new WebView.
         Diag.log("player: render process gone")
+        app.couch.alhasapa.diag.Flight.log("player: the page's process ended (crashed=${detail.didCrash()}, priority ${detail.rendererPriorityAtExit()}); reloading")
+        app.couch.alhasapa.diag.Flight.flushNow()
         onRenderGone()
         return true
     }

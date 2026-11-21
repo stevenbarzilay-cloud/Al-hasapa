@@ -79,6 +79,13 @@ What it can do, honestly:
    holds the game's whole frame (clock, score, zoom, shape, frame size, paw, keyboard, menu, back, result, "we played") so there are no
    bars or panels around the game; the TV gets an optimised release build, a static starting window instead of the animated splash,
    a lighter hub, a crash screen with startup timings, and a settings tab to edit game links and add games from inside the app.
+   **Revised in 1.5 after the third try ("crashes and gets stuck quickly, the keyboard opens by itself, scrolling not smooth"):** found
+   in the code: the keyboard opened every time the system asked the WebView for an input connection (on every window focus change);
+   after a game was closed the hub's remote pointed at the game's destroyed WebView, so the arrows stopped working; a page that did not
+   answer left the remote waiting forever; the focus ring was redrawn on every frame. Now: the keyboard opens from its button only;
+   each screen owns its WebView; page questions time out; the focus is a style on the element (no frame loop) and pages glide
+   (Android TV list behaviour in long lists); a flight recorder, a main-thread watchdog and an "it stopped while in use" report make
+   every kind of failure readable on the TV; ⓘ in the dock shows it at any time.
 2. **Accounts and sync** (needs the backend decision below).
 3. **Several users and avatars, and the animation set** (ANIMATION-IDEAS.md).
 

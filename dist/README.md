@@ -1,6 +1,6 @@
 # dist
 
-The latest Android TV build (1.4.0-tv, the optimised release build), published here so that the Downloader app on the TV can fetch it from a fixed address:
+The latest Android TV build (1.5.0-tv, the optimised release build), published here so that the Downloader app on the TV can fetch it from a fixed address:
 
     https://raw.githubusercontent.com/stevenbarzilay-cloud/Al-hasapa/ccr-e79b67fd-boiaic/dist/al-hasapa-tv.apk
 

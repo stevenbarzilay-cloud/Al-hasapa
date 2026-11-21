@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.4.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.5.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -193,19 +193,22 @@ adb install -r app-tv-debug.apk
 Without a computer: put the APK on a USB stick and open it with a file manager app from the Play Store, or use "Send Files to TV".
 Later versions install over the old one (same key), so the logins stay.
 
-**Use the release build on the box.** `assembleTvRelease` is the same app with R8 shrinking (about 4 MB instead of 33) and no debug
+**Use the release build on the box.** `assembleTvRelease` is the same app with R8 shrinking (under 3 MB instead of 15) and no debug
 overhead, signed with the same committed key, so it installs over a debug build and keeps the logins. The debug build is for development;
 on a weak TV box it is noticeably slower to start and to scroll.
 
-**The remote: two modes, always visible.** A dock on the left edge of every screen holds the **paw** and the **keyboard**; in a game it
-also holds everything about the game's frame (below).
+**The remote: two modes, always visible.** A dock on the left edge of every screen holds the **paw**, the **keyboard** and **ⓘ**
+(information to photograph when something goes wrong); in a game it also holds everything about the game's frame (below).
 
-- **Navigate (the default).** The arrows move the highlight from button to button, in the direction pressed, like Tab: through the
-  app's own buttons, and *into the pages* too: the hub's buttons, the games' buttons, links and fields (a small script finds what can
-  be pressed; it only reads where things are, never what they say). The focused button is **filled with colour** (a red fill in the
-  button's own shape, no square ring); on a page the highlight is a translucent red fill in the element's own shape. **OK** presses
-  what is highlighted (as a real tap at its centre, so every game gets the touches it expects). When there is nothing further, the
-  page **scrolls**; at the end of the page the highlight moves on to the dock, and back. Left from the game goes to the dock.
+- **Navigate (the default).** The arrows move the focus from button to button, in the direction pressed, like a TV app moves between
+  its tiles: through the app's own buttons, and *into the pages* too: the hub's buttons, the games' buttons, links and fields (a small
+  script finds what can be pressed; it only reads where things are, never what they say). The focused button itself **takes the colour**
+  (in the hub it turns red with cream letters; on a game's page a red tint in the element's own shape; never a box around it). **OK**
+  presses it (as a real tap at its centre, so every game gets the touches it expects). The page **glides** to keep the focus in view: in
+  a long list (the hub's games) the focus stays a little above the middle and the list moves one row per press, like an Android TV
+  list; the next thing below the edge of the screen is reached directly; across a long stretch with nothing to press, each press scrolls
+  about half a screen so it can be read. Holding an arrow walks on at a steady pace. Sideways stays on the same line. At the end of the
+  page Left goes to the dock, and back.
 - **Paw (the mouse), only when needed.** Press the paw button (a dark circle with a red paw while it is on, and a message at the
   top says which mode you are in): the arrows now move a free paw print, slowly at first and faster the longer an arrow is held,
   **OK** taps where it is, **hold OK** puts the finger down (the paw turns red) so the arrows drag, hold OK again to lift. Use it for
@@ -215,28 +218,46 @@ also holds everything about the game's frame (below).
 
 **The dock in a game (one frame, not bars and panels).** On a TV there are no bars above and below the game and no side panels. The
 whole frame is the dock at the left, and the game keeps the middle: the clock with the logo, the evening's score and the two of
-us; **−** and **+** (zoom, kept per site); **▯ / ▭** (phone-shaped or wide); **▣ / ◧** (the frame itself: full, or slim with only
-the buttons as icons; remembered); the paw; the keyboard; ☰ and ↩; and, with words, "result" and "we played". Every button says what
-it is at the top of the dock while it is highlighted.
+us; **−** and **+** (zoom, kept per site); a phone drawn upright or on its side (phone-shaped or wide); **▣ / ◧** (the frame itself:
+full, or slim with only the buttons as icons; remembered); the paw; the keyboard; ☰, ↩ and ⓘ; and, with words, "result" and "we
+played". Every button says what it is at the foot of the dock while it is focused.
 
-**The keyboard.** The keyboard button in the dock (or the remote's Play/Pause key, or a text field taking focus) slides it up
-from the bottom. It is small: four rows and a slim header that shows what you typed, about a third of the screen, and the game
+**The keyboard.** Only the keyboard button in the dock opens it (in 1.4 it also opened by itself whenever the window got focus back,
+which was the "keyboard for no reason"); OK on a text field selects the field and says where the keyboard button is. It slides up
+from the bottom and types into the field that was selected. It is small: four rows and a slim header that shows what you typed, about a third of the screen, and the game
 area shrinks to make room, so you still see the game while you type. English, Hebrew and symbols (digits are on the symbols
 layout); Shift makes one capital; the arrows move a highlight, OK types, **Back** or ✕ closes it. A password field shows dots. Letters
 go in as real key presses (a game that listens for keys, like Wordle, just works); Hebrew and symbols are inserted as text. The
-system keyboard is kept away so the two never fight. Sign-in works the same way: highlight the field, OK, type, highlight "Sign in".
+system keyboard is kept away so the two never fight. Sign-in works the same way: the field, OK, ⌨, type, Back, then "Sign in".
 
 **Sound and video** play as on the phone, and a game's full-screen video fills the screen (Back leaves it).
 
-What cannot be checked without the box: how the highlight moves around real pages (it is tested in Chromium on a sample page, not on every game), how fast the paw feels, whether the keyboard reaches the page on this WebView, and whether
+What cannot be checked without the box: how the focus moves around real game pages (it is tested in Chromium on sample pages, a list like the hub's, the hub itself, and a heavy page with the CPU slowed six times; not on every game), how fast the paw feels, whether the keyboard reaches the page on this WebView, and whether
 the WebView on the Mi Box is recent enough for the games. The Mi Box's own WebView version matters most (Settings, Apps, show system
 apps, Android System WebView): the oldest ones cannot run some modern pages.
 
-**Starting up and crashes (1.4).** On the TV the splash is no longer animated: the system's own starting window shows the cats at
-once, and the hub fades in when it is ready (the animated splash made a weak GPU stutter, and before it the screen stayed blank
-for seconds). The hub itself runs in a lighter mode on the TV (no blurs, shadows or long animations). If the app ever crashes, the
-next start opens a screen with what happened and the timings of the last start (it reaches nothing outside the device; the same
-text is under Settings, "על האפליקציה", with a copy button), so one screenshot tells us what failed.
+**Starting up, freezes and crashes.** On the TV the splash is not animated: the system's own starting window shows the cats at
+once, and the hub fades in when it is ready. The hub runs in a lighter mode on the TV (no blurs, shadows or long animations), and
+nothing runs while nothing is pressed (1.3 and 1.4 redrew the focus ring on every frame, which kept a weak box busy all the time).
+
+1.5 makes sure every kind of failure leaves a trace that can be read on the TV itself, without a computer:
+
+- **A flight recorder** (`diag/Flight.kt`): the last few hundred things the app did (screens opened and closed, pages loaded, the page's
+  process ending, memory every minute and whenever Android says memory is short), written to a file as they happen. It also keeps whether
+  the app was in front when its process ended.
+- **A watchdog** (`diag/Watchdog.kt`): a thread that notices within 2.5 seconds when the main thread stops answering (the app looks
+  frozen; Android offers to close it after about five) and writes down exactly where it is stuck, before the app can be closed.
+- **On the next start**, a Java crash shows its report (as in 1.4), and so does a run that ended while in use without one (frozen and
+  closed by the system, a crash inside the WebView's own code, out of memory): "בפעם הקודמת האפליקציה נעצרה באמצע", with what happened
+  just before, newest first.
+- **ⓘ in the dock** opens the same information at any moment, natively, so it works even when a page is stuck: versions, memory, the
+  last start, the last crash, how the previous run ended, and what happened lately. Up and Down scroll it, Back closes it. The hub's
+  Settings, "על האפליקציה", shows the same text.
+- The remote can no longer get stuck: each screen has its own WebView (after a game was closed, the hub's arrows went to the game's dead
+  WebView and stopped answering), a question to a page that does not answer in 1.2 seconds is given up, a mistake while handling a key is
+  written down instead of crashing, and Back always works even if the hub does not answer.
+- A game whose page process dies is reloaded once; if it dies again within two minutes (most likely the box out of memory) the player
+  stops and says so, instead of reloading forever.
 
 ## Settings and your own games (1.4)
 
@@ -284,7 +305,7 @@ marks them "קישור זמני"; replace them under "הקישורים שלנו"
 | Path | What |
 | --- | --- |
 | `app/src/tv/` | What is only in the TV build: the TV launcher entry and its banner |
-| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `tv/` (the remote's focus navigation, the paw, the keyboard, the dock, full-screen video), `diag/` (startup timings, crash report), `ui/` (splash, loading cover, crash screen, theme) |
+| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `tv/` (the remote's focus navigation, the paw, the keyboard, the dock, full-screen video), `diag/` (startup timings, crash report, flight recorder, main-thread watchdog, the information text), `ui/` (splash, loading cover, crash screen, theme) |
 | `app/src/main/assets/hub/` | The prototype's web UI, `pieces.json`, bundled fonts and images |
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |

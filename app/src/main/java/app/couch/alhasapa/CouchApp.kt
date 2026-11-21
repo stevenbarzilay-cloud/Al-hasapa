@@ -1,11 +1,18 @@
 package app.couch.alhasapa
 
+import android.app.Activity
 import android.app.Application
+import android.content.ComponentCallbacks2
+import android.os.Build
+import android.os.Bundle
 import app.couch.alhasapa.catalog.Catalog
 import app.couch.alhasapa.data.FileStateStore
 import app.couch.alhasapa.data.StateRepository
 import app.couch.alhasapa.diag.CrashReport
+import app.couch.alhasapa.diag.Diagnostics
+import app.couch.alhasapa.diag.Flight
 import app.couch.alhasapa.diag.Startup
+import app.couch.alhasapa.diag.Watchdog
 import java.io.File
 
 /** Owns the two things every screen shares: the state and the catalogue. Created lazily, so tests that never touch them pay nothing. */
@@ -13,7 +20,52 @@ class CouchApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Startup.mark("application")
+        Flight.start(this)
         CrashReport.install(this)
+        registerActivityLifecycleCallbacks(Visibility())
+        // Not under the unit tests: their main looper is paused on purpose, which a watchdog would take for a frozen app.
+        if (Build.FINGERPRINT != "robolectric") {
+            Watchdog(onSample = { Flight.log(Diagnostics.memory(this)) }).start()
+        }
+        Flight.log(Diagnostics.memory(this))
+    }
+
+    // Deprecated from Android 14 (it no longer sends these while in front); Android 9, which the Mi Box runs, still does.
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // The levels that matter while the app is in front: the device is running low and may start closing things.
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_MODERATE || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL || level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE
+        ) {
+            Flight.log("memory pressure (level $level); ${Diagnostics.memory(this)}")
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onLowMemory() {
+        super.onLowMemory()
+        Flight.log("LOW MEMORY; ${Diagnostics.memory(this)}")
+        Flight.flushNow()
+    }
+
+    /** Which of the app's screens are showing: the flight recorder's "was it in front when it ended". */
+    private class Visibility : ActivityLifecycleCallbacks {
+        private var started = 0
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Flight.log("${activity.javaClass.simpleName} created")
+        override fun onActivityStarted(activity: Activity) {
+            started++
+            Flight.session(true, activity.javaClass.simpleName)
+        }
+        override fun onActivityResumed(activity: Activity) = Flight.log("${activity.javaClass.simpleName} in front")
+        override fun onActivityPaused(activity: Activity) = Flight.log("${activity.javaClass.simpleName} paused")
+        override fun onActivityStopped(activity: Activity) {
+            started = (started - 1).coerceAtLeast(0)
+            if (started == 0) { Flight.session(false, activity.javaClass.simpleName); Flight.log("in the background") }
+        }
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) = Flight.log("${activity.javaClass.simpleName} closed")
     }
 
     val repo: StateRepository by lazy { StateRepository(FileStateStore(File(filesDir, "state.json"))) }

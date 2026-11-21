@@ -28,6 +28,9 @@ class TvHost(private val activity: ComponentActivity) {
         if (enabled) {
             val original = activity.window.callback
             activity.window.callback = KeyInterceptCallback(original) { controller.decor = activity.window.decorView; controller.handleKey(it) }
+            // The picture of the cats is the starting window's (what shows while the app starts). Once the screen draws itself it covers
+            // the whole window, so the window behind it becomes a plain colour: nothing extra to paint under every frame of a game.
+            activity.window.decorView.post { runCatching { activity.window.setBackgroundDrawableResource(app.couch.alhasapa.R.color.cream) } }
         }
         activity.lifecycle.addObserver(LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_PAUSE || e == Lifecycle.Event.ON_DESTROY) controller.release() })
     }

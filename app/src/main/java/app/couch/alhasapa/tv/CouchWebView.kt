@@ -1,44 +1,36 @@
 package app.couch.alhasapa.tv
 
 import android.content.Context
-import android.text.InputType
 import android.view.KeyEvent
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
-import java.lang.ref.WeakReference
 import org.json.JSONObject
 
 /**
- * The WebView every page runs in. On a TV with its own keyboard the system keyboard must not pop up over it, so when a page
- * asks for one (a text field took focus) this tells the app (which slides its own keyboard up) and declines the system one.
+ * The WebView every page runs in. On a TV the system keyboard must never pop up over the game, and the app's own keyboard opens only
+ * from its button: so when the system asks for a way to type into the page, it gets none.
+ *
+ * (The system asks far more often than a field taking focus: every time the window gets focus back, when the app starts and when a
+ * game is closed. Opening the keyboard on that request is what made it appear "for no reason".)
  */
 class CouchWebView(context: Context) : WebView(context) {
     /** True on a TV: the app's keyboard types, not the system's. */
     var ownKeyboard: Boolean = false
 
-    /** A text field took focus; [password] is true for a password field. */
-    var onEditable: ((password: Boolean) -> Unit)? = null
-
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
         if (!ownKeyboard) return super.onCreateInputConnection(outAttrs)
-        super.onCreateInputConnection(outAttrs)             // fills in what kind of field it is
-        val variation = outAttrs.inputType and InputType.TYPE_MASK_VARIATION
-        val pw = variation == InputType.TYPE_TEXT_VARIATION_PASSWORD || variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
-            variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-        onEditable?.invoke(pw)
-        post { (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(windowToken, 0) }
+        // Asked of the page only to keep its own state right; nothing is opened, and the system keyboard is sent away if it came.
+        val connection = super.onCreateInputConnection(outAttrs)
+        if (connection != null) {
+            post { (context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager)?.hideSoftInputFromWindow(windowToken, 0) }
+        }
         return null
     }
-}
 
-/** The WebView the keyboard types into: the one the person is looking at (the hub, or the game). */
-object TvTarget {
-    private var ref: WeakReference<WebView>? = null
-
-    fun set(web: WebView) { ref = WeakReference(web) }
-    fun get(): WebView? = ref?.get()
+    /** Not a text editor as far as the system is concerned: it then has no reason to show its keyboard for this view. */
+    override fun onCheckIsTextEditor(): Boolean = if (ownKeyboard) false else super.onCheckIsTextEditor()
 }
 
 /** Delivers a typed key to a page. Letters and digits are real key presses, which is what games that listen for keys expect. */

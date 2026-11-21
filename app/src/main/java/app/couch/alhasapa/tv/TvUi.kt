@@ -24,6 +24,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.gestures.animateScrollBy
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -91,7 +95,11 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     // The app's own screens are right to left, like on the phone.
                     Box(Modifier.weight(1f).fillMaxWidth()) {
-                        CompositionLocalProvider(LocalLayoutDirection provides appDirection) { content() }
+                        CompositionLocalProvider(LocalLayoutDirection provides appDirection) {
+                            content()
+                            // The information panel lies over the content (the page stays alive under it) and needs no WebView.
+                            if (c.panel == TvPanel.INFO) InfoPanel(c)
+                        }
                     }
                     AnimatedVisibility(
                         visible = c.keyboardOpen,
@@ -127,13 +135,14 @@ private fun TvDock(c: TvController) {
             .verticalScroll(rememberScrollState())
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically),
+        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
     ) {
         if (extras != null) extras(c.slim) else {
             Spacer(Modifier.weight(1f))
             PawButton(c)
             KeyboardButton(c)
             Spacer(Modifier.weight(1f))
+            InfoButton(c)
         }
         // The name of what the focus is on: the buttons are glyphs, and the glyph is not always enough.
         if (wide) {
@@ -150,6 +159,7 @@ fun DockButton(
     modifier: Modifier = Modifier,
     selected: Boolean = false,
     wide: Boolean = false,
+    height: Dp = 52.dp,
     onClick: () -> Unit,
     content: @Composable (lit: Boolean) -> Unit,
 ) {
@@ -158,7 +168,7 @@ fun DockButton(
     val lit = c?.isFocused(id) == true
     Box(
         modifier
-            .height(52.dp)
+            .height(height)
             .clip(RoundedCornerShape(16.dp))
             .background(if (selected) Palette.Ink else Palette.Tint)
             .tvTarget(id, label, onClick)
@@ -169,19 +179,85 @@ fun DockButton(
 
 /** The paw (mouse) switch: dark with a red paw while it is on. */
 @Composable
-fun PawButton(c: TvController, modifier: Modifier = Modifier.width(64.dp)) {
+fun PawButton(c: TvController, modifier: Modifier = Modifier.width(64.dp), height: Dp = 52.dp) {
     val paw = c.mode == InputMode.PAW
     val label = stringResource(if (paw) R.string.tv_paw_on else R.string.tv_paw_off)
-    DockButton(label, modifier, selected = paw, onClick = { c.togglePaw() }) { lit ->
+    DockButton(label, modifier, selected = paw, height = height, onClick = { c.togglePaw() }) { lit ->
         PawIcon(32.dp, if (lit) Palette.Cream else if (paw) Palette.Red else Palette.Ink, outline = if (paw && !lit) Palette.Cream else Color.Transparent)
     }
 }
 
 @Composable
-fun KeyboardButton(c: TvController, modifier: Modifier = Modifier.width(64.dp)) {
+fun KeyboardButton(c: TvController, modifier: Modifier = Modifier.width(64.dp), height: Dp = 52.dp) {
     val label = stringResource(R.string.tv_keyboard_open)
-    DockButton(label, modifier, onClick = { if (c.keyboardOpen) c.closeKeyboard() else c.openKeyboard() }) { lit ->
+    DockButton(label, modifier, height = height, onClick = { c.keyboardButton() }) { lit ->
         Text("⌨", fontSize = 28.sp, color = if (lit) Palette.Cream else Palette.Ink)
+    }
+}
+
+/** A phone's outline, upright or on its side: how the game is shown (phone-shaped or wide). Drawn, so it never shows as a missing letter. */
+@Composable
+fun ShapeIcon(portrait: Boolean, color: Color, size: Dp = 30.dp) {
+    Canvas(Modifier.size(size)) {
+        val s = this.size.minDimension
+        val w = if (portrait) s * 0.56f else s * 0.96f
+        val h = if (portrait) s * 0.96f else s * 0.6f
+        val stroke = s * 0.09f
+        val tl = Offset((this.size.width - w) / 2f, (this.size.height - h) / 2f)
+        drawRoundRect(color, topLeft = tl, size = androidx.compose.ui.geometry.Size(w, h), cornerRadius = androidx.compose.ui.geometry.CornerRadius(s * 0.12f),
+            style = androidx.compose.ui.graphics.drawscope.Stroke(stroke))
+        // the little bar a phone has at its top (or at its side when it lies down)
+        if (portrait) drawLine(color, Offset(tl.x + w * 0.35f, tl.y + stroke * 1.9f), Offset(tl.x + w * 0.65f, tl.y + stroke * 1.9f), strokeWidth = stroke * 0.8f)
+        else drawLine(color, Offset(tl.x + stroke * 1.9f, tl.y + h * 0.35f), Offset(tl.x + stroke * 1.9f, tl.y + h * 0.65f), strokeWidth = stroke * 0.8f)
+    }
+}
+
+/** Opens the information panel: what to photograph when something does not work. Reachable from every screen, even if a page hangs. */
+@Composable
+fun InfoButton(c: TvController, modifier: Modifier = Modifier.width(64.dp), height: Dp = 48.dp) {
+    val label = stringResource(R.string.tv_info_open)
+    DockButton(label, modifier, height = height, onClick = { c.openPanel(TvPanel.INFO) }) { lit ->
+        Text("ⓘ", fontSize = 26.sp, color = if (lit) Palette.Cream else Palette.Ink2)
+    }
+}
+
+/**
+ * Everything worth knowing when something goes wrong (versions, memory, the last start, the last crash, how the last run ended, what
+ * happened lately), in plain text to photograph. Native, so it opens even when the hub's page is stuck. Up and Down scroll, Back closes.
+ */
+@Composable
+private fun InfoPanel(c: TvController) {
+    val context = LocalContext.current
+    val text = remember { app.couch.alhasapa.diag.Diagnostics.text(context) }
+    val scroll = rememberScrollState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var viewport by remember { androidx.compose.runtime.mutableIntStateOf(400) }
+    androidx.compose.runtime.DisposableEffect(c) {
+        c.textScroller = { dir -> scope.launch { scroll.animateScrollBy(dir * viewport * 0.8f) } }
+        onDispose { c.textScroller = null }
+    }
+    val close = stringResource(R.string.tv_info_close)
+    Box(Modifier.fillMaxSize().background(Palette.Cream.copy(alpha = 0.97f)).padding(20.dp)) {
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.weight(1f)) {
+                    Text(stringResource(R.string.tv_info_title), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+                    Text(stringResource(R.string.tv_info_body), fontSize = 18.sp, color = Palette.Ink2)
+                }
+                Box(
+                    Modifier.height(52.dp).widthIn(min = 140.dp).clip(RoundedCornerShape(14.dp)).background(Palette.Ink)
+                        .tvTarget(TvController.PANEL_CLOSE_ID, close) { c.closePanel() }.semantics { role = Role.Button; contentDescription = close },
+                    contentAlignment = Alignment.Center,
+                ) { Text(close, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Palette.Cream, modifier = Modifier.padding(horizontal = 20.dp)) }
+            }
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Text(
+                    text, fontSize = 15.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, color = Palette.Ink,
+                    modifier = Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(12.dp)).background(Palette.Card)
+                        .onSizeChanged { viewport = it.height }.verticalScroll(scroll).padding(14.dp),
+                )
+            }
+        }
     }
 }
 
@@ -192,6 +268,7 @@ private fun HintPill(c: TvController, modifier: Modifier) {
         TvHint.PAW_ON -> stringResource(R.string.tv_hint_paw)
         TvHint.NAV_ON -> stringResource(R.string.tv_hint_nav)
         TvHint.NO_TARGETS -> stringResource(R.string.tv_hint_none)
+        TvHint.TYPE -> stringResource(R.string.tv_hint_type)
         null -> null
     }
     AnimatedVisibility(visible = text != null, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {

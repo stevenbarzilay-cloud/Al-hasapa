@@ -7,6 +7,9 @@ import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.webkit.WebView
+import app.couch.alhasapa.diag.Flight
+import java.lang.ref.WeakReference
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -19,7 +22,10 @@ enum class InputMode { NAV, PAW }
 enum class Zone { PAGE, NATIVE }
 
 /** A short message shown on screen when the way of controlling things changes or something is worth knowing. */
-enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS }
+enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE }
+
+/** A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up). */
+enum class TvPanel { INFO }
 
 /** The page, as one of the things the arrows can move to. */
 const val PAGE_ID = "page"
@@ -65,8 +71,68 @@ class TvController(val enabled: Boolean, density: Float) {
     private val targets = LinkedHashMap<String, NavTarget>()
     private val actions = HashMap<String, () -> Unit>()
     var pageBox: Box? = null
-    var pageNav: PageNav = PageNavOverride ?: WebPageNav { TvTarget.get() }
+
+    /**
+     * The WebView of this screen (the hub, or the game): the page the arrows walk and the keyboard types into. Each screen has its own;
+     * a screen that closes takes its WebView with it ([releaseWeb]), so nothing ever talks to a WebView that is gone.
+     */
+    private var webRef: WeakReference<WebView>? = null
+    var web: WebView?
+        get() = webRef?.get()
+        set(value) { webRef = value?.let { WeakReference(it) } }
+
+    fun releaseWeb(view: WebView) { if (webRef?.get() === view) webRef = null }
+
+    var pageNav: PageNav = PageNavOverride ?: WebPageNav { web }
+
+    /** A question to the page is on its way. Never for long: an answer that does not come in [PAGE_TIMEOUT_MS] is given up on. */
     private var busy = false
+    private var callSeq = 0
+    private var lastMoveAt = 0L
+    private val giveUp = Runnable {
+        if (busy) { busy = false; Flight.log("tv: the page did not answer in ${PAGE_TIMEOUT_MS} ms") }
+    }
+
+    /** Asks the page [ask], at most one question at a time, and hands the answer to [done] unless it came too late. */
+    private fun askPage(ask: ((PageResult) -> Unit) -> Unit, done: (PageResult) -> Unit) {
+        val seq = ++callSeq
+        busy = true
+        handler.removeCallbacks(giveUp)
+        handler.postDelayed(giveUp, PAGE_TIMEOUT_MS)
+        try {
+            ask { r ->
+                if (seq != callSeq) return@ask                  // a newer question was asked since; this answer is stale
+                busy = false
+                handler.removeCallbacks(giveUp)
+                done(r)
+            }
+        } catch (t: Throwable) {
+            busy = false; handler.removeCallbacks(giveUp)
+            Flight.log("tv: asking the page failed: $t")
+        }
+    }
+
+    /** The information panel (or another of the app's own screens) over the content. */
+    var panel by mutableStateOf<TvPanel?>(null); private set
+
+    /** A screen with a long text (the information panel, the crash report) scrolls it with Up and Down: by a page, either way. */
+    var textScroller: ((direction: Int) -> Unit)? = null
+
+    fun openPanel(p: TvPanel) {
+        if (!enabled) return
+        if (keyboardOpen) closeKeyboard()
+        pageNav.blur()
+        panel = p; zone = Zone.NATIVE; focusedId = PANEL_CLOSE_ID          // one OK closes it again
+        Flight.log("tv: panel $p open")
+    }
+
+    /** Puts the focus on the app's button [id] (a screen's main button, so a single OK presses it). */
+    fun focus(id: String) { if (enabled) { zone = Zone.NATIVE; focusedId = id } }
+
+    fun closePanel() {
+        panel = null; textScroller = null; focusedId = null
+        if (pageBox != null) zone = Zone.PAGE
+    }
 
     var keyboardOpen by mutableStateOf(false); private set
     var layout by mutableStateOf(KbLayout.ENGLISH); private set
@@ -81,7 +147,7 @@ class TvController(val enabled: Boolean, density: Float) {
     var decor: View? = null
 
     /** Delivers a typed key to the page. Replaceable in tests. */
-    var typer: (Delivery) -> Unit = { WebTyper.deliver(TvTarget.get(), it) }
+    var typer: (Delivery) -> Unit = { WebTyper.deliver(web, it) }
 
     /** Every injected touch, for tests. */
     var onInjected: (action: Int, x: Float, y: Float) -> Unit = { _, _, _ -> }
@@ -124,15 +190,32 @@ class TvController(val enabled: Boolean, density: Float) {
     /** Puts the cursor somewhere (the arrows get there by themselves; this is for tests and for "jump to the keyboard"). */
     fun placeCursor(x: Float, y: Float) { cursor.jumpTo(x, y); cursorVisible = true; sync() }
 
-    /** Called from the window before the key goes anywhere else. Returns true when the key was used. */
+    /**
+     * Called from the window before the key goes anywhere else. Returns true when the key was used. A mistake in here must never take the
+     * app down with it: it is written down and the key goes on to the system as if the remote were not there.
+     */
     fun handleKey(e: KeyEvent): Boolean {
         if (!enabled) return false
-        if (keyboardOpen) return handleKeyboardKey(e)
-        if (e.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) {
-            if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) openKeyboard()
-            return true
+        return try {
+            when {
+                keyboardOpen -> handleKeyboardKey(e)
+                panel != null -> handlePanelKey(e)
+                mode == InputMode.PAW -> handlePawKey(e)
+                else -> handleNavKey(e)
+            }
+        } catch (t: Throwable) {
+            Flight.log("tv: key ${e.keyCode} failed: $t")
+            busy = false
+            false
         }
-        return if (mode == InputMode.PAW) handlePawKey(e) else handleNavKey(e)
+    }
+
+    /** With the information panel up: Up and Down scroll it, Left and Right and OK work its buttons, Back closes it. */
+    private fun handlePanelKey(e: KeyEvent): Boolean {
+        val dir = dirOf(e.keyCode)
+        if (e.keyCode == KeyEvent.KEYCODE_BACK) { if (e.action == KeyEvent.ACTION_UP) closePanel(); return true }
+        if (dir == Dir.UP || dir == Dir.DOWN) { if (e.action == KeyEvent.ACTION_DOWN) textScroller?.invoke(if (dir == Dir.DOWN) 1 else -1); return true }
+        return handleNavKey(e)
     }
 
     private fun dirOf(code: Int): Dir? = when (code) {
@@ -149,18 +232,28 @@ class TvController(val enabled: Boolean, density: Float) {
 
     private fun handleNavKey(e: KeyEvent): Boolean {
         val dir = dirOf(e.keyCode)
-        if (dir != null) { if (e.action == KeyEvent.ACTION_DOWN) navigate(dir); return true }
+        if (dir != null) {
+            if (e.action != KeyEvent.ACTION_DOWN) return true
+            // A screen of long text with no page (the crash report): Up and Down read on.
+            val scroller = textScroller
+            if (scroller != null && (dir == Dir.UP || dir == Dir.DOWN) && (pageBox == null || panel != null)) { scroller(if (dir == Dir.DOWN) 1 else -1); return true }
+            // Holding an arrow walks on at a steady pace (each step scrolls smoothly), never faster than the page can follow.
+            val now = SystemClock.uptimeMillis()
+            if (e.repeatCount > 0 && now - lastMoveAt < REPEAT_MS) return true
+            lastMoveAt = now
+            navigate(dir)
+            return true
+        }
         if (isOk(e.keyCode)) { if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) activate(); return true }
         return false
     }
 
     /** Move the focus one step that way: through the app's buttons, into the page, and inside the page (which scrolls at its end). */
     fun navigate(dir: Dir) {
-        if (zone == Zone.PAGE && pageBox != null) {
+        val page = if (panel == null) pageBox else null
+        if (zone == Zone.PAGE && page != null) {
             if (busy) return
-            busy = true
-            pageNav.move(dir) { r ->
-                busy = false
+            askPage({ cb -> pageNav.move(dir, cb) }) { r ->
                 when (r) {
                     PageResult.Moved, PageResult.Scrolled -> {}
                     PageResult.Edge -> leavePage(dir)
@@ -174,18 +267,17 @@ class TvController(val enabled: Boolean, density: Float) {
         if (from == null) {
             // Nothing is focused yet: begin with the first button (top left), or the page if there are none.
             val first = targets.values.minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { it.box.l })
-            if (first != null) { zone = Zone.NATIVE; focusedId = first.id } else if (pageBox != null) enterPage(dir)
+            if (first != null) { zone = Zone.NATIVE; focusedId = first.id } else if (page != null) enterPage(dir)
             return
         }
-        val candidates = targets.values.toList() + listOfNotNull(pageBox?.let { NavTarget(PAGE_ID, it) })
+        val candidates = targets.values.toList() + listOfNotNull(page?.let { NavTarget(PAGE_ID, it) })
         val next = Spatial.next(from, candidates, dir, exclude = focusedId) ?: return
         if (next.id == PAGE_ID) enterPage(dir) else { zone = Zone.NATIVE; focusedId = next.id }
     }
 
     private fun enterPage(dir: Dir?) {
         zone = Zone.PAGE; focusedId = null
-        busy = true
-        pageNav.enter(dir) { r -> busy = false; if (r == PageResult.None) say(TvHint.NO_TARGETS) }
+        askPage({ cb -> pageNav.enter(dir, cb) }) { r -> if (r == PageResult.None) say(TvHint.NO_TARGETS) }
     }
 
     /** The page has nothing further that way: the focus goes to the nearest of the app's buttons, if there is one. */
@@ -199,14 +291,15 @@ class TvController(val enabled: Boolean, density: Float) {
     /** OK: press what is focused. */
     fun activate() {
         if (zone == Zone.NATIVE) { focusedId?.let { actions[it]?.invoke() }; return }
-        if (pageBox == null) {
+        if (pageBox == null || panel != null) {
             // A screen with no page (the accounts list, the crash report): the first OK lands on the first button, the next one presses.
             targets.values.minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { it.box.l })?.let { zone = Zone.NATIVE; focusedId = it.id }
             return
         }
         pageNav.activate { r ->
             when (r) {
-                is PageResult.Tap -> { pageNav.tap(r.x, r.y); if (r.editable) openKeyboard(r.password) }
+                // A field is only chosen: the keyboard opens from its own button, never by itself (it covered the game when it did).
+                is PageResult.Tap -> { pageNav.tap(r.x, r.y); if (r.editable) say(TvHint.TYPE) }
                 else -> say(TvHint.NO_TARGETS)
             }
         }
@@ -276,9 +369,21 @@ class TvController(val enabled: Boolean, density: Float) {
                 return true
             }
             e.keyCode == KeyEvent.KEYCODE_BACK -> { if (e.action == KeyEvent.ACTION_UP) closeKeyboard(); return true }
-            e.keyCode == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> { if (e.action == KeyEvent.ACTION_DOWN && e.repeatCount == 0) closeKeyboard(); return true }
         }
         return false
+    }
+
+    /**
+     * The keyboard button: the only way the keyboard opens. The page is asked which field is being typed into (the one the focus is on,
+     * if none has the cursor yet) so a password shows as dots; the WebView takes the keys.
+     */
+    fun keyboardButton() {
+        if (!enabled) return
+        if (keyboardOpen) { closeKeyboard(); return }
+        openKeyboard()
+        web?.let { w -> if (!w.hasFocus()) w.requestFocus() }
+        runCatching { pageNav.field { _, pw -> if (keyboardOpen) password = pw } }
+        Flight.log("tv: keyboard opened")
     }
 
     fun openKeyboard(passwordField: Boolean = false) {
@@ -320,12 +425,22 @@ class TvController(val enabled: Boolean, density: Float) {
     /** The app went to the background or closed: nothing may stay pressed. */
     fun release() {
         cursor.cancel(sink); handler.removeCallbacks(ticker); sync()
+        busy = false; handler.removeCallbacks(giveUp)
     }
 
     companion object {
         /** How long a tap keeps the finger down, like a real tap. */
         const val TAP_MS = 50L
         const val HINT_MS = 3_500L
+
+        /** The longest the remote waits for the page to answer before it moves on (a busy or frozen page must not freeze the remote). */
+        const val PAGE_TIMEOUT_MS = 1_200L
+
+        /** While an arrow is held: one step this often. */
+        const val REPEAT_MS = 110L
+
+        /** The information panel's close button. */
+        const val PANEL_CLOSE_ID = "panel-close"
 
         /** Tests put a fake page here before the screen is built. */
         var PageNavOverride: PageNav? = null

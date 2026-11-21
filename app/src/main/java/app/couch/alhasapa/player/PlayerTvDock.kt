@@ -28,6 +28,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.R
 import app.couch.alhasapa.tv.DockButton
+import app.couch.alhasapa.tv.InfoButton
+import app.couch.alhasapa.tv.ShapeIcon
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import kotlinx.coroutines.delay
 import app.couch.alhasapa.tv.KeyboardButton
 import app.couch.alhasapa.tv.PawButton
 import app.couch.alhasapa.tv.TvController
@@ -43,11 +48,16 @@ import app.couch.alhasapa.ui.theme.Palette
 fun ColumnScope.PlayerTvDock(slim: Boolean, tv: TvController, data: ChromeData, actions: ChromeActions) {
     val lit = Palette.Cream
     val ink = Palette.Ink
+    val h = if (slim) 48.dp else 52.dp
     if (!slim) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(44.dp))
+            // The clock ticks here, by itself: only these few characters are drawn again every second, not the game's screen.
+            val elapsed by produceState(data.elapsed, data.startedAt) {
+                if (data.startedAt > 0) while (true) { value = formatElapsed((System.currentTimeMillis() - data.startedAt) / 1000); delay(1_000) }
+            }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                Text(data.elapsed, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = ink, modifier = Modifier.semantics { contentDescription = data.elapsed })
+                Text(elapsed, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = ink, modifier = Modifier.semantics { contentDescription = elapsed })
             }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -73,8 +83,8 @@ fun ColumnScope.PlayerTvDock(slim: Boolean, tv: TvController, data: ChromeData, 
         val out = stringResource(R.string.display_zoom_out)
         val inn = stringResource(R.string.display_zoom_in)
         if (slim) {
-            DockButton(inn, Modifier.width(64.dp), onClick = { actions.onZoom(+1) }) { l -> Text("+", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = if (l) lit else ink) }
-            DockButton(out, Modifier.width(64.dp), onClick = { actions.onZoom(-1) }) { l -> Text("−", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = if (l) lit else ink) }
+            DockButton(inn, Modifier.width(64.dp), height = h, onClick = { actions.onZoom(+1) }) { l -> Text("+", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = if (l) lit else ink) }
+            DockButton(out, Modifier.width(64.dp), height = h, onClick = { actions.onZoom(-1) }) { l -> Text("−", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = if (l) lit else ink) }
         } else {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 DockButton(out, Modifier.weight(1f), onClick = { actions.onZoom(-1) }) { l -> Text("−", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = if (l) lit else ink) }
@@ -91,19 +101,19 @@ fun ColumnScope.PlayerTvDock(slim: Boolean, tv: TvController, data: ChromeData, 
         if (slim) { a(); b() } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { a(); b() }
     }
     val modeButton = @Composable {
-        if (data.zoom != null) DockButton(mode, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), onClick = actions.onToggleMode) { l ->
-            Text(if (data.portrait) "▯" else "▭", fontSize = 28.sp, color = if (l) lit else ink)
+        if (data.zoom != null) DockButton(mode, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), height = h, onClick = actions.onToggleMode) { l ->
+            ShapeIcon(portrait = data.portrait, color = if (l) lit else ink)
         }
     }
     val frameButton = @Composable {
-        DockButton(frame, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), onClick = { tv.toggleSlim() }) { l ->
+        DockButton(frame, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), height = h, onClick = { tv.toggleSlim() }) { l ->
             Text(if (slim) "◧" else "▣", fontSize = 28.sp, color = if (l) lit else ink)
         }
     }
     twoUp(modeButton, frameButton)
 
     // The paw and the keyboard.
-    if (slim) { PawButton(tv); KeyboardButton(tv) } else {
+    if (slim) { PawButton(tv, height = h); KeyboardButton(tv, height = h) } else {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PawButton(tv, Modifier.weight(1f)); KeyboardButton(tv, Modifier.weight(1f))
         }
@@ -112,11 +122,15 @@ fun ColumnScope.PlayerTvDock(slim: Boolean, tv: TvController, data: ChromeData, 
     // The menu and back.
     val menu = stringResource(R.string.menu_open)
     val back = stringResource(R.string.player_back)
-    val menuButton = @Composable { DockButton(menu, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), onClick = actions.onMenu) { l -> Text("☰", fontSize = 28.sp, color = if (l) lit else ink) } }
-    val backButton = @Composable { DockButton(back, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), onClick = actions.onBack) { l -> Text("↩", fontSize = 28.sp, color = if (l) lit else ink) } }
-    twoUp(menuButton, backButton)
+    val menuButton = @Composable { DockButton(menu, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), height = h, onClick = actions.onMenu) { l -> Text("☰", fontSize = 28.sp, color = if (l) lit else ink) } }
+    val backButton = @Composable { DockButton(back, if (slim) Modifier.width(64.dp) else Modifier.weight(1f), height = h, onClick = actions.onBack) { l -> Text("↩", fontSize = 28.sp, color = if (l) lit else ink) } }
+    // The information button sits with the menu and back in the full frame (a row of three), so every control fits a TV's height.
+    if (slim) { menuButton(); backButton() } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        menuButton(); backButton(); InfoButton(tv, Modifier.weight(1f), height = h)
+    }
 
     // The result and "we played", with words (the two things a person does at the end of a game).
+    if (slim) InfoButton(tv)
     if (!slim) {
         actions.onResult?.let { onResult ->
             val label = stringResource(R.string.player_result)

@@ -54,6 +54,8 @@ data class ChromeData(
     val zoom: Int?,
     /** The page is shown phone-shaped (otherwise wide), for the button that swaps them. */
     val portrait: Boolean = true,
+    /** When the game began (System.currentTimeMillis), for a clock that ticks by itself; 0 = use [elapsed] as it is. */
+    val startedAt: Long = 0L,
 )
 
 /** What they can do. [onResult] is null where there is no result to record (the sign-in screens). */

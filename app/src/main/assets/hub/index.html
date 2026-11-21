@@ -88,6 +88,15 @@ img{max-width:100%;height:auto;display:block}
 /* A TV box: no recolouring layers over the illustrations (blend modes on big images are heavy for a weak GPU), no shadows, no smooth scrolling. */
 .tv .art .tint,.tv .art .lift{display:none!important}
 .tv *{box-shadow:none!important;text-shadow:none!important;scroll-behavior:auto!important}
+/* The TV remote's focus (the attribute is set by the app's navigation): the button itself takes the colour, in its own shape. No ring
+   around it. Fields keep their white face and get a red edge, so what is typed stays readable. */
+.tv [data-couch-focus]{outline:none!important;background:var(--red)!important;color:var(--cream)!important;border-color:var(--red)!important;box-shadow:none!important}
+.tv [data-couch-focus] svg{color:var(--cream)!important}
+.tv [data-couch-focus] .n{background:rgba(242,235,221,.28)!important;color:var(--cream)!important}
+.tv [data-couch-focus] .box{border-color:var(--cream)!important}
+.tv .tab[data-couch-focus]::after{background:var(--cream)!important}
+.tv input[data-couch-focus],.tv select[data-couch-focus],.tv textarea[data-couch-focus]{background:var(--card)!important;color:var(--ink)!important;border:2px solid var(--red)!important;box-shadow:0 0 0 3px rgba(217,78,56,.30)!important}
+.tv label.inline input[data-couch-focus]{box-shadow:0 0 0 4px var(--red)!important}
 /* ---------- illustrations follow the pieces' colours ----------
    Each picture is the untouched original plus two layers, one per colour family in the art (the red family is Steve's
    shirt, mug and cushions; the pink family is Roni's shirt and the couch). A layer is a flat colour, cut out by a soft

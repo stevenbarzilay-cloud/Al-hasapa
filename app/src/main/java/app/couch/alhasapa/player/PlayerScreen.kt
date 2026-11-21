@@ -61,7 +61,6 @@ import app.couch.alhasapa.R
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.tv.CouchWebView
 import app.couch.alhasapa.tv.LocalTv
-import app.couch.alhasapa.tv.TvTarget
 import app.couch.alhasapa.tv.tvPage
 import app.couch.alhasapa.tv.VideoChrome
 import app.couch.alhasapa.display.DisplayLayout
@@ -124,6 +123,8 @@ fun PlayerScreen(
     var injector by remember { mutableStateOf<DisplayInjector?>(null) }
     var generation by remember { mutableIntStateOf(0) }
     var loadError by remember { mutableStateOf<String?>(null) }
+    // When the page's process ended (a crash, or the box out of memory), and when: a second time soon after is not reloaded again by itself.
+    val pageDeaths = remember { ArrayList<Long>() }
     var usedProfile by remember { mutableStateOf(session.profile) }
 
     // The page being shown decides how it is shown; a navigation to another game of the same site can change it.
@@ -180,7 +181,9 @@ fun PlayerScreen(
 
     val startedAt = remember { System.currentTimeMillis() }
     var now by remember { mutableLongStateOf(startedAt) }
-    LaunchedEffect(Unit) { while (true) { delay(1_000); now = System.currentTimeMillis() } }
+    // On a phone the bars show the clock. On a TV the dock's clock ticks by itself, so this screen (and the game's frame around the
+    // WebView) is not composed again every second on a slow box.
+    LaunchedEffect(tv) { if (tv == null) while (true) { delay(1_000); now = System.currentTimeMillis() } }
 
     // The zoom buttons are for quick use while playing, so they keep what they set for this site without a second step.
     val keep: (DisplayProfile) -> Unit = { next ->
@@ -206,7 +209,7 @@ fun PlayerScreen(
     val chrome = ChromeData(
         title = session.title, elapsed = formatElapsed((now - startedAt) / 1000), info = info, played = played,
         showPlayed = !session.loginMode, zoom = if (profile.mode != DisplayMode.NATIVE) profile.zoom else null,
-        portrait = profile.mode == DisplayMode.PORTRAIT_FIT,
+        portrait = profile.mode == DisplayMode.PORTRAIT_FIT, startedAt = startedAt,
     )
     val actions = ChromeActions(
         onMenu = { sheetOpen = true }, onBack = onClose, onResult = if (result != null) openResult else null,
@@ -274,10 +277,9 @@ fun PlayerScreen(
                                 modifier = Modifier.fillMaxSize(),
                                 factory = { ctx ->
                                     val web = CouchWebView(ctx).apply {
-                                        // On a TV the app's own keyboard types, and a text field taking focus slides it up.
+                                        // On a TV the app's own keyboard types (it opens from its button only), into this screen's page.
                                         ownKeyboard = tv != null
-                                        onEditable = { pw -> tv?.openKeyboard(pw) }
-                                        TvTarget.set(this)
+                                        tv?.web = this
                                         webChromeClient = video          // a game's full-screen video
                                         usedProfile = PlayerWebView.configure(this, session.profile)
                                         Diag.log("player: webview created, profile ${session.profile} -> $usedProfile, display ${profile.mode.id}")
@@ -297,7 +299,14 @@ fun PlayerScreen(
                                             onStarted = { loadError = null },
                                             onFinished = { },
                                             onLoadError = { loadError = it },
-                                            onRenderGone = { generation++ },
+                                            onRenderGone = {
+                                                // A new WebView, the same game. Twice within two minutes is likely the box running out of memory:
+                                                // then the error panel says so and waits, instead of reloading forever.
+                                                val now = android.os.SystemClock.uptimeMillis()
+                                                pageDeaths.removeAll { now - it > 120_000 }; pageDeaths += now
+                                                // (The panel's "try again" builds the new WebView; a new one started here would clear the panel.)
+                                                if (pageDeaths.size >= 2) loadError = ctx.getString(R.string.player_page_died) else generation++
+                                            },
                                             onUrl = { currentUrl = it },
                                             onPageBegan = { inj.onPageStarted() },
                                         )
@@ -320,6 +329,7 @@ fun PlayerScreen(
                                 onRelease = { frame ->
                                     val view = frame.getChildAt(0) as? WebView
                                     if (view != null && webView === view) { webView = null; injector = null }
+                                    if (view != null) tv?.releaseWeb(view)
                                     PlayerWebView.flushCookies(usedProfile)
                                     view?.destroy()
                                 },
@@ -347,7 +357,7 @@ fun PlayerScreen(
                 }
             }
 
-            app.couch.alhasapa.dnd.DndChipHost(
+            if (tv == null) app.couch.alhasapa.dnd.DndChipHost(
                 Modifier.align(Alignment.TopCenter).padding(top = (layout.topBar + 12f).dp),
                 dndSignals ?: app.couch.alhasapa.dnd.DndSignals.real(androidx.compose.ui.platform.LocalContext.current),
             )

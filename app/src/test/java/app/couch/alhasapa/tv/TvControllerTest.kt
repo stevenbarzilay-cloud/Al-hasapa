@@ -99,13 +99,90 @@ class TvControllerTest {
     }
 
     @Test
-    fun okInThePageTapsTheFocusedElementAndOpensTheKeyboardForAField() {
+    fun okInThePageTapsTheFocusedElementAndAFieldIsOnlyChosenNotTypedInto() {
         val (c, page) = screen()
         press(c, KeyEvent.KEYCODE_DPAD_CENTER)
         assertEquals(listOf("activate", "tap 50,60"), page.calls); assertFalse(c.keyboardOpen)
         page.calls.clear(); page.onActivate = PageResult.Tap(1f, 2f, editable = true, password = true)
         press(c, KeyEvent.KEYCODE_DPAD_CENTER)
-        assertTrue(c.keyboardOpen); assertTrue("a password field masks the preview", c.password)
+        assertEquals(listOf("activate", "tap 1,2"), page.calls)
+        assertFalse("the keyboard opens from its button only", c.keyboardOpen)
+        assertEquals("instead the person is told where the keyboard is", TvHint.TYPE, c.hint)
+    }
+
+    @Test
+    fun thePageThatDoesNotAnswerCannotFreezeTheRemote() {
+        val page = object : PageNav {
+            val pending = ArrayList<(PageResult) -> Unit>()
+            override fun enter(dir: Dir?, cb: (PageResult) -> Unit) { pending += cb }
+            override fun move(dir: Dir, cb: (PageResult) -> Unit) { pending += cb }
+            override fun activate(cb: (PageResult) -> Unit) {}
+            override fun blur() {}
+            override fun tap(x: Float, y: Float) {}
+        }
+        val c = TvController(true, 1f); c.resize(1000f, 600f); c.pageNav = page; c.pageBox = Box(100f, 70f, 900f, 530f)
+        c.register("dock", Box(0f, 0f, 80f, 600f)) {}
+        press(c, KeyEvent.KEYCODE_DPAD_LEFT)
+        assertEquals(1, page.pending.size)
+        idle(TvController.REPEAT_MS + 10)
+        press(c, KeyEvent.KEYCODE_DPAD_LEFT)
+        assertEquals("while one question is out, the next press waits", 1, page.pending.size)
+        idle(TvController.PAGE_TIMEOUT_MS + 50)
+        press(c, KeyEvent.KEYCODE_DPAD_LEFT)
+        assertEquals("after the time is up the remote asks again", 2, page.pending.size)
+        // The first, late answer is stale and changes nothing; the current one counts.
+        page.pending[0](PageResult.Edge)
+        assertEquals(Zone.PAGE, c.zone)
+        page.pending[1](PageResult.Edge)
+        assertEquals("the current answer is acted on", Zone.NATIVE, c.zone); assertEquals("dock", c.focusedId)
+    }
+
+    @Test
+    fun aMistakeWhileHandlingAKeyNeverTakesTheAppDown() {
+        val c = TvController(true, 1f); c.resize(1000f, 600f); c.pageBox = Box(100f, 70f, 900f, 530f)
+        c.pageNav = object : PageNav {
+            override fun enter(dir: Dir?, cb: (PageResult) -> Unit) = error("boom")
+            override fun move(dir: Dir, cb: (PageResult) -> Unit) = error("boom")
+            override fun activate(cb: (PageResult) -> Unit) = error("boom")
+            override fun blur() {}
+            override fun tap(x: Float, y: Float) {}
+        }
+        c.handleKey(key(KeyEvent.KEYCODE_DPAD_DOWN))
+        assertFalse("OK fails too, and the key goes on to the system", c.handleKey(key(KeyEvent.KEYCODE_DPAD_CENTER)))
+        // ...and the remote still works afterwards.
+        c.pageNav = FakePage()
+        assertTrue(c.handleKey(key(KeyEvent.KEYCODE_DPAD_DOWN)))
+    }
+
+    @Test
+    fun theInformationPanelTakesTheArrowsAndBackClosesIt() {
+        val (c, page) = screen()
+        var scrolled = 0
+        c.openPanel(TvPanel.INFO); c.textScroller = { scrolled += it }
+        assertEquals(TvPanel.INFO, c.panel); assertTrue(page.calls.contains("blur"))
+        page.calls.clear()
+        press(c, KeyEvent.KEYCODE_DPAD_DOWN); press(c, KeyEvent.KEYCODE_DPAD_DOWN); press(c, KeyEvent.KEYCODE_DPAD_UP)
+        assertEquals("Up and Down scroll the text", 1, scrolled); assertTrue("the page is not walked", page.calls.isEmpty())
+        press(c, KeyEvent.KEYCODE_DPAD_RIGHT)
+        assertEquals("Left and Right go to the app's buttons, never into the page", Zone.NATIVE, c.zone)
+        assertTrue(c.handleKey(key(KeyEvent.KEYCODE_BACK))); assertTrue(c.handleKey(key(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_UP)))
+        assertNull(c.panel); assertEquals("closed, the focus is back on the page", Zone.PAGE, c.zone)
+        // Opened again, its close button has the focus at once: one OK closes it.
+        c.openPanel(TvPanel.INFO); c.register(TvController.PANEL_CLOSE_ID, Box(500f, 20f, 600f, 70f)) { c.closePanel() }
+        assertTrue(c.isFocused(TvController.PANEL_CLOSE_ID))
+        press(c, KeyEvent.KEYCODE_DPAD_CENTER)
+        assertNull(c.panel)
+    }
+
+    @Test
+    fun holdingAnArrowWalksOnAtASteadyPace() {
+        val (c, page) = screen()
+        c.handleKey(key(KeyEvent.KEYCODE_DPAD_DOWN))
+        for (i in 1..5) c.handleKey(key(KeyEvent.KEYCODE_DPAD_DOWN, repeat = i))   // repeats arriving faster than a step
+        assertEquals("the repeats within one step are let go", 1, page.calls.count { it == "move DOWN" })
+        idle(TvController.REPEAT_MS + 10)
+        c.handleKey(key(KeyEvent.KEYCODE_DPAD_DOWN, repeat = 6))
+        assertEquals(2, page.calls.count { it == "move DOWN" })
     }
 
     @Test
@@ -186,12 +263,26 @@ class TvControllerTest {
     // ---- the keyboard ----
 
     @Test
-    fun playPauseSlidesTheKeyboardUpAndBackOrPlayPauseAgainClosesIt() {
-        val (c, _) = screen()
-        assertTrue(c.handleKey(key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))); assertTrue(c.keyboardOpen)
+    fun theKeyboardOpensOnlyFromItsButtonAndBackClosesIt() {
+        val (c, page) = screen()
+        assertFalse("Play/Pause is the page's (a video's), it does not open the keyboard", c.handleKey(key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)))
+        assertFalse(c.keyboardOpen)
+        c.keyboardButton(); assertTrue(c.keyboardOpen)
         assertTrue(c.handleKey(key(KeyEvent.KEYCODE_BACK))); assertTrue("Back closes on release", c.keyboardOpen)
         assertTrue(c.handleKey(key(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_UP))); assertFalse(c.keyboardOpen)
-        c.openKeyboard(); c.handleKey(key(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)); assertFalse(c.keyboardOpen)
+        c.keyboardButton(); c.keyboardButton(); assertFalse("the button closes it again", c.keyboardOpen)
+        assertTrue(page.calls.isEmpty() || page.calls.all { it.startsWith("field") || it == "blur" })
+    }
+
+    @Test
+    fun theKeyboardButtonAsksThePageAboutTheFieldSoAPasswordShowsAsDots() {
+        val page = object : PageNav by FakePage() {
+            override fun field(cb: (editable: Boolean, password: Boolean) -> Unit) = cb(true, true)
+        }
+        val c = TvController(true, 1f); c.pageNav = page; c.pageBox = Box(0f, 0f, 10f, 10f); c.typer = {}
+        c.keyboardButton()
+        assertTrue(c.keyboardOpen); assertTrue(c.password)
+        c.press(KbKey.Ch("a")); assertEquals("•", c.preview)
     }
 
     @Test

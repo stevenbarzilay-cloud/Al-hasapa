@@ -23,6 +23,8 @@ import app.couch.alhasapa.player.PlayerActivity
 import app.couch.alhasapa.ui.WhoPlaysDialog
 import app.couch.alhasapa.diag.CrashReport
 import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.diag.Diagnostics
+import app.couch.alhasapa.diag.Flight
 import app.couch.alhasapa.diag.Startup
 import app.couch.alhasapa.ui.CrashScreen
 import app.couch.alhasapa.diag.DiagOverlay
@@ -77,13 +79,21 @@ class MainActivity : ComponentActivity() {
         // Only on a real cold start (not after rotation or coming back), and never with "remove animations" on.
         // On a TV the splash always plays: some boxes ship with the animation scale at zero, and the splash does not depend on it.
         val playSplash = savedInstanceState == null && (!reduceMotion || tv.enabled)
-        // If the last run crashed, say so first, with the reason in text that can be photographed.
+        // If the last run crashed, or stopped while in use without a crash of its own (frozen, out of memory, a crash inside the
+        // WebView), say so first, with what happened in text that can be photographed.
         var crash by mutableStateOf(CrashReport.pending(this))
+        var stopped by mutableStateOf(if (crash == null) Diagnostics.unexpectedEnd(this) else null)
+        if (crash != null || stopped != null) Flight.log("showing the report of the previous run (${if (crash != null) "crash" else "stopped in use"})")
         setContent {
             AlHasapaTheme {
               tv.Layer {
-                val report = crash
-                if (report != null) { CrashScreen(report) { CrashReport.clear(this@MainActivity); crash = null }; return@Layer }
+                val report = crash ?: stopped
+                if (report != null) {
+                    CrashScreen(report, stopped = crash == null) {
+                        CrashReport.clear(this@MainActivity); Flight.acknowledgePrevious(); crash = null; stopped = null
+                    }
+                    return@Layer
+                }
                 AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() }, bridge = bridge)
                 whoPlaysFor?.let { id ->
                     val game = app.catalog.game(id)

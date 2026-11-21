@@ -50,7 +50,6 @@ import app.couch.alhasapa.bridge.HubBridge
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.tv.CouchWebView
 import app.couch.alhasapa.tv.LocalTv
-import app.couch.alhasapa.tv.TvTarget
 import app.couch.alhasapa.tv.tvPage
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.theme.Palette
@@ -175,9 +174,13 @@ fun HubScreen(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { webView?.onPause() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        webView?.onResume()
-        // Something else (the player, a shared result) may have changed the state while the hub was away.
-        webView?.evaluateJavascript("window.__reloadState && window.__reloadState()", null)
+        webView?.let { v ->
+            v.onResume()
+            // The remote walks this page again (a game that was open had its own), and the hub is told to re-read the state, which
+            // something else (the player, a shared result) may have changed while it was away.
+            tv?.web = v
+            v.evaluateJavascript("window.__reloadState && window.__reloadState()", null)
+        }
     }
 
     Box(
@@ -193,10 +196,9 @@ fun HubScreen(
                 factory = { ctx ->
                     Diag.log("webview: created (generation $generation)")
                     CouchWebView(ctx).apply {
-                        // On a TV the app's own keyboard types into the hub's text fields (names, backups, links).
+                        // On a TV the app's own keyboard types into the hub's text fields (names, backups, links); it opens from its button.
                         ownKeyboard = tv != null
-                        onEditable = { pw -> tv?.openKeyboard(pw) }
-                        TvTarget.set(this)
+                        tv?.web = this
                         // Explicit match-parent: a WebView left at the default (wrap-content) height tells the page its
                         // layout height is 0, which collapses every percentage height. That blanked the hub in M0.1-M0.3.
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
@@ -207,13 +209,14 @@ fun HubScreen(
                         webViewClient = HubWebViewClient(
                             ctx, assetLoader,
                             onPageReady = {
+                                if (!pageReady) app.couch.alhasapa.diag.Flight.log("hub: page loaded (generation $generation)")
                                 pageReady = true
                                 // A WebView that was ever paused does not paint; make sure this one is running.
                                 webView?.let { it.onResume(); it.resumeTimers() }
                                 onReady()
                             },
                             onLoadError = { Diag.markProblem("load error: $it"); loadError = it },
-                        ) { Diag.markProblem("the render process died"); pageReady = false; generation++ }
+                        ) { why -> Diag.markProblem("the render process died"); app.couch.alhasapa.diag.Flight.log("hub: $why; a new WebView"); pageReady = false; generation++ }
                         loadUrl(HubOrigin.url(reduceMotion, tv != null))
                         Diag.log("webview: loadUrl")
                         webView = this
@@ -221,6 +224,7 @@ fun HubScreen(
                 },
                 onRelease = { view ->
                     if (webView === view) webView = null
+                    tv?.releaseWeb(view)
                     view.destroy()
                 },
             )
@@ -271,9 +275,18 @@ private fun WebView.configureHub() {
     }
 }
 
-/** Back closes an open sheet in the hub first (the hub also reverts anything unsaved); only a second back leaves. */
+/**
+ * Back closes an open sheet in the hub first (the hub also reverts anything unsaved); only a second back leaves. If the page does not
+ * answer at once (busy, or stuck), Back leaves anyway: it must always work.
+ */
 private fun closeSheetOrExit(view: WebView, onExit: () -> Unit) {
+    var answered = false
+    val fallback = Runnable { if (!answered) { answered = true; app.couch.alhasapa.diag.Flight.log("hub: no answer to Back; leaving"); onExit() } }
+    view.postDelayed(fallback, 800)
     view.evaluateJavascript("window.__back ? window.__back() : 'none'") { result ->
+        if (answered) return@evaluateJavascript
+        answered = true
+        view.removeCallbacks(fallback)
         if (result != "\"closed\"") onExit()
     }
 }
@@ -281,6 +294,7 @@ private fun closeSheetOrExit(view: WebView, onExit: () -> Unit) {
 /** What the page logs (errors included) lands in Logcat under the tag AlHasapaHub; the last error is kept for the error screen. */
 private class ConsoleToLogcat : WebChromeClient() {
     @Volatile var lastError: String? = null
+    private var errors = 0
 
     override fun onConsoleMessage(message: ConsoleMessage): Boolean {
         val priority = when (message.messageLevel()) {
@@ -292,6 +306,7 @@ private class ConsoleToLogcat : WebChromeClient() {
         if (priority == Log.ERROR) {
             lastError = line
             Diag.log("js error: $line")
+            if (errors++ < 20) app.couch.alhasapa.diag.Flight.log("hub js error: ${line.take(300)}")
         }
         Log.println(priority, TAG, line)
         return true

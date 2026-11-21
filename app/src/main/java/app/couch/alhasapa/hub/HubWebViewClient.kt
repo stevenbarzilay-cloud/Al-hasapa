@@ -43,7 +43,7 @@ class HubWebViewClient(
     private val assetLoader: WebViewAssetLoader,
     private val onPageReady: () -> Unit,
     private val onLoadError: (String) -> Unit,
-    private val onRenderProcessGone: () -> Unit,
+    private val onRenderProcessGone: (why: String) -> Unit,
 ) : WebViewClient() {
 
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
@@ -96,8 +96,10 @@ class HubWebViewClient(
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         // Returning true keeps the app alive; the host recreates the WebView.
-        Log.e(TAG, "render process gone (crashed=${detail.didCrash()})")
-        onRenderProcessGone()
+        val why = "the page's process ended (crashed=${detail.didCrash()}, priority ${detail.rendererPriorityAtExit()})"
+        Log.e(TAG, why)
+        app.couch.alhasapa.diag.Flight.flushNow()
+        onRenderProcessGone(why)
         return true
     }
 }

@@ -20,6 +20,7 @@ object CrashReport {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching { File(app.filesDir, FILE).writeText(report(app, thread, error)) }
+            runCatching { Flight.log("CRASH on ${thread.name}: $error"); Flight.session(false, "crash"); Flight.flushNow() }
             previous?.uncaughtException(thread, error)
         }
     }
@@ -33,7 +34,9 @@ object CrashReport {
             appendLine("--- start-up marks ---")
             appendLine(Startup.summary())
             appendLine("--- stack ---")
-            append(trace)
+            appendLine(trace)
+            appendLine("--- just before ---")
+            append(Flight.tail(25))
         }
     }
 

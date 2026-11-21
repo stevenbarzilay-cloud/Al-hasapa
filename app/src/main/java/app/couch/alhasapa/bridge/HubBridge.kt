@@ -8,8 +8,7 @@ import app.couch.alhasapa.R
 import app.couch.alhasapa.catalog.Catalog
 import app.couch.alhasapa.data.Backup
 import app.couch.alhasapa.data.StateRepository
-import app.couch.alhasapa.diag.CrashReport
-import app.couch.alhasapa.diag.Startup
+import app.couch.alhasapa.diag.Diagnostics
 import org.json.JSONObject
 
 /**
@@ -68,11 +67,7 @@ class HubBridge(
 
     /** What the settings page shows about the app: versions, device, how long the last start took, and the last crash if there was one. */
     @JavascriptInterface
-    fun diagnostics(): String = buildString {
-        appendLine(Startup.environment(context))
-        Startup.last(context)?.let { appendLine(); appendLine("--- the last start ---"); appendLine(it) }
-        CrashReport.pending(context)?.let { appendLine(); appendLine("--- the last crash ---"); appendLine(it.take(1_500)) }
-    }.trim()
+    fun diagnostics(): String = Diagnostics.text(context)
 
     @JavascriptInterface
     fun exportBackup(): String = repo.exportBackup()

@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.couch.alhasapa.player.PlayerTvDock
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 import app.couch.alhasapa.ui.theme.Palette
 import java.io.File
@@ -74,5 +75,41 @@ class TvPreviewTest {
         val img = rule.onRoot().captureToImage().asAndroidBitmap()
         File(dir, "tv-dock-paw.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         org.junit.Assert.assertTrue(File(dir, "tv-dock-paw.png").length() > 5_000)
+    }
+
+    private fun save(name: String) {
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, name).outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        org.junit.Assert.assertTrue(File(dir, name).length() > 5_000)
+    }
+
+    @Test
+    fun drawTheInformationPanel() {
+        val c = TvController(true, 2f)
+        app.couch.alhasapa.diag.Flight.start(ApplicationProvider.getApplicationContext())
+        app.couch.alhasapa.diag.Flight.log("player: page loaded (www.nytimes.com)")
+        rule.setContent { AlHasapaTheme { TvLayer(c) { Box(Modifier.fillMaxSize().background(Palette.Cream)) } } }
+        rule.waitForIdle()
+        c.openPanel(TvPanel.INFO)
+        save("tv-info-panel.png")
+    }
+
+    @Test
+    fun drawThePlayersDockFullAndSlim() {
+        val c = TvController(true, 2f)
+        val pieces = app.couch.alhasapa.data.PiecesConfig.load(ApplicationProvider.getApplicationContext())
+        val info = app.couch.alhasapa.player.PlayerInfo(
+            done = 2, total = 5, points = 7, nameA = "סטיב", nameB = "רוני",
+            pieceA = pieces.styleFor(null, "a"), pieceB = pieces.styleFor(null, "b"), who = null,
+        )
+        val data = app.couch.alhasapa.player.ChromeData("Wordle", "12:34", info, played = false, showPlayed = true, zoom = 100)
+        val actions = app.couch.alhasapa.player.ChromeActions({}, {}, {}, {}, {})
+        c.dockExtras = { slim -> PlayerTvDock(slim, c, data, actions) }
+        rule.setContent { AlHasapaTheme { TvLayer(c) { Box(Modifier.fillMaxSize().background(Palette.Cream)) } } }
+        save("tv-player-dock-full.png")
+        c.toggleSlim()
+        save("tv-player-dock-slim.png")
     }
 }

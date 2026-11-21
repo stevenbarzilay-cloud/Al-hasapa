@@ -22,6 +22,7 @@ import app.couch.alhasapa.player.PlayerActivity
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -87,11 +88,54 @@ class TvScreensTest {
     }
 
     @Test
-    fun thePlayPauseKeyOpensTheKeyboardFromTheRemote() {
+    fun theKeyboardNeverOpensByItself() {
         launch()
-        scenario!!.onActivity { a -> assertTrue(key(a, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) }
+        // The remote's Play/Pause is the page's now.
+        scenario!!.onActivity { a -> assertFalse(key(a, KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)) }
         rule.waitForIdle()
-        rule.onNode(hasContentDescription("סגירת מקלדת")).assertIsDisplayed()
+        rule.onNode(hasContentDescription("q")).assertDoesNotExist()
+        // The system asks the page for a way to type every time the window gets focus back (the start, a game closed): nothing opens.
+        scenario!!.onActivity { a ->
+            val web = findWeb(a.window.decorView)!!
+            assertTrue("it is our WebView", web is CouchWebView)
+            assertNull("the system keyboard gets nothing to type into", web.onCreateInputConnection(android.view.inputmethod.EditorInfo()))
+            assertFalse("and the system is told this is not a text editor", web.onCheckIsTextEditor())
+            a.onWindowFocusChanged(false); a.onWindowFocusChanged(true)
+        }
+        rule.waitForIdle()
+        rule.onNode(hasContentDescription("q")).assertDoesNotExist()
+        rule.onNode(hasContentDescription("סגירת מקלדת")).assertDoesNotExist()
+    }
+
+    @Test
+    fun theInformationPanelOpensFromTheDockWithoutThePageAndBackClosesIt() {
+        launch()
+        rule.onNode(hasContentDescription("מידע לתיקון תקלות")).performClick(); rule.waitForIdle()
+        rule.onNodeWithText("מידע לתיקון תקלות", substring = false).assertIsDisplayed()
+        rule.onNodeWithText("app ", substring = true).assertIsDisplayed()
+        scenario!!.onActivity { a -> assertTrue(key(a, KeyEvent.KEYCODE_BACK)); assertTrue(key(a, KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_UP)) }
+        rule.waitForIdle()
+        rule.onNode(hasContentDescription("סגירה")).assertDoesNotExist()
+        scenario!!.onActivity { assertFalse("Back closed the panel, not the game", it.isFinishing) }
+    }
+
+    @Test
+    fun theRemoteWalksThisScreensOwnWebViewAndLetsGoOfItWhenTheScreenCloses() {
+        launch()
+        var web: android.webkit.WebView? = null
+        scenario!!.onActivity { a -> web = findWeb(a.window.decorView) }
+        assertNotNull(web)
+        scenario!!.close(); scenario = null
+        // The game's WebView is gone with its screen: nothing keeps it as the target of the remote or the keyboard.
+        val c = TvController(true, 1f)
+        c.web = web; c.releaseWeb(web!!)
+        assertNull(c.web)
+    }
+
+    private fun findWeb(v: View): android.webkit.WebView? = when (v) {
+        is android.webkit.WebView -> v
+        is android.view.ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { findWeb(v.getChildAt(it)) }
+        else -> null
     }
 
     @Test

@@ -150,8 +150,21 @@ class RemoteLogicTest {
 
     @Test
     fun theNavigationScriptNeverReadsWhatThePageSaysOrSendsAnything() {
-        for (banned in listOf("innerText", "textContent", "innerHTML", "value", "cookie", "localStorage", "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "eval("))
+        for (banned in listOf("innerText", "innerHTML", "outerHTML", ".value", "cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "eval(", "postMessage"))
             assertFalse("must not use $banned", TvNavScript.JS.contains(banned))
+        // textContent only once, and only to write its own style sheet.
+        assertEquals(1, Regex("textContent").findAll(TvNavScript.JS).count())
+        assertTrue(TvNavScript.JS.contains("s.textContent='["))
+    }
+
+    @Test
+    fun theNavigationScriptHasNoFrameLoopAndNoTemplateCharacters() {
+        // The old version redrew a ring every frame for as long as it showed, which kept a weak box busy all the time.
+        assertFalse("no ring element any more", TvNavScript.JS.contains("couch-tv-ring"))
+        assertFalse("no loop that places a ring", TvNavScript.JS.contains("function loop"))
+        assertTrue("the glide's frames end by themselves", TvNavScript.JS.contains("a.idle>=3"))
+        assertFalse(TvNavScript.JS.contains("$"))
+        assertTrue("it says which version it is, so an older copy on a page is replaced", TvNavScript.JS.contains("v:${TvNavScript.VERSION},doc:document"))
     }
 
     @Test
