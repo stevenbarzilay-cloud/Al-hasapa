@@ -105,4 +105,13 @@
     <string name="size_medium">בינוני</string>
     <string name="size_large">גדול</string>
     <string name="panel_progress_full">%1$d מתוך %2$d שיחקנו הערב</string>
+    <string name="tv_keyboard">מקלדת</string>
+    <string name="tv_keyboard_open">פתיחת מקלדת</string>
+    <string name="tv_keyboard_hint">מה שמקלידים מופיע כאן</string>
+    <string name="tv_cursor_on">סמן בשלט: פועל</string>
+    <string name="tv_cursor_off">סמן בשלט: כבוי (ניווט רגיל)</string>
+    <string name="kb_space">רווח</string>
+    <string name="kb_backspace">מחיקה</string>
+    <string name="kb_enter">אנטר</string>
+    <string name="kb_close">סגירת מקלדת</string>
 </resources>

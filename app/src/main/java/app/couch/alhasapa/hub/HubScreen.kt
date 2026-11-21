@@ -48,6 +48,9 @@ import androidx.webkit.WebViewAssetLoader
 import app.couch.alhasapa.R
 import app.couch.alhasapa.bridge.HubBridge
 import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.tv.CouchWebView
+import app.couch.alhasapa.tv.LocalTv
+import app.couch.alhasapa.tv.TvTarget
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.theme.Palette
 import kotlin.coroutines.resume
@@ -172,12 +175,17 @@ fun HubScreen(
             .background(Palette.Cream)
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
+        val tv = LocalTv.current
         key(generation) {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
                     Diag.log("webview: created (generation $generation)")
-                    WebView(ctx).apply {
+                    CouchWebView(ctx).apply {
+                        // On a TV the app's own keyboard types into the hub's text fields (names, backups, links).
+                        ownKeyboard = tv != null
+                        onEditable = { pw -> tv?.openKeyboard(pw) }
+                        TvTarget.set(this)
                         // Explicit match-parent: a WebView left at the default (wrap-content) height tells the page its
                         // layout height is 0, which collapses every percentage height. That blanked the hub in M0.1-M0.3.
                         layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)

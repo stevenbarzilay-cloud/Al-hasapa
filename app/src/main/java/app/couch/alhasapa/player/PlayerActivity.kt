@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.os.Bundle
 import android.view.WindowManager
+import app.couch.alhasapa.tv.TvHost
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -36,16 +37,22 @@ import org.json.JSONObject
  */
 class PlayerActivity : ComponentActivity() {
     private lateinit var session: PlaySession
+    private lateinit var tv: TvHost
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tv = TvHost(this)
         val app = application as CouchApp
         session = buildSession(app) ?: run { finish(); return }
         Diag.log("player: ${session.title} (${if (session.loginMode) "login" else "game"}) profile ${session.profile}")
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        window.attributes = window.attributes.also { it.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
+        // Cut-outs (the Pixel's camera hole) exist from Android 9; the TV build runs on older versions too.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.also { it.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
+        }
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
@@ -62,6 +69,7 @@ class PlayerActivity : ComponentActivity() {
                 val state = remember(revision) { app.repo.snapshot() }
                 val played = session.gameId != null && CouchState.entry(state, today(), session.gameId!!) != null
                 val info = remember(revision) { PlayerInfo.from(state, app.catalog, pieces, today(), session.who) }
+              tv.Layer {
                 PlayerScreen(
                     session = session,
                     played = played,
@@ -80,6 +88,7 @@ class PlayerActivity : ComponentActivity() {
                     onClose = { finish() },
                     onOpenInChrome = { url -> ChromeTab.open(this, url) },
                 )
+              }
             }
         }
     }

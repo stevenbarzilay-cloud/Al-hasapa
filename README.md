@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.1.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.2.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -146,9 +146,10 @@ Android Studio installs those for you. If you open this folder in Android Studio
 update the Android Gradle Plugin or the SDK, let it.
 
 ```sh
-./gradlew :app:assembleDebug        # -> app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:testDebugUnitTest    # unit tests (JVM, no device needed)
-./gradlew :app:lintDebug            # -> app/build/reports/lint-results-debug.html
+./gradlew :app:assemblePhoneDebug   # -> app/build/outputs/apk/phone/debug/app-phone-debug.apk   (the phone app)
+./gradlew :app:assembleTvDebug      # -> app/build/outputs/apk/tv/debug/app-tv-debug.apk         (the Android TV app)
+./gradlew :app:testPhoneDebugUnitTest :app:testTvDebugUnitTest   # unit tests (JVM, no device needed)
+./gradlew :app:lintPhoneDebug :app:lintTvDebug                   # -> app/build/reports/lint-results-*.html
 ```
 
 Outside Android Studio, point Gradle at the SDK with `ANDROID_HOME=/path/to/sdk` or a
@@ -161,7 +162,7 @@ Outside Android Studio, point Gradle at the SDK with `ANDROID_HOME=/path/to/sdk`
 **With adb** (USB debugging on, phone connected):
 
 ```sh
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/phone/debug/app-phone-debug.apk
 ```
 
 **Without a computer:** copy `app-debug.apk` to the phone, open it from Files, and allow
@@ -173,6 +174,43 @@ build is signed with the same committed debug key (`app/debug.keystore`, the sta
 says "package conflicts with an existing package", the installed copy came from a different key
 (for example an APK built before this key existed); in that case export a backup, uninstall, and
 install again.
+
+## The Android TV app (Xiaomi Mi Box and other Android TV)
+
+The same code, built as a second app (`app.couch.alhasapa.tv`, shown in the TV launcher with its own banner). It runs the games
+on the TV itself, so there is no casting and no lag. It needs Android 8.0 or newer (API 26); a Mi Box S runs 8.1 or 9. It keeps
+its own history and logins (it is a different app); until accounts and sync exist, bring over history with the hub's backup.
+
+**Install** (once): on the Mi Box, Settings, Device Preferences, About, press Build seven times; then Developer options, turn on
+USB debugging (and network debugging). From a computer on the same network:
+
+```sh
+adb connect <the Mi Box's IP address>:5555
+adb install -r app-tv-debug.apk
+```
+
+Without a computer: put the APK on a USB stick and open it with a file manager app from the Play Store, or use "Send Files to TV".
+Later versions install over the old one (same key), so the logins stay.
+
+**The remote.** There is no touch and no mouse, so the arrows move a small cat paw over the screen: slowly at first, faster the
+longer an arrow is held. **OK** is a tap where the paw is. **Hold OK** puts the finger down (the paw turns red) and the arrows
+then drag, which scrolls a page or swipes a word; **hold OK again** lifts it. Everything works the same way (the hub, the games, the
+menus), because the paw hands the screen real touches. **Back** and **Home** are the system's.
+
+**The keyboard.** Push the paw to the bottom edge of the screen: a "⌨ מקלדת" tab rises; OK on it slides the keyboard up (the page
+makes room, so the field you type into stays in view). It also slides up by itself when a text field takes focus, from the
+menu (☰, at the bottom of it), and with the remote's Play/Pause key if it has one. English, Hebrew and symbols; Shift makes one capital;
+the arrows move the highlight, OK types, **Back** closes it. A password field shows dots in the preview. Letters and digits go in as real
+key presses (a game that listens for keys, like Wordle, just works); Hebrew and symbols are inserted as text. The system keyboard is
+kept away so the two never fight. Sign-in works the same way: tap the field, type, tap "Sign in".
+
+**Sound and video** play as on the phone, and a game's full-screen video fills the screen (Back leaves it).
+
+The Mi Box remote has no Menu key, so the menu is the ☰ button, reached with the paw like everything else.
+
+What cannot be checked without the box: how fast the paw feels, whether the keyboard reaches the page on this WebView, and whether
+the WebView on the Mi Box is recent enough for the games. The Mi Box's own WebView version matters most (Settings, Apps, show system
+apps, Android System WebView): the oldest ones cannot run some modern pages.
 
 ## Check on the phone
 
@@ -204,7 +242,8 @@ marks them "קישור זמני"; replace them under "הקישורים שלנו"
 
 | Path | What |
 | --- | --- |
-| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `ui/` (splash, theme) |
+| `app/src/tv/` | What is only in the TV build: the TV launcher entry and its banner |
+| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `tv/` (the remote's cursor, the keyboard, full-screen video), `ui/` (splash, theme) |
 | `app/src/main/assets/hub/` | The prototype's web UI, `pieces.json`, bundled fonts and images |
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |

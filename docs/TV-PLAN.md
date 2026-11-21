@@ -66,7 +66,12 @@ What it can do, honestly:
 
 ## Order of work
 
-1. **TV flavor with cursor, keyboard, full-screen video, launcher** (no backend needed): can start as soon as the TV is known.
+1. **TV flavor with cursor, keyboard, full-screen video, launcher** (no backend needed): **built in 1.2.0** for the Xiaomi Mi Box
+   (API 26 and up). What changed from the plan: the cursor is one virtual finger that hands real touches to the whole window, so
+   it works in the hub and the menus too; OK taps, holding OK latches a drag (a remote's centre button cannot be held while an arrow is
+   pressed); the keyboard handle rises when the cursor is pushed to the bottom edge (a permanent handle sat over the page's own
+   controls), and the keyboard also opens by itself when a field takes focus, from the menu, and on Play/Pause. The Mi Box remote has no Menu key,
+   so the ☰ button is how the menu is reached.
 2. **Accounts and sync** (needs the backend decision below).
 3. **Several users and avatars, and the animation set** (ANIMATION-IDEAS.md).
 
@@ -79,7 +84,8 @@ What it can do, honestly:
 - A password typed with a remote is slow; the plan is a fast keyboard, a clear "show/hide" for the preview, and saved logins
   that survive, so it is done once.
 
-## Open decisions (asked in the chat)
+## Decisions (from the chat)
 
-1. Which backend for accounts and sync (Firebase, Supabase, your own server, or later).
-2. Which TV (the Android version sets the minimum version of the TV app).
+1. Backend for accounts and sync: leaning Supabase (the open question was whether it scales to more users: it does, see the chat).
+   To start I need a Supabase project's URL and public (anon) key; I will provide the SQL to run in it.
+2. The TV is a Xiaomi Mi Box (Android TV 8.1 or 9, so the TV app goes down to API 26).

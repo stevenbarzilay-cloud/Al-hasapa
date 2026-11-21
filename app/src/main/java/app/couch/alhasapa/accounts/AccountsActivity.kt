@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
+import app.couch.alhasapa.tv.TvHost
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -66,8 +67,12 @@ import app.couch.alhasapa.ui.theme.Palette
 
 /** "החשבונות שלנו": log in once to the sites we pay for; the logins live only inside this app. */
 class AccountsActivity : ComponentActivity() {
+    private lateinit var tv: TvHost
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        tv = TvHost(this)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
@@ -78,6 +83,7 @@ class AccountsActivity : ComponentActivity() {
             AlHasapaTheme {
                 val state = app.repo.snapshot()
                 val (nameA, nameB) = CouchState.names(state)
+              tv.Layer {
                 AccountsScreen(
                     sites = app.catalog.sites.values.filter { it.account },
                     nameA = nameA, nameB = nameB,
@@ -86,6 +92,7 @@ class AccountsActivity : ComponentActivity() {
                     onChrome = { url -> ChromeTab.open(this, url) },
                     onBack = { finish() },
                 )
+              }
             }
         }
     }

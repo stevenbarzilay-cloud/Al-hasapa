@@ -23,11 +23,15 @@ import app.couch.alhasapa.player.PlayerActivity
 import app.couch.alhasapa.ui.WhoPlaysDialog
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.diag.DiagOverlay
+import app.couch.alhasapa.tv.TvHost
 import app.couch.alhasapa.ui.AppRoot
 import app.couch.alhasapa.ui.animationsRemoved
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 
 class MainActivity : ComponentActivity() {
+    private lateinit var tv: TvHost
+
+
     /** The head-to-head game waiting for "who plays?" to be answered. */
     private var whoPlaysFor by mutableStateOf<String?>(null)
 
@@ -36,6 +40,7 @@ class MainActivity : ComponentActivity() {
         // the animated in-app splash continues from it.
         installSplashScreen()
         super.onCreate(savedInstanceState)
+        tv = TvHost(this)
         Diag.log("activity: onCreate, build ${BuildConfig.VERSION_NAME}, android ${Build.VERSION.RELEASE} (api ${Build.VERSION.SDK_INT})")
         Diag.log("webview package: " + (WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" } ?: "NONE"))
         val dm = resources.displayMetrics
@@ -69,6 +74,7 @@ class MainActivity : ComponentActivity() {
         val playSplash = savedInstanceState == null && !reduceMotion
         setContent {
             AlHasapaTheme {
+              tv.Layer {
                 AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() }, bridge = bridge)
                 whoPlaysFor?.let { id ->
                     val game = app.catalog.game(id)
@@ -83,6 +89,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                 }
+              }
             }
         }
         // Plain views, no Compose and no WebView: readable even if either of those fails. Debug builds only.

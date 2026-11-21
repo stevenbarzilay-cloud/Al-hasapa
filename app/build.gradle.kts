@@ -15,10 +15,27 @@ android {
 
     defaultConfig {
         applicationId = "app.couch.alhasapa"
-        minSdk = 29
         targetSdk = 37
-        versionCode = 14
-        versionName = "1.1.0"
+        versionCode = 15
+        versionName = "1.2.0"
+    }
+
+    // Two builds from one codebase: the phone app, and the Android TV app (a Xiaomi Mi Box runs Android TV 8.1 or 9, so the TV
+    // build goes down to API 26; the phone app keeps 29). Both can be installed side by side, they are different apps.
+    flavorDimensions += "device"
+    productFlavors {
+        create("phone") {
+            dimension = "device"
+            minSdk = 29
+            buildConfigField("boolean", "TV", "false")
+        }
+        create("tv") {
+            dimension = "device"
+            minSdk = 26
+            applicationIdSuffix = ".tv"
+            versionNameSuffix = "-tv"
+            buildConfigField("boolean", "TV", "true")
+        }
     }
 
     // One fixed debug key, committed on purpose (standard "android" passwords; this is not a secret).

@@ -252,6 +252,15 @@ fun TuningSheet(
                 }
             }
             if (pageSees != null) Text(stringResource(R.string.display_page_sees, pageSees), fontSize = PanelText, color = Palette.Ink2)
+            val tv = app.couch.alhasapa.tv.LocalTv.current
+            if (tv != null) {
+                // On a TV: the keyboard, and whether the arrows move a cursor or the focus.
+                SheetButton("⌨  " + stringResource(R.string.tv_keyboard), stringResource(R.string.tv_keyboard_open), Modifier.fillMaxWidth(), onClick = { onClose(); tv.openKeyboard() })
+                SheetButton(
+                    stringResource(if (tv.cursorMode) R.string.tv_cursor_on else R.string.tv_cursor_off), null, Modifier.fillMaxWidth(),
+                    onClick = { tv.cursorMode = !tv.cursorMode },
+                )
+            }
           }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

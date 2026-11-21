@@ -59,6 +59,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import app.couch.alhasapa.R
 import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.tv.CouchWebView
+import app.couch.alhasapa.tv.LocalTv
+import app.couch.alhasapa.tv.TvTarget
+import app.couch.alhasapa.tv.VideoChrome
 import app.couch.alhasapa.display.DisplayLayout
 import app.couch.alhasapa.display.DisplayMode
 import app.couch.alhasapa.display.ScaledFrame
@@ -109,6 +113,9 @@ fun PlayerScreen(
     reduceMotion: Boolean = false,
     dndSignals: app.couch.alhasapa.dnd.DndSignals? = null,
 ) {
+    val tv = LocalTv.current
+    val activity = LocalContext.current.findActivity()
+    val video = remember(activity) { VideoChrome(activity) }
     val enter = if (reduceMotion) androidx.compose.animation.EnterTransition.None else fadeIn()
     val exit = if (reduceMotion) androidx.compose.animation.ExitTransition.None else fadeOut()
     var webView by remember { mutableStateOf<WebView?>(null) }
@@ -194,6 +201,7 @@ fun PlayerScreen(
     BackHandler {
         val view = webView
         when {
+            video.isShowing -> video.onHideCustomView()
             resultOpen -> resultOpen = false
             sheetOpen -> sheetOpen = false
             view != null && view.canGoBack() -> view.goBack()
@@ -243,7 +251,12 @@ fun PlayerScreen(
                             AndroidView(
                                 modifier = Modifier.fillMaxSize(),
                                 factory = { ctx ->
-                                    val web = WebView(ctx).apply {
+                                    val web = CouchWebView(ctx).apply {
+                                        // On a TV the app's own keyboard types, and a text field taking focus slides it up.
+                                        ownKeyboard = tv != null
+                                        onEditable = { pw -> tv?.openKeyboard(pw) }
+                                        TvTarget.set(this)
+                                        webChromeClient = video          // a game's full-screen video
                                         usedProfile = PlayerWebView.configure(this, session.profile)
                                         Diag.log("player: webview created, profile ${session.profile} -> $usedProfile, display ${profile.mode.id}")
                                         val inj = DisplayInjector(this, DisplayInjector.originRules(session.allowedHosts, session.roaming))
@@ -399,4 +412,10 @@ private fun existingRaw(result: ResultSupport, who: String?): String {
     val e = app.couch.alhasapa.data.CouchState.entry(result.state, result.day, result.game.id) ?: return ""
     return if (result.game.isDuel) e.optJSONObject("d")?.optJSONObject(who ?: "")?.optString("raw").orEmpty()
     else e.optJSONObject("r")?.optString("raw").orEmpty()
+}
+
+private fun Context.findActivity(): android.app.Activity {
+    var c: Context = this
+    while (c is android.content.ContextWrapper) { if (c is android.app.Activity) return c; c = c.baseContext }
+    error("no activity")
 }
