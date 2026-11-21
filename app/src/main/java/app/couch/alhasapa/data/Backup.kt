@@ -95,6 +95,7 @@ object Backup {
         // prefs / urls: add what is missing, never override a choice made here
         mergeMissing(local, incoming, "prefs")
         mergeMissing(local, incoming, "urls")
+        mergeMissing(local, incoming, "displays")
         // pieces: keep this phone's choice if it has one
         if (!local.has("pieces") && incoming.has("pieces")) local.put("pieces", incoming.get("pieces"))
         // anything else the other side knows (a newer app's fields) is kept if we have nothing under that name

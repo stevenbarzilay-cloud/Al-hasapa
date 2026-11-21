@@ -8,11 +8,31 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Status:** milestone 1 (data layer). The state is one JSON document stored natively (atomic file, revisioned), the hub
-talks to it through a bridge, the game catalogue is `app/src/main/assets/games.json`, backups can be exported and
-imported (merged, newest wins, nothing deleted), and the team scoring is ported to Kotlin and tested against the
-prototype's own functions. Still to come: the isolated game player and accounts, TV mode, result capture and the
-share target.
+**Status:** milestone 3 (TV display). The data layer, the isolated player with persistent logins (including two LinkedIn
+profiles), the accounts screen, "who plays?" for head-to-head games, and per-site display profiles are in. Still to
+come: result capture (share / copy hook, native result sheet, Android share target) and the polish pass.
+
+TV display (`app/src/main/assets/display_profiles.json`, `display/`):
+
+- Every site is shown one of three ways: **native** (the page as it is), **wide** (the page believes it is a 1280 px
+  desktop window, scaled to the screen) or **portrait-fit** (the page believes it is a 430 x 800 phone held upright,
+  scaled to the screen's height and centred, with a couch panel on each side: the game and the clock on one, the evening
+  and the two of us on the other, all at 20 sp or more). Defaults follow the brief: Haaretz riddles and NYT Wordle,
+  Connections, Strands, Pips and LinkedIn games are portrait-fit; the NYT daily crossword is wide; everything else is native.
+- Not by transform. The WebView is sized to the box and a script injected at document start sets the viewport
+  (`width=` the virtual width, scale fixed), so the page lays out for that screen and `100vh` really is the virtual
+  height (this is what fixes the Haaretz chain's board falling off the bottom: it needs about 775 CSS px of height and
+  now gets 800). The same script forces light mode and hides cookie and "get the app" banners (`css` in the defaults).
+  It never reads the page. If a WebView is too old for document-start scripts it runs on page start instead.
+- **Zoom** shrinks the virtual viewport (125% means 344 px wide instead of 430). **Safe area** keeps 2.5% free on every
+  side for TVs that crop; the camera cut-out is respected on top of that.
+- Tuning is live: top edge, then "תצוגה" opens a sheet on the left; mode and zoom change the page as you press.
+  "לשמור לאתר הזה" stores it under host + path prefix (the longest match wins; stored in the state as `displays`,
+  survives backups); "לחזור לברירת המחדל" removes it again.
+- Three sites in the defaults are my guesses, not in the brief (the NYT Mini, the NYT puzzles section, and the
+  LinkedIn games index): they are marked `_note` in the file.
+- `tools/display_check.cjs` runs the real injected script in Chromium (mobile emulation) against pages with and without
+  their own viewport meta.
 
 Hub notes:
 

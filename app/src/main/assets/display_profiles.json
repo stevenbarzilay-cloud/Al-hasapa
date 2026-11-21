@@ -1,0 +1,19 @@
+{
+ "v": 1,
+ "_comment": "How each site is shown on the TV. mode: native (the page as it is) | wide (a desktop-width page, e.g. 1280 CSS px, scaled to fit) | portrait-fit (a phone-portrait page, e.g. 430x800 CSS px, scaled to the screen's height and centred, with the couch panels at its sides). zoom is a percentage. safeArea is the TV overscan margin in percent of the screen. match is host + path prefix; the longest match wins, and what you save from the player (לשמור לאתר הזה) overrides these.",
+ "defaults": {
+  "mode": "native", "zoom": 100, "injectCss": true, "safeArea": 2.5, "dark": false, "vw": 430, "vh": 800,
+  "css": "#onetrust-consent-sdk,#onetrust-banner-sdk,.onetrust-pc-dark-filter,.smartbanner,[class*='smart-banner'],[class*='SmartBanner'],[id*='app-banner'],[class*='app-banner'],[class*='AppBanner']{display:none!important}"
+ },
+ "profiles": [
+  { "match": "haaretz.co.il/riddles", "mode": "portrait-fit", "vw": 430, "vh": 800 },
+  { "match": "nytimes.com/games/wordle", "mode": "portrait-fit" },
+  { "match": "nytimes.com/games/connections", "mode": "portrait-fit" },
+  { "match": "nytimes.com/games/strands", "mode": "portrait-fit" },
+  { "match": "nytimes.com/games/pips", "mode": "portrait-fit" },
+  { "match": "nytimes.com/crosswords/game/daily", "mode": "wide", "vw": 1280 },
+  { "match": "nytimes.com/crosswords/game/mini", "mode": "portrait-fit", "_note": "my guess, not in the brief: the Mini is a phone-shaped board" },
+  { "match": "nytimes.com/puzzles", "mode": "portrait-fit", "_note": "my guess, not in the brief: Spelling Bee, Letter Boxed, Tiles, Sudoku are phone-shaped" },
+  { "match": "linkedin.com/games", "mode": "portrait-fit", "vw": 430, "vh": 800 }
+ ]
+}

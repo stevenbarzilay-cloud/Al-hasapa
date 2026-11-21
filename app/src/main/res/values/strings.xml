@@ -34,4 +34,21 @@
     <string name="accounts_show_cookies">מה נשמר? (שמות עוגיות)</string>
     <string name="accounts_hide_cookies">להסתיר</string>
     <string name="accounts_no_cookies">אין עוגיות עדיין.</string>
+    <string name="player_display">תצוגה</string>
+    <string name="display_mode">איך להציג את האתר</string>
+    <string name="display_mode_native">רגיל</string>
+    <string name="display_mode_wide">רחב</string>
+    <string name="display_mode_portrait">טלפון זקוף</string>
+    <string name="display_zoom">זום</string>
+    <string name="display_zoom_value">%1$d%%</string>
+    <string name="display_zoom_in">להגדיל</string>
+    <string name="display_zoom_out">להקטין</string>
+    <string name="display_save">לשמור לאתר הזה</string>
+    <string name="display_saved">נשמר</string>
+    <string name="display_reset">לחזור לברירת המחדל</string>
+    <string name="display_close">סגירה</string>
+    <string name="panel_progress">מתוך %1$d שיחקנו הערב</string>
+    <string name="panel_points">%1$d נקודות ספה</string>
+    <string name="panel_logo">על הספה שלנו</string>
+    <string name="panel_playing">משחק עכשיו</string>
 </resources>

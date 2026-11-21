@@ -11,11 +11,14 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.data.PiecesConfig
+import app.couch.alhasapa.display.DisplayStore
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 import java.time.LocalDate
@@ -44,14 +47,23 @@ class PlayerActivity : ComponentActivity() {
         )
         hideSystemBars()
 
+        val profiles = DisplayStore.load(this)
+        val pieces = PiecesConfig.load(this)
         setContent {
             AlHasapaTheme {
                 val revision by app.repo.revision.collectAsState()
-                val played = revision >= 0 && session.gameId != null &&
-                    CouchState.entry(app.repo.snapshot(), today(), session.gameId!!) != null
+                // Re-read whenever the state changes (a tick, a saved display profile, a result).
+                val state = remember(revision) { app.repo.snapshot() }
+                val played = session.gameId != null && CouchState.entry(state, today(), session.gameId!!) != null
+                val info = remember(revision) { PlayerInfo.from(state, app.catalog, pieces, today(), session.who) }
                 PlayerScreen(
                     session = session,
                     played = played,
+                    info = info,
+                    profiles = profiles,
+                    overrides = DisplayStore.overrides(state),
+                    onSaveDisplay = { key, p -> DisplayStore.save(app.repo, key, p) },
+                    onResetDisplay = { key -> DisplayStore.reset(app.repo, key) },
                     onTogglePlayed = { togglePlayed(app) },
                     onClose = { finish() },
                     onOpenInChrome = { url -> ChromeTab.open(this, url) },

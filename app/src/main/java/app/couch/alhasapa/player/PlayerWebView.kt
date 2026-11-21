@@ -11,9 +11,14 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.webkit.ScriptHandler
 import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.display.DisplayLayout
+import app.couch.alhasapa.display.DisplayProfile
+import app.couch.alhasapa.display.DisplayScript
 
 /** Creates and configures the WebView a game runs in, in its own browser profile. */
 object PlayerWebView {
@@ -62,6 +67,50 @@ object PlayerWebView {
     }
 }
 
+/**
+ * Keeps one WebView showing its pages the way the display profile says: the injected script (viewport, light mode, banner CSS)
+ * runs at document start where the WebView allows it, and is re-run on the live page whenever the profile changes.
+ * [origins] are the origin rules the script may run on (the game's own sites).
+ */
+class DisplayInjector(private val view: WebView, private val origins: Set<String>) {
+    private var handler: ScriptHandler? = null
+    private var script: String? = null
+    private var documentStart = false
+
+    /** True when the script is registered to run before the page's own scripts. */
+    val runsAtDocumentStart: Boolean get() = documentStart
+
+    fun apply(profile: DisplayProfile, layout: DisplayLayout) {
+        val next = DisplayScript.build(profile, layout)
+        // A page with a viewport meta is laid out at that width; without wide-viewport support the meta would be ignored.
+        view.settings.useWideViewPort = layout.virtualWidth != null
+        view.settings.loadWithOverviewMode = layout.virtualWidth != null
+        if (next == script) return
+        script = next
+        runCatching { handler?.remove() }
+        handler = null
+        documentStart = false
+        runCatching {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+                handler = WebViewCompat.addDocumentStartJavaScript(view, next, origins)
+                documentStart = true
+            }
+        }.onFailure { Diag.log("display: document-start script refused: ${it.javaClass.simpleName}") }
+        view.evaluateJavascript(next, null)          // the page that is already there
+    }
+
+    /** Without document-start support the script is run as each page begins loading (a little later, still before it is shown). */
+    fun onPageStarted() {
+        if (!documentStart) script?.let { view.evaluateJavascript(it, null) }
+    }
+
+    companion object {
+        /** The host itself and its subdomains, over https, for every allowed host; every origin when the session may roam. */
+        fun originRules(hosts: Set<String>, roaming: Boolean): Set<String> =
+            if (roaming) setOf("*") else hosts.flatMap { listOf("https://$it", "https://*.$it") }.toSet()
+    }
+}
+
 /** Applies the navigation policy to the main frame and reports what happened. */
 class PlayerWebViewClient(
     private val session: PlaySession,
@@ -70,6 +119,9 @@ class PlayerWebViewClient(
     private val onFinished: (String) -> Unit,
     private val onLoadError: (String) -> Unit,
     private val onRenderGone: () -> Unit,
+    /** The page the person is looking at changed (a navigation, or a single-page app moving on). */
+    private val onUrl: (String) -> Unit = {},
+    private val onPageBegan: () -> Unit = {},
 ) : WebViewClient() {
 
     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
@@ -84,6 +136,12 @@ class PlayerWebViewClient(
 
     override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
         onStarted()
+        onUrl(url)
+        onPageBegan()
+    }
+
+    override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+        onUrl(url)
     }
 
     override fun onPageFinished(view: WebView, url: String) {
