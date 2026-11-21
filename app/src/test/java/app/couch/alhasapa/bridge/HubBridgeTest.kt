@@ -33,6 +33,7 @@ class HubBridgeTest {
     private lateinit var repo: StateRepository
     private lateinit var bridge: HubBridge
     private val played = mutableListOf<String>()
+    private var opened = 0
 
     @Before
     fun setUp() {
@@ -40,6 +41,7 @@ class HubBridgeTest {
         repo = StateRepository(MemoryStore()) { LocalDate.of(2026, 11, 21) }
         bridge = HubBridge(context, repo, Catalog.load(context), object : HubBridge.Actions {
             override fun play(gameId: String) { played += gameId }
+            override fun openAccounts() { opened++ }
         })
     }
 
@@ -88,6 +90,12 @@ class HubBridgeTest {
     }
 
     @Test
+    fun theHubCanOpenTheAccountsScreen() {
+        bridge.openAccounts()
+        assertEquals(1, opened)
+    }
+
+    @Test
     fun exportThenImportOnAnotherPhoneRestoresTheHistory() {
         val s = CouchState.empty()
         CouchState.setEntry(s, "2026-11-20", "wordle", JSONObject().put("w", "a").put("t", 5L))
@@ -96,7 +104,7 @@ class HubBridgeTest {
         assertEquals("al-hasapa-shelanu", JSONObject(backup).getString("app"))
 
         val other = StateRepository(MemoryStore()) { LocalDate.of(2026, 11, 21) }
-        val otherBridge = HubBridge(context, other, Catalog.load(context), object : HubBridge.Actions { override fun play(gameId: String) {} })
+        val otherBridge = HubBridge(context, other, Catalog.load(context), object : HubBridge.Actions { override fun play(gameId: String) {}; override fun openAccounts() {} })
         val r = JSONObject(otherBridge.importBackup(backup))
         assertTrue(r.getBoolean("ok"))
         assertEquals(1, r.getInt("added"))

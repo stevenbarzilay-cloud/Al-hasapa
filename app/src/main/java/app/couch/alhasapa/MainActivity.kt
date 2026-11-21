@@ -12,14 +12,25 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.LifecycleEventObserver
-import android.widget.Toast
+import android.content.Intent
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import app.couch.alhasapa.accounts.AccountsActivity
 import app.couch.alhasapa.bridge.HubBridge
+import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.data.PiecesConfig
+import app.couch.alhasapa.player.PlayerActivity
+import app.couch.alhasapa.ui.WhoPlaysDialog
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.AppRoot
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 
 class MainActivity : ComponentActivity() {
+    /** The head-to-head game waiting for "who plays?" to be answered. */
+    private var whoPlaysFor by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must come before super.onCreate. The system splash is the first instants of a cold start;
         // the animated in-app splash continues from it.
@@ -39,10 +50,18 @@ class MainActivity : ComponentActivity() {
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
 
         val app = application as CouchApp
+        val pieces = PiecesConfig.load(this)
         val bridge = HubBridge(this, app.repo, app.catalog, object : HubBridge.Actions {
             override fun play(gameId: String) {
-                // The isolated player arrives in the next milestone; until then a game cannot be opened from here.
-                runOnUiThread { Toast.makeText(this@MainActivity, R.string.player_soon, Toast.LENGTH_SHORT).show() }
+                runOnUiThread {
+                    val game = app.catalog.game(gameId) ?: return@runOnUiThread
+                    // Head to head (LinkedIn): each person plays alone, in their own account, so ask whose turn it is.
+                    if (game.isDuel) whoPlaysFor = gameId else startActivity(PlayerActivity.gameIntent(this@MainActivity, gameId, null))
+                }
+            }
+
+            override fun openAccounts() {
+                runOnUiThread { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) }
             }
         })
         val reduceMotion = animationsRemoved(contentResolver)
@@ -51,6 +70,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             AlHasapaTheme {
                 AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() }, bridge = bridge)
+                whoPlaysFor?.let { id ->
+                    val game = app.catalog.game(id)
+                    if (game != null) {
+                        val state = app.repo.snapshot()
+                        val (nameA, nameB) = CouchState.names(state)
+                        WhoPlaysDialog(
+                            gameName = game.n, nameA = nameA, nameB = nameB,
+                            pieceA = pieces.styleFor(state, "a"), pieceB = pieces.styleFor(state, "b"),
+                            onPick = { who -> whoPlaysFor = null; startActivity(PlayerActivity.gameIntent(this, id, who)) },
+                            onDismiss = { whoPlaysFor = null },
+                        )
+                    }
+                }
             }
         }
         // Plain views, no Compose and no WebView: readable even if either of those fails. Debug builds only.

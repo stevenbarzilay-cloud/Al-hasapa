@@ -667,7 +667,7 @@ function renderHome(){
   const leftN=lib.filter(g=>!playedOn(g.id,t)).length;
   const coda=`<div class="coda">${IMG.cats}<b>${!groups?(filter==="left"?"אין מה להשלים הערב.":"אין פה כלום בסינון הזה."):(leftN?`זו כל הספרייה. נשארו ${leftN} להערב.`:"שיחקנו הכול. החתולים מאשרים.")}</b><span class="help">${!groups&&filter!=="left"?"נסו סינון אחר.":"מה שלא שיחקנו מחכה למחר."}</span></div>`;
   document.getElementById("v-home").innerHTML=`<div class="tonight">${feat}${side}</div>
-    <div class="lib-head" id="lib"><h2>הספרייה</h2><span class="help">${lib.length} משחקים</span><button class="tbtn" type="button" data-act="urls">הקישורים שלנו</button>
+    <div class="lib-head" id="lib"><h2>הספרייה</h2><span class="help">${lib.length} משחקים</span><button class="tbtn" type="button" data-act="accounts">החשבונות</button><button class="tbtn" type="button" data-act="urls">הקישורים שלנו</button>
       <div class="filters" role="group" aria-label="סינון">${chips.map(([v,l])=>`<button class="f" data-filter="${esc(v)}" aria-pressed="${filter===v}">${esc(l)}</button>`).join("")}</div></div>
     <div class="groups">${groups}</div>${coda}`;
 }
@@ -887,6 +887,7 @@ document.querySelector("main").addEventListener("click",e=>{
   const a=e.target.closest("[data-act]"); if(!a) return;
   const act=a.dataset.act, host=a.closest("[data-id]"), id=a.dataset.id||(host&&host.dataset.id), t=TODAY();
   if(act==="shuffle"){featOffset++;renderHome();return}
+  if(act==="accounts"){NATIVE?NATIVE.openAccounts():toast("החשבונות זמינים באפליקציה.");return}
   if(act==="urls"){openUrls();return}
   if(act==="result"){openResult(id);return}
   if(act==="duel"){openDuel(id);return}

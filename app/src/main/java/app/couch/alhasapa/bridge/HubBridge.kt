@@ -25,6 +25,9 @@ class HubBridge(
     interface Actions {
         /** Open this game in the isolated player. */
         fun play(gameId: String)
+
+        /** Open the accounts screen. */
+        fun openAccounts()
     }
 
     /** `{rev, fresh, state}`: `fresh` is true on the very first run, when the page may bring over what it stored itself. */
@@ -51,6 +54,9 @@ class HubBridge(
     fun play(gameId: String) {
         if (catalog.game(gameId) != null) actions.play(gameId)
     }
+
+    @JavascriptInterface
+    fun openAccounts() = actions.openAccounts()
 
     @JavascriptInterface
     fun exportBackup(): String = repo.exportBackup()

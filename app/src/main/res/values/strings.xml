@@ -13,4 +13,25 @@
     <string name="import_version">הגיבוי הזה מגרסה שלא מוכרת לי.</string>
     <string name="import_too_big">הגיבוי גדול מדי.</string>
     <string name="import_no_log">בגיבוי חסרה ההיסטוריה.</string>
+    <string name="player_back">חזרה</string>
+    <string name="player_played">שיחקנו</string>
+    <string name="player_load_failed">הדף לא נטען</string>
+    <string name="player_retry">לנסות שוב</string>
+    <string name="player_open_chrome">לפתוח בכרום</string>
+    <string name="player_blocked_site">הקישור יוצא מהמשחק, לא פותחים: %1$s</string>
+    <string name="player_blocked_app">הקישור מנסה לפתוח אפליקציה אחרת, לא פותחים.</string>
+    <string name="who_plays_title">מי משחק?</string>
+    <string name="who_plays_hint">כל אחד נכנס לחשבון לינקדאין שלו.</string>
+    <string name="who_plays_as">משחק: %1$s</string>
+    <string name="accounts_title">החשבונות שלנו</string>
+    <string name="accounts_intro">כאן מתחברים פעם אחת לאתרים שיש לנו מנוי בהם. ההתחברות נשמרת רק באפליקציה הזאת, לא בכרום, ונשארת גם אחרי שסוגרים אותה.</string>
+    <string name="accounts_google">גוגל לא מאפשרת להתחבר עם "המשך עם Google" בתוך אפליקציה, ואנחנו לא עוקפים את זה. מתחברים עם מייל וסיסמה. אם באתר אין דרך אחרת, אפשר "לפתוח בכרום".</string>
+    <string name="accounts_no_profiles">הגרסה של Android System WebView בטלפון ישנה מדי לשמירת שני חשבונות לינקדאין נפרדים. עדכנו אותה ב-Google Play. עד אז כל האתרים חולקים התחברות אחת.</string>
+    <string name="accounts_logged_in">מחובר</string>
+    <string name="accounts_logged_out">לא מחובר</string>
+    <string name="accounts_unknown">לא ידוע</string>
+    <string name="accounts_login">להתחבר</string>
+    <string name="accounts_show_cookies">מה נשמר? (שמות עוגיות)</string>
+    <string name="accounts_hide_cookies">להסתיר</string>
+    <string name="accounts_no_cookies">אין עוגיות עדיין.</string>
 </resources>

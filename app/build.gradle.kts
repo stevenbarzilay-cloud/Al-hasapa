@@ -17,8 +17,8 @@ android {
         applicationId = "app.couch.alhasapa"
         minSdk = 29
         targetSdk = 37
-        versionCode = 7
-        versionName = "0.2.0-m1"
+        versionCode = 8
+        versionName = "0.3.0-m2"
     }
 
     // One fixed debug key, committed on purpose (standard "android" passwords; this is not a secret).
@@ -82,6 +82,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.browser)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
 
@@ -26,5 +27,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".accounts.AccountsActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
+            android:theme="@style/Theme.AlHasapa" />
+
+        <!-- The isolated player: landscape only, because the phone sits sideways while cast to the TV. -->
+        <!-- Android 16+ ignores a fixed orientation on LARGE screens (tablets, foldables). This is a phone-only app (a Pixel 8),
+             where it is honored; PlayerActivity also requests the orientation in code. -->
+        <activity
+            android:name=".player.PlayerActivity"
+            android:exported="false"
+            tools:ignore="DiscouragedApi"
+            android:screenOrientation="sensorLandscape"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
+            android:theme="@style/Theme.AlHasapa" />
     </application>
 </manifest>

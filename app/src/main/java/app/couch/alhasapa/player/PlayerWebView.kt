@@ -1,0 +1,108 @@
+package app.couch.alhasapa.player
+
+import android.annotation.SuppressLint
+import android.graphics.Bitmap
+import android.util.Log
+import android.view.ViewGroup
+import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
+import app.couch.alhasapa.diag.Diag
+
+/** Creates and configures the WebView a game runs in, in its own browser profile. */
+object PlayerWebView {
+    /** @return the profile actually in use (see [WebProfiles.attach]). */
+    @SuppressLint("SetJavaScriptEnabled") // The pages are the games the person chose; JavaScript is the point.
+    fun configure(view: WebView, profile: String): String {
+        // Explicit match-parent: a WebView at the default wrap-content height tells the page its layout height is 0
+        // (that collapsed the hub in M0.1-M0.3). Pages here rely on percentage heights even more.
+        view.layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        val used = WebProfiles.attach(view, profile)       // before ANY load
+        val cookies: CookieManager = WebProfiles.cookies(used)
+        cookies.setAcceptCookie(true)
+        cookies.setAcceptThirdPartyCookies(view, true)
+        view.overScrollMode = WebView.OVER_SCROLL_NEVER
+        view.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            // Music games (Bandle, "איזה שיר!") must be able to play without a tap.
+            mediaPlaybackRequiresUserGesture = false
+            setSupportMultipleWindows(false)          // a new window navigates this one, through the policy
+            javaScriptCanOpenWindowsAutomatically = false
+            allowFileAccess = false
+            allowContentAccess = false
+            setSupportZoom(false)
+            builtInZoomControls = false
+            displayZoomControls = false
+            cacheMode = WebSettings.LOAD_DEFAULT
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            textZoom = 100
+            // The default user agent is left alone on purpose: no spoofing (Google blocks OAuth in embedded WebViews,
+            // and that is respected, not worked around; the accounts screen recommends email and password).
+        }
+        // Light only unless a display profile says otherwise (the TV reads best light).
+        // Optional WebKit features can report "supported" and still refuse (seen under test, possible on odd WebView builds):
+        // every one of them is wrapped, and a refusal only costs that one nicety.
+        runCatching {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                WebSettingsCompat.setAlgorithmicDarkeningAllowed(view.settings, false)
+            }
+        }
+        return used
+    }
+
+    fun flushCookies(profile: String) {
+        runCatching { WebProfiles.cookies(profile).flush() }
+    }
+}
+
+/** Applies the navigation policy to the main frame and reports what happened. */
+class PlayerWebViewClient(
+    private val session: PlaySession,
+    private val onBlocked: (NavigationPolicy.Decision) -> Unit,
+    private val onStarted: () -> Unit,
+    private val onFinished: (String) -> Unit,
+    private val onLoadError: (String) -> Unit,
+    private val onRenderGone: () -> Unit,
+) : WebViewClient() {
+
+    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+        // Sub-frames (embedded players, payment widgets) are the page's own business; the main frame is what the person sees.
+        if (!request.isForMainFrame) return false
+        val decision = NavigationPolicy.decide(request.url.toString(), session.allowedHosts, session.roaming)
+        if (decision == NavigationPolicy.Decision.Allow) return false
+        Diag.log("player: refused ${request.url.host ?: request.url.scheme} (${decision::class.simpleName})")
+        onBlocked(decision)
+        return true
+    }
+
+    override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+        onStarted()
+    }
+
+    override fun onPageFinished(view: WebView, url: String) {
+        Diag.log("player: page finished")
+        onFinished(url)
+    }
+
+    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+        if (!request.isForMainFrame) return
+        // -3 is ERR_ABORTED: the page replaced itself (a redirect); not a failure.
+        if (error.errorCode == -3) return
+        Log.e("AlHasapaPlayer", "load error ${error.errorCode} ${error.description} for ${request.url}")
+        Diag.log("player: load error ${error.errorCode} ${error.description}")
+        onLoadError("${error.errorCode} ${error.description}")
+    }
+
+    override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+        Diag.log("player: render process gone")
+        onRenderGone()
+        return true
+    }
+}
