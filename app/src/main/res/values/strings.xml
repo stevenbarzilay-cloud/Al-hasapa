@@ -4,4 +4,6 @@
     <string name="app_name">על הספה שלנו</string>
     <string name="player_soon">הנגן מגיע בשלב הבא. בינתיים אפשר לשוטט בספה.</string>
     <string name="splash_description">על הספה שלנו. שלושה חתולים ישנים על הספה הוורודה.</string>
+    <string name="hub_error_title">משהו השתבש בטעינה של הספה.</string>
+    <string name="hub_error_retry">לנסות שוב</string>
 </resources>

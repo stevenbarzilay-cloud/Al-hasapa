@@ -17,8 +17,8 @@ android {
         applicationId = "app.couch.alhasapa"
         minSdk = 29
         targetSdk = 37
-        versionCode = 2
-        versionName = "0.1.1-m0"
+        versionCode = 3
+        versionName = "0.1.2-m0"
     }
 
     // One fixed debug key, committed on purpose (standard "android" passwords; this is not a secret).
@@ -50,6 +50,13 @@ android {
         buildConfig = true
     }
 
+    testOptions {
+        unitTests {
+            // Robolectric needs the merged resources and assets (the hub is loaded from assets).
+            isIncludeAndroidResources = true
+        }
+    }
+
     lint {
         abortOnError = true
         warningsAsErrors = false
@@ -77,7 +84,13 @@ dependencies {
     implementation(libs.androidx.webkit)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(platform(libs.androidx.compose.bom))
+    testImplementation(libs.androidx.compose.ui.test.junit4)
 }

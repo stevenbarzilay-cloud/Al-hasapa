@@ -11,11 +11,12 @@
         <item name="android:forceDarkAllowed">false</item>
     </style>
 
-    <!-- The system splash (a static cream screen with the three cats) shows for the first instants of a cold
-         start. The in-app animated splash (ui/SplashScreen.kt) takes over right after it, in the same spot. -->
+    <!-- The system splash is deliberately just the cream background, with no icon: the in-app splash
+         (ui/SplashScreen.kt) takes over on the very next frame with the cats already full size, so nothing
+         ever appears small and grows. -->
     <style name="Theme.AlHasapa.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/cream</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="windowSplashScreenAnimatedIcon">@android:color/transparent</item>
         <item name="postSplashScreenTheme">@style/Theme.AlHasapa</item>
     </style>
 </resources>

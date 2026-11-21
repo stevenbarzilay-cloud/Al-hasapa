@@ -4,6 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>על הספה שלנו</title>
+<script>
+/* Safety net. Runs before anything else and has no dependencies: if the app fails to draw, the reason is shown on screen
+   (and reported to the native side) instead of leaving a blank page. */
+window.__errors=[];window.__ready=false;
+addEventListener("error",function(e){__errors.push(String(e.message||e.type)+(e.lineno?" @"+e.lineno+":"+e.colno:""))});
+addEventListener("unhandledrejection",function(e){__errors.push("promise: "+String(e.reason&&e.reason.message||e.reason))});
+setTimeout(function(){if(window.__ready)return;var d=document.createElement("div");
+  d.style.cssText="position:fixed;left:8px;right:8px;top:8px;z-index:99999;background:#fff;color:#900;border:2px solid #900;border-radius:8px;padding:10px;font:12px/1.4 monospace;direction:ltr;white-space:pre-wrap";
+  d.textContent="The couch did not load.\n"+(__errors.length?__errors.slice(0,4).join("\n"):"(no script error; still waiting)");
+  (document.body||document.documentElement).appendChild(d)},5000);
+</script>
 <style>
 /* Bundled font (SIL OFL, see THIRD_PARTY/IBM-Plex-OFL.txt). No network fonts: the hub must work offline. */
 @font-face{font-family:"IBM Plex Sans Hebrew";font-weight:400;font-style:normal;font-display:swap;src:url("fonts/IBMPlexSansHebrew-Regular.woff2") format("woff2")}
@@ -516,7 +527,7 @@ const FALLBACK_PCFG={defaults:{a:{shape:"circle",color:"red"},b:{shape:"triangle
   shapes:[{id:"circle",n:"עיגול",d:"M10 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16z"},{id:"triangle",n:"משולש",d:"M10 2.5 18.2 17H1.8z"}],
   colors:[{id:"red",n:"אדום",def:"האדום",base:"#D94E38",accent:"#D94E38",soft:"#EBA094"},{id:"pink",n:"ורוד",def:"הוורוד",base:"#E8A5B5",accent:"#D24E6D",soft:"#E8A5B5"}]};
 let PCFG=FALLBACK_PCFG;
-async function loadPieces(){try{const r=await fetch("pieces.json");if(r.ok){const j=await r.json();if(j&&Array.isArray(j.shapes)&&j.shapes.length&&Array.isArray(j.colors)&&j.colors.length&&j.defaults)PCFG=j}}catch(e){}}
+async function loadPieces(){try{const r=await Promise.race([fetch("pieces.json"),new Promise((_,no)=>setTimeout(()=>no(new Error("pieces.json timeout")),4000))]);if(r.ok){const j=await r.json();if(j&&Array.isArray(j.shapes)&&j.shapes.length&&Array.isArray(j.colors)&&j.colors.length&&j.defaults)PCFG=j}}catch(e){}}
 const shapeOf=id=>PCFG.shapes.find(s=>s.id===id)||PCFG.shapes[0];
 const colorOf=id=>PCFG.colors.find(c=>c.id===id)||PCFG.colors[0];
 const piecesOf=()=>state.pieces&&state.pieces.a&&state.pieces.b?state.pieces:PCFG.defaults;
@@ -754,7 +765,7 @@ function renderStats(){
   </div>`;
 }
 
-function render(){renderMast(); if(view==="home")renderHome(); else if(view==="disc")renderDisc(); else renderStats(); document.getElementById("c-disc").textContent=queue().length; requestAnimationFrame(()=>window.updateHBar&&window.updateHBar())}
+function render(){renderMast(); if(view==="home")renderHome(); else if(view==="disc")renderDisc(); else renderStats(); document.getElementById("c-disc").textContent=queue().length; window.__ready=true; requestAnimationFrame(()=>window.updateHBar&&window.updateHBar())}
 function renderSide(){renderMast()}
 
 /* ================= sheets ================= */
@@ -924,6 +935,7 @@ const scroller=document.getElementById("scroller");
   addEventListener("resize",()=>{if(!chip.hidden)fill()}); setInterval(()=>{if(!chip.hidden)fill()},1000);
 })();
 
+applyTheme();render();
 loadPieces().then(()=>{applyTheme();render()});
 setInterval(renderMast,60000);
 

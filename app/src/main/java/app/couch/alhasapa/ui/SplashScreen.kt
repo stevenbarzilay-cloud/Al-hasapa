@@ -100,11 +100,10 @@ fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
         finishedListener = { if (leaving && it >= 1f) onFinished() },
     )
 
-    val appear = remember { Animatable(0f) }
+    // The cats are there from the very first frame, full size, already asleep. Only the logo bounces in.
     val logoIn = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, tween(560, easing = FastOutSlowInEasing)) }
     LaunchedEffect(Unit) {
-        delay(380)
+        delay(150)
         logoIn.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow))
     }
 
@@ -125,11 +124,7 @@ fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(Palette.Cream)
-            .graphicsLayer {
-                alpha = 1f - exit
-                val s = 1f + 0.04f * exit
-                scaleX = s; scaleY = s
-            }
+            .graphicsLayer { alpha = 1f - exit }
             .pointerInput(Unit) { detectTapGestures { leaving = true } }
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
@@ -143,13 +138,7 @@ fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
                 Canvas(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .aspectRatio(ART_W / (ART_H + SKY))
-                        .graphicsLayer {
-                            alpha = appear.value
-                            val s = 0.9f + 0.1f * appear.value
-                            scaleX = s; scaleY = s
-                            translationY = (1f - appear.value) * 14.dp.toPx()
-                        },
+                        .aspectRatio(ART_W / (ART_H + SKY)),
                 ) {
                     val w = size.width
                     val unit = w / ART_W
@@ -178,7 +167,7 @@ fun SplashScreen(hubReady: Boolean, onFinished: () -> Unit) {
                     Z_PHASES.forEachIndexed { i, offset ->
                         val p = (zPhase + offset) % 1f
                         val anchor = SNORES[i / 2]
-                        val a = sin(PI.toFloat() * p).pow(1.3f) * appear.value
+                        val a = sin(PI.toFloat() * p).pow(1.3f)
                         val s = 0.55f + 0.8f * p
                         val x = anchor.x * w + w * 0.03f * p + w * 0.010f * sin(p * 2f * PI.toFloat() * 1.2f)
                         val y = artTop + anchor.y * artH - rise * p

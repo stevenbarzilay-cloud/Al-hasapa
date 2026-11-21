@@ -1,7 +1,9 @@
 package app.couch.alhasapa.hub
 
 import android.content.Context
+import android.util.Log
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -10,6 +12,8 @@ import android.widget.Toast
 import androidx.webkit.WebViewAssetLoader
 import app.couch.alhasapa.R
 import java.io.ByteArrayInputStream
+
+internal const val TAG = "AlHasapaHub"
 
 /** Where the hub (the prototype's web UI) lives. Served from the APK's assets, never from the network. */
 object HubOrigin {
@@ -29,6 +33,7 @@ class HubWebViewClient(
     private val context: Context,
     private val assetLoader: WebViewAssetLoader,
     private val onPageReady: () -> Unit,
+    private val onLoadError: (String) -> Unit,
     private val onRenderProcessGone: () -> Unit,
 ) : WebViewClient() {
 
@@ -52,11 +57,23 @@ class HubWebViewClient(
     }
 
     override fun onPageFinished(view: WebView, url: String) {
+        Log.i(TAG, "page finished: $url")
         onPageReady()
+    }
+
+    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+        Log.e(TAG, "load error ${error.errorCode} ${error.description} for ${request.url} (main frame: ${request.isForMainFrame})")
+        if (request.isForMainFrame) onLoadError("${error.errorCode} ${error.description}")
+    }
+
+    override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+        Log.e(TAG, "http ${errorResponse.statusCode} for ${request.url} (main frame: ${request.isForMainFrame})")
+        if (request.isForMainFrame) onLoadError("HTTP ${errorResponse.statusCode}")
     }
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         // Returning true keeps the app alive; the host recreates the WebView.
+        Log.e(TAG, "render process gone (crashed=${detail.didCrash()})")
         onRenderProcessGone()
         return true
     }

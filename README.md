@@ -22,6 +22,13 @@ Hub notes:
   that every colour stays readable. The choice is stored in the state JSON as `state.pieces` (additive:
   older backups without it still import).
 - Diagnostics: tap the logo three times to show what size the page believes the screen is.
+- A blank screen is never an acceptable failure. If the page does not load, or loads but does not draw itself
+  within 4 s, a native error screen shows the reason with a retry button; if the page's own script crashes, the
+  error is printed on the page. Everything the page logs goes to Logcat under the tag `AlHasapaHub`
+  (`adb logcat -s AlHasapaHub`).
+- `AppRootTest` runs the startup flow (hub created and told to load, splash lifts, hub stays mounted, error
+  screen and retry) through the real Android framework with Robolectric. It cannot run Chromium, so page
+  rendering itself is checked separately in a browser.
 
 ## Build
 
