@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -21,7 +22,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.doOnLayout
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.webkit.WebViewAssetLoader
@@ -32,7 +35,11 @@ import app.couch.alhasapa.ui.theme.Palette
  * around it (player, accounts, storage); the hub keeps the exact look and copy of the prototype.
  */
 @Composable
-fun HubScreen(onExit: () -> Unit) {
+fun HubScreen(
+    onExit: () -> Unit,
+    reduceMotion: Boolean = false,
+    onReady: () -> Unit = {},
+) {
     val context = LocalContext.current
     val assetLoader = remember(context) {
         WebViewAssetLoader.Builder()
@@ -51,6 +58,12 @@ fun HubScreen(onExit: () -> Unit) {
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { webView?.onPause() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { webView?.onResume() }
 
+    // Tell the page its size changed (rotation, split screen) so nothing keeps a stale layout.
+    val windowSize = LocalWindowInfo.current.containerSize
+    LaunchedEffect(windowSize) {
+        webView?.evaluateJavascript("window.dispatchEvent(new Event('resize'))", null)
+    }
+
     Box(
         Modifier
             .fillMaxSize()
@@ -63,8 +76,10 @@ fun HubScreen(onExit: () -> Unit) {
                 factory = { ctx ->
                     WebView(ctx).apply {
                         configureHub()
-                        webViewClient = HubWebViewClient(ctx, assetLoader) { generation++ }
-                        loadUrl(HubOrigin.URL)
+                        webViewClient = HubWebViewClient(ctx, assetLoader, onPageReady = onReady) { generation++ }
+                        // Start loading only once the view has its real size: a page that starts life in a
+                        // 0 x 0 window can settle into the wrong layout.
+                        doOnLayout { loadUrl(HubOrigin.url(reduceMotion)) }
                         webView = this
                     }
                 },
@@ -93,17 +108,18 @@ private fun WebView.configureHub() {
         displayZoomControls = false
         cacheMode = WebSettings.LOAD_DEFAULT
         mediaPlaybackRequiresUserGesture = true
+        // The page lays out at exactly the view's width, like any phone page. Spelled out on purpose
+        // instead of relying on defaults, so no viewport heuristic can ever widen the layout.
+        useWideViewPort = false
+        loadWithOverviewMode = false
+        layoutAlgorithm = WebSettings.LayoutAlgorithm.NORMAL
+        textZoom = 100
     }
 }
 
-/** Back closes an open sheet in the hub first; only a second back leaves the app. */
+/** Back closes an open sheet in the hub first (the hub also reverts anything unsaved); only a second back leaves. */
 private fun closeSheetOrExit(view: WebView, onExit: () -> Unit) {
-    val js = """
-        (function(){
-          var o=document.getElementById('overlay');
-          if(o && o.classList.contains('show')){ o.classList.remove('show'); return 'closed'; }
-          return 'none';
-        })()
-    """.trimIndent()
-    view.evaluateJavascript(js) { result -> if (result != "\"closed\"") onExit() }
+    view.evaluateJavascript("window.__back ? window.__back() : 'none'") { result ->
+        if (result != "\"closed\"") onExit()
+    }
 }

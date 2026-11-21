@@ -39,6 +39,21 @@ class HubAssetsTest {
     }
 
     @Test
+    fun breakpointsNeverUseTheOrientationFeature() {
+        // `orientation` flips when the on-screen keyboard shrinks the viewport, which threw a phone into the wide
+        // layout (played rows lost their titles, the check mark squashed into an ellipse). Width/height only.
+        val css = Regex("<style>(.*?)</style>", RegexOption.DOT_MATCHES_ALL).findAll(html).joinToString("\n") { it.groupValues[1] }
+        assertTrue("expected the hub stylesheet", css.contains(":root"))
+        assertFalse("a media query uses orientation", Regex("""@media[^{]*orientation""").containsMatchIn(css))
+    }
+
+    @Test
+    fun hubShipsItsPiecesCatalog() {
+        assertTrue("pieces.json missing", File(hubDir, "pieces.json").isFile)
+        assertTrue("hub no longer loads pieces.json", html.contains("fetch(\"pieces.json\")"))
+    }
+
+    @Test
     fun fourPlexWeightsAreBundledForBothHubAndNative() {
         for (w in listOf("Regular", "Medium", "SemiBold", "Bold")) {
             assertTrue("hub font $w", File(hubDir, "fonts/IBMPlexSansHebrew-$w.woff2").isFile)

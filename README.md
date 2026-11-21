@@ -8,8 +8,20 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Status:** milestone 0 (skeleton). The hub opens and works offline. Game links, accounts, TV mode,
-result capture and the real storage layer come in the next milestones.
+**Status:** milestone 0, second round (skeleton + phone feedback). The hub opens and works offline,
+the launcher icon and an animated splash use the three-cats illustration, and each of you can pick a
+shape and a colour for your piece (the whole interface follows the colour). Game links, accounts, TV
+mode, result capture and the real storage layer come in the next milestones.
+
+Hub notes:
+
+- The logo and the tab bar never move; only the content scrolls. If anything is ever wider than the screen,
+  a scroll indicator (track, thumb, arrows) appears immediately above the tabs.
+- Pieces live in `app/src/main/assets/hub/pieces.json` (shapes, colours with `base` / `accent` / `soft`
+  tones). Steve's colour drives the "red" role of the interface and Roni's the "pink" role. The tests check
+  that every colour stays readable. The choice is stored in the state JSON as `state.pieces` (additive:
+  older backups without it still import).
+- Diagnostics: tap the logo three times to show what size the page believes the screen is.
 
 ## Build
 
@@ -50,8 +62,8 @@ install again.
 
 | Path | What |
 | --- | --- |
-| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `ui/theme/` |
-| `app/src/main/assets/hub/` | The prototype's web UI plus bundled fonts and images |
+| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `ui/` (animated splash), `ui/theme/` |
+| `app/src/main/assets/hub/` | The prototype's web UI, `pieces.json`, bundled fonts and images |
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `THIRD_PARTY/` | Font license (SIL OFL 1.1) |
 | `couch-artifact/` | The original prototype and the Haaretz layout bug screenshots, kept verbatim |

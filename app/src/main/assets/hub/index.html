@@ -31,7 +31,7 @@
   color-scheme:light;
 }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0}
+html,body{height:100%;margin:0;overflow:hidden}
 body{background:var(--cream);color:var(--ink);font-family:var(--font);font-size:16px;line-height:1.5;-webkit-tap-highlight-color:transparent}
 @media (min-width:1280px){body{font-size:17px}}
 button,a,input,textarea{font:inherit;color:inherit}
@@ -41,6 +41,48 @@ img{max-width:100%;height:auto;display:block}
 :focus-visible{outline:2px solid var(--red);outline-offset:3px;border-radius:8px}
 .wrap{max-width:1200px;margin:0 auto;padding:0 clamp(16px,3vw,36px)}
 .help{font-size:.86em;color:var(--ink-2)}
+
+/* ---------- shell: the logo and the menu never move, only the content scrolls ---------- */
+.app{display:flex;flex-direction:column;height:100%}
+.mast{order:1;flex:none}
+.navbar{order:2;flex:none}
+.stage{order:3;flex:1;min-height:0;position:relative}
+.scroller{position:absolute;inset:0;overflow:auto;overscroll-behavior:contain}
+.scroller::-webkit-scrollbar:horizontal{display:none}
+.scroller.has-h{padding-bottom:40px}
+/* Horizontal scroll indicator: always visible the moment the content is wider than the screen.
+   Same language as the progress bar: tint track, ink thumb, with the one hard accent shadow. */
+.hbar{position:absolute;left:0;right:0;bottom:0;height:40px;direction:ltr;display:flex;align-items:center;gap:4px;padding:0 6px;background:linear-gradient(to top,var(--cream) 62%,rgba(242,235,221,0));z-index:6}
+.hbar[hidden]{display:none}
+.hb-btn{flex:none;width:44px;height:44px;margin:-2px 0;display:grid;place-items:center;border-radius:50%;color:var(--ink)}
+.hb-btn:active{background:var(--tint)}
+.hb-btn:disabled{opacity:.25}
+.hb-btn svg{width:16px;height:16px}
+.hbar .track{position:relative;flex:1;height:12px;border-radius:999px;background:var(--tint);border:1px solid var(--line-2);touch-action:none}
+.hbar .thumb{position:absolute;top:-1px;bottom:-1px;left:0;min-width:44px;border-radius:999px;background:var(--ink);box-shadow:2px 2px 0 var(--red);touch-action:none;cursor:grab}
+.hbar .thumb::after{content:"";position:absolute;inset:-16px -6px}
+.edge{position:absolute;top:0;bottom:40px;width:26px;z-index:5;pointer-events:none}
+.edge[hidden]{display:none}
+.edge.l{left:0;background:linear-gradient(to right,rgba(48,35,45,.16),rgba(48,35,45,0))}
+.edge.r{right:0;background:linear-gradient(to left,rgba(48,35,45,.16),rgba(48,35,45,0))}
+.dbg{position:fixed;inset-inline-start:6px;top:6px;z-index:70;background:var(--ink);color:var(--cream);font:11px/1.35 ui-monospace,monospace;padding:3px 7px;border-radius:6px;opacity:.9;pointer-events:none;direction:ltr;max-width:calc(100vw - 12px)}
+.dbg[hidden]{display:none}
+.reduce-motion *,.reduce-motion *::before,.reduce-motion *::after{animation:none!important;transition:none!important}
+/* ---------- our pieces: shape and colour per person ---------- */
+.who-card{display:flex;flex-direction:column;gap:8px;padding-top:14px;border-top:1px solid var(--line)}
+.who-card:first-of-type{border-top:0;padding-top:0}
+.pick-l{font-weight:600;font-size:.85em;color:var(--ink-2)}
+.pick{display:grid;gap:6px}
+.pick.shapes{grid-template-columns:repeat(6,minmax(0,1fr))}
+.pick.colors{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:380px){.pick.shapes{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.pick .opt{height:44px;border-radius:12px;border:1px solid var(--line-2);display:grid;place-items:center;background:var(--card);transition:transform .12s var(--press),background .15s}
+.pick .opt:active{transform:scale(.94)}
+.pick .opt svg{width:26px;height:26px}
+.pick .opt[aria-checked="true"]{border:2px solid var(--ink);background:var(--tint)}
+.pick .opt[aria-checked="true"] svg,.pick .opt[aria-checked="true"] i{animation:hop .4s var(--press)}
+.pick .opt:disabled{opacity:.28;cursor:not-allowed}
+.pick .sw i{display:block;width:26px;height:26px;border-radius:50%;background:var(--c);border:1.5px solid var(--ink)}
 
 /* ---------- masthead ---------- */
 .mast .wrap{display:flex;align-items:center;gap:16px;padding-top:14px;padding-bottom:10px}
@@ -133,7 +175,7 @@ img{max-width:100%;height:auto;display:block}
 .row.done .play{background:transparent;color:var(--ink);border-color:var(--line-2)}
 .tick{display:inline-flex;align-items:center;gap:6px;min-height:44px;min-width:44px;justify-content:center;padding:0 8px;border-radius:10px;font-size:.84em;color:var(--ink-2)}
 .tick:hover{background:var(--tint);color:var(--ink)}
-.tick .box{width:22px;height:22px;border:1.5px solid var(--line-2);border-radius:50%;display:grid;place-items:center;transition:background .15s,border-color .15s}
+.tick .box{flex:none;width:22px;height:22px;border:1.5px solid var(--line-2);border-radius:50%;display:grid;place-items:center;transition:background .15s,border-color .15s}
 .tick .box svg{width:13px;height:13px}
 .tick .box path{stroke-dasharray:20;stroke-dashoffset:20}
 .tick[aria-pressed="true"]{color:var(--ink)}
@@ -143,7 +185,7 @@ img{max-width:100%;height:auto;display:block}
 @keyframes pop{0%{transform:scale(.6)}100%{transform:scale(1)}}
 .win{display:flex;align-items:center;gap:0}
 .win .q{margin-inline-end:4px}
-.win button{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;opacity:.4}
+.win button{flex:none;width:36px;height:36px;display:grid;place-items:center;border-radius:50%;opacity:.4}
 .win button:hover{opacity:.85;background:var(--tint)}
 .win button[aria-pressed="true"]{opacity:1;background:var(--tint)}
 .win button[aria-pressed="true"] .pc,.win button[aria-pressed="true"] .both{animation:hop .4s var(--press)}
@@ -221,12 +263,14 @@ footer .wrap{display:flex;justify-content:space-between;align-items:center;gap:1
 footer .joke{font-style:italic}
 
 /* ---------- phone, portrait ---------- */
-@media (max-width:720px) and (orientation:portrait){
-  body{padding-bottom:calc(68px + env(safe-area-inset-bottom))}
+/* Breakpoints use width/height only, never the orientation feature: it flips when the on-screen keyboard
+   shrinks the viewport, and that is how a phone ended up in the wide layout. */
+@media (max-width:720px){
   .mast .wrap{padding-top:10px;padding-bottom:6px;gap:10px}
   .logo img{height:50px}
   .mast .date,.who .nmz{display:none}
-  .navbar{position:fixed;bottom:0;left:0;right:0;z-index:40;background:var(--cream);border-top:1px solid var(--line-2)}
+  .navbar{order:4;background:var(--cream);border-top:1px solid var(--line-2)}
+  .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
   .navbar .wrap{padding:0 0 env(safe-area-inset-bottom);border:0}
   .tabs{width:100%;gap:0}
   .tab{flex:1;flex-direction:column;gap:2px;padding:8px 4px;font-size:.74em;min-height:60px}
@@ -251,7 +295,7 @@ footer .joke{font-style:italic}
   .ill-board{width:min(260px,80%)}
 }
 /* ---------- phone, landscape ---------- */
-@media (max-height:520px) and (orientation:landscape){
+@media (max-height:520px) and (min-width:721px){
   .mast .wrap{padding-top:8px;padding-bottom:4px}
   .logo img{height:44px}
   .tab{min-height:40px;padding:6px 12px}
@@ -290,11 +334,12 @@ footer .joke{font-style:italic}
 .backup{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:14px}
 .backup .btn{align-self:flex-start}
 @media (max-width:520px){.duelgrid{grid-template-columns:1fr}}
-@media (max-width:720px) and (orientation:portrait){.row.is-duel .extra:empty{display:none}.count .pts{margin-inline-start:0;width:100%}}
+@media (max-width:720px){.row.is-duel .extra:empty{display:none}.count .pts{margin-inline-start:0;width:100%}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
+<div class="app">
 <header class="mast">
   <div class="wrap">
     <h1 class="logo"><img src="img/logo.webp" alt="על הספה שלנו" width="900" height="444"></h1>
@@ -318,12 +363,23 @@ footer .joke{font-style:italic}
     </div>
   </div>
 </nav>
+<div class="stage">
+<div class="scroller" id="scroller">
 <main class="wrap">
   <section id="v-home"></section>
   <section id="v-disc" hidden></section>
   <section id="v-stats" hidden></section>
 </main>
 <footer><div class="wrap"><span class="joke" id="footnote"></span><span id="sync">שמור במכשיר</span></div></footer>
+</div>
+<i class="edge l" id="edgeL" hidden></i><i class="edge r" id="edgeR" hidden></i>
+<div class="hbar" id="hbar" hidden role="group" aria-label="גלילה הצידה">
+  <button class="hb-btn" id="hbL" type="button" aria-label="לגלול שמאלה"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 3 5.5 8l5 5"/></svg></button>
+  <div class="track" id="hbTrack"><i class="thumb" id="hbThumb"></i></div>
+  <button class="hb-btn" id="hbR" type="button" aria-label="לגלול ימינה"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5.5 3 5 5-5 5"/></svg></button>
+</div>
+</div>
+</div>
 <div class="overlay" id="overlay"><div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle"></div></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>
@@ -455,10 +511,25 @@ const SYM={
  "גיאוגרפיה":'<circle cx="12" cy="12" r="8"/><ellipse cx="12" cy="12" rx="8" ry="3.2"/>'
 };
 const sym=k=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYM[k]||SYM["ידע"]}</svg>`;
-const pcS=(c="pc")=>`<svg class="${c}" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="#D94E38" stroke="#30232D" stroke-width="1.5"/></svg>`;
-const pcR=(c="pc")=>`<svg class="${c}" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.5 18.2 17H1.8z" fill="#E8A5B5" stroke="#30232D" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
-const PIECE={s:pcS(),r:pcR()};
-const both=`<span class="both" aria-hidden="true">${pcS()}${pcR()}</span>`;
+/* ---- pieces: a shape and a colour per person (pieces.json ships with the app; this fallback keeps the prototype's look if it ever fails to load) ---- */
+const FALLBACK_PCFG={defaults:{a:{shape:"circle",color:"red"},b:{shape:"triangle",color:"pink"}},
+  shapes:[{id:"circle",n:"עיגול",d:"M10 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16z"},{id:"triangle",n:"משולש",d:"M10 2.5 18.2 17H1.8z"}],
+  colors:[{id:"red",n:"אדום",def:"האדום",base:"#D94E38",accent:"#D94E38",soft:"#EBA094"},{id:"pink",n:"ורוד",def:"הוורוד",base:"#E8A5B5",accent:"#D24E6D",soft:"#E8A5B5"}]};
+let PCFG=FALLBACK_PCFG;
+async function loadPieces(){try{const r=await fetch("pieces.json");if(r.ok){const j=await r.json();if(j&&Array.isArray(j.shapes)&&j.shapes.length&&Array.isArray(j.colors)&&j.colors.length&&j.defaults)PCFG=j}}catch(e){}}
+const shapeOf=id=>PCFG.shapes.find(s=>s.id===id)||PCFG.shapes[0];
+const colorOf=id=>PCFG.colors.find(c=>c.id===id)||PCFG.colors[0];
+const piecesOf=()=>state.pieces&&state.pieces.a&&state.pieces.b?state.pieces:PCFG.defaults;
+const svgPiece=(d,fill,c="pc")=>`<svg class="${c}" viewBox="0 0 20 20" aria-hidden="true"><path d="${d}" fill="${fill}" stroke="#30232D" stroke-width="1.5" stroke-linejoin="round"/></svg>`;
+const piece=(who,c="pc")=>{const p=piecesOf()[who];return svgPiece(shapeOf(p.shape).d,colorOf(p.color).base,c)};
+const pieceName=who=>{const p=piecesOf()[who];return "ה"+shapeOf(p.shape).n+" "+colorOf(p.color).def};
+/* Steve's colour takes the "red" role of the interface (the count, the stamp, the one hard shadow);
+   Roni's takes the "pink" role (warm surfaces). Pick a colour and the whole app follows. */
+function applyTheme(){const p=piecesOf(),r=document.documentElement.style;r.setProperty("--red",colorOf(p.a.color).accent);r.setProperty("--pink",colorOf(p.b.color).soft)}
+const pcS=(c="pc")=>piece("a",c);
+const pcR=(c="pc")=>piece("b",c);
+const PIECE={get s(){return pcS()},get r(){return pcR()}};
+const bothHTML=()=>`<span class="both" aria-hidden="true">${pcS()}${pcR()}</span>`;
 const CHECK='<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5 5.6 10.4 11.5 3.8" fill="none" stroke="#F2EBDD" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const IMG={
   couple:'<img class="ill-couple" src="img/couple.webp" width="1100" height="715" alt="סטיב ורוני על הספה הוורודה, משחקים בטאבלט, והחתול השחור ישן על המסעד">',
@@ -544,7 +615,7 @@ function crackHTML(g,w){
   return `<span class="win" role="group" aria-label="מי פיצח את ${esc(g.n)}"><span class="q">מי פיצח?</span>
       <button data-act="win" data-w="a" aria-pressed="${w==="a"}" aria-label="${esc(state.names.a)}" title="${esc(state.names.a)}">${PIECE.s}</button>
       <button data-act="win" data-w="b" aria-pressed="${w==="b"}" aria-label="${esc(state.names.b)}" title="${esc(state.names.b)}">${PIECE.r}</button>
-      <button data-act="win" data-w="t" aria-pressed="${w==="t"}" aria-label="ביחד" title="ביחד">${both}</button></span>`;
+      <button data-act="win" data-w="t" aria-pressed="${w==="t"}" aria-label="ביחד" title="ביחד">${bothHTML()}</button></span>`;
 }
 function rowHTML(g){
   const t=TODAY(), e=state.log[t]&&state.log[t][g.id], done=!!e, st=gameStreak(g.id), duel=isDuel(g), kind=metricOf(g);
@@ -650,7 +721,7 @@ function renderStats(){
   for(let i=0;i<ks.length;i++){run=i&&new Date(ks[i])-new Date(ks[i-1])===864e5?run+1:1;best_=Math.max(best_,run)}
   let max=1,bars=[]; for(let i=6;i>=0;i--){const d=daysAgo(i),p=dayPts(key(d));max=Math.max(max,p);bars.push({d,p,i})}
   const weekPts=bars.reduce((s,b)=>s+b.p,0);
-  const shade=c=>!c?"":c<3?"#E8A5B5":c<6?"#D94E38":"#30232D";
+  const shade=c=>!c?"":c<3?"var(--pink)":c<6?"var(--red)":"#30232D";
   let heat=""; for(let i=104;i>=0;i--){const c=dayCount(key(daysAgo(i)));heat+=`<i title="${key(daysAgo(i))}: ${c}"${c?` style="background:${shade(c)};border-color:transparent"`:""}></i>`}
   const csum=Math.max(1,ca+cb+ct), dsum=Math.max(1,da+db_+dt);
   const lead=da===db_?"שוויון. כרגיל.":(da>db_?state.names.a:state.names.b)+" מוביל. בינתיים.";
@@ -662,7 +733,7 @@ function renderStats(){
       <div class="week">${bars.map(b=>`<div class="b ${b.p?"has":""} ${b.i===0?"today":""}"><em>${b.p||""}</em><i style="height:${Math.max(4,b.p/max*80)}px"></i><small>${b.d.toLocaleDateString("he-IL",{weekday:"short"})}</small></div>`).join("")}</div>
       <p class="help" style="margin:8px 0 0">${weekPts} נקודות השבוע</p></div>
     <div class="panel"><h3>מי פיצח</h3>
-      <div class="crack"><div>${PIECE.s}<b>${ca}</b><span>${esc(state.names.a)}</span></div><div>${both}<b>${ct}</b><span>ביחד</span></div><div>${PIECE.r}<b>${cb}</b><span>${esc(state.names.b)}</span></div></div>
+      <div class="crack"><div>${PIECE.s}<b>${ca}</b><span>${esc(state.names.a)}</span></div><div>${bothHTML()}<b>${ct}</b><span>ביחד</span></div><div>${PIECE.r}<b>${cb}</b><span>${esc(state.names.b)}</span></div></div>
       <div class="sbar" aria-hidden="true"><i style="width:${ca/csum*100}%;background:var(--red)"></i><i style="width:${ct/csum*100}%;background:var(--ink-2)"></i><i style="width:${cb/csum*100}%;background:var(--pink)"></i></div>
       <p class="help" style="margin:8px 0 0">קרדיט, לא תחרות. אף אחד לא מפסיד פה.</p></div>
     <div class="score-wrap">
@@ -679,16 +750,19 @@ function renderStats(){
       <div><b>${total}</b><span>משחקים ששיחקנו</span></div><div><b>${ks.length}</b><span>ערבים על הספה</span></div>
       <div><b>${togetherStreak()}</b><span>רצף נוכחי</span></div><div><b>${best_}</b><span>הרצף הכי ארוך</span></div></div></div>
     <div class="panel wide"><h3>15 שבועות על הספה</h3><div class="heat">${heat}</div>
-      <div class="legend"><span><i></i>לא שיחקנו</span><span><i style="background:#E8A5B5"></i>קצת</span><span><i style="background:#D94E38"></i>ערב טוב</span><span><i style="background:#30232D"></i>מרתון</span></div></div>
+      <div class="legend"><span><i></i>לא שיחקנו</span><span><i style="background:var(--pink)"></i>קצת</span><span><i style="background:var(--red)"></i>ערב טוב</span><span><i style="background:#30232D"></i>מרתון</span></div></div>
   </div>`;
 }
 
-function render(){renderMast(); if(view==="home")renderHome(); else if(view==="disc")renderDisc(); else renderStats(); document.getElementById("c-disc").textContent=queue().length}
+function render(){renderMast(); if(view==="home")renderHome(); else if(view==="disc")renderDisc(); else renderStats(); document.getElementById("c-disc").textContent=queue().length; requestAnimationFrame(()=>window.updateHBar&&window.updateHBar())}
 function renderSide(){renderMast()}
 
 /* ================= sheets ================= */
-function openSheet(html){document.getElementById("sheet").innerHTML=html;document.getElementById("overlay").classList.add("show");const f=document.querySelector("#sheet textarea, #sheet input");f&&f.focus()}
-function closeSheet(){document.getElementById("overlay").classList.remove("show")}
+let onSheetClose=null;
+function openSheet(html){onSheetClose=null;document.getElementById("sheet").innerHTML=html;document.getElementById("overlay").classList.add("show");const f=document.querySelector("#sheet textarea, #sheet input");if(f&&!matchMedia("(pointer:coarse)").matches)f.focus()}
+function closeSheet(){document.getElementById("overlay").classList.remove("show");if(onSheetClose){const f=onSheetClose;onSheetClose=null;f()}}
+/* Android back: close an open sheet first, otherwise let the app leave */
+window.__back=()=>document.getElementById("overlay").classList.contains("show")?(closeSheet(),"closed"):"none";
 document.getElementById("overlay").addEventListener("click",e=>{if(e.target.id==="overlay"||e.target.dataset.act==="close")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
 
@@ -741,25 +815,45 @@ function openDuel(id){
   const c=document.getElementById("clearD"); if(c) c.onclick=()=>{delete state.log[t][id]; if(!Object.keys(state.log[t]).length) delete state.log[t]; save();closeSheet();render()};
 }
 document.getElementById("who").addEventListener("click",()=>{
+  const before=state.pieces?JSON.stringify(state.pieces):null; let saved=false;
+  const cur=()=>{if(!state.pieces||!state.pieces.a||!state.pieces.b) state.pieces=JSON.parse(JSON.stringify(PCFG.defaults)); return state.pieces};
+  const card=(w,id)=>`<div class="who-card" data-w="${w}">
+      <label for="${id}"><span class="lab"><span data-slot="pc"></span><span data-slot="nm"></span></span><input id="${id}" value="${esc(state.names[w])}" maxlength="20" autocomplete="off"></label>
+      <div class="pick-l" id="${w}-sl">הצורה</div>
+      <div class="pick shapes" role="radiogroup" aria-labelledby="${w}-sl">${PCFG.shapes.map(s=>`<button type="button" class="opt" role="radio" data-pick="shape" data-w="${w}" data-v="${esc(s.id)}" aria-label="${esc(s.n)}"></button>`).join("")}</div>
+      <div class="pick-l" id="${w}-cl">הצבע</div>
+      <div class="pick colors" role="radiogroup" aria-labelledby="${w}-cl">${PCFG.colors.map(c=>`<button type="button" class="opt sw" role="radio" data-pick="color" data-w="${w}" data-v="${esc(c.id)}" aria-label="${esc(c.n)}"><i style="--c:${c.base}"></i></button>`).join("")}</div>
+    </div>`;
   openSheet(`<h3 id="sheetTitle">מי על הספה</h3>
     <form id="nf" style="display:flex;flex-direction:column;gap:14px">
-      <label for="na"><span class="lab">${PIECE.s}העיגול האדום</span><input id="na" value="${esc(state.names.a)}" maxlength="20" autocomplete="off"></label>
-      <label for="nb"><span class="lab">${PIECE.r}המשולש הוורוד</span><input id="nb" value="${esc(state.names.b)}" maxlength="20" autocomplete="off"></label>
+      ${card("a","na")}${card("b","nb")}
       <label for="jk">הבדיחות שלנו<span class="help">שורה לכל בדיחה. אחת מהן תופיע בתחתית בכל ערב.</span><textarea id="jk" placeholder="למשל: מי שמפסיד בוורדל מכין תה">${esc((state.jokes||[]).join("\n"))}</textarea></label>
       <div class="row-btns"><button class="btn primary main" type="submit">שמירה</button><button class="tbtn" type="button" data-act="close">ביטול</button></div>
     </form>
     <div class="backup"><b>גיבוי והעברה לאפליקציה</b><span class="help">מעתיק את כל ההיסטוריה, השמות והבדיחות. מדביקים אותו באפליקציה החדשה.</span><button class="btn ghost sm" id="exp" type="button">להעתיק גיבוי</button><textarea id="expTxt" readonly hidden></textarea></div>`);
-  document.getElementById("nf").addEventListener("submit",e=>{e.preventDefault();
+  const form=document.getElementById("nf");
+  const refresh=()=>{const p=cur();
+    for(const w of ["a","b"]){const o=w==="a"?"b":"a", card=form.querySelector(`.who-card[data-w="${w}"]`), col=colorOf(p[w].color), sh=shapeOf(p[w].shape);
+      card.querySelector('[data-slot="pc"]').innerHTML=svgPiece(sh.d,col.base,"pc lg");
+      card.querySelector('[data-slot="nm"]').textContent=pieceName(w);
+      card.querySelectorAll('[data-pick="shape"]').forEach(b=>{const s=shapeOf(b.dataset.v);b.innerHTML=svgPiece(s.d,col.base);const on=b.dataset.v===p[w].shape;b.setAttribute("aria-checked",on);b.disabled=p[o].shape===b.dataset.v&&p[o].color===p[w].color});
+      card.querySelectorAll('[data-pick="color"]').forEach(b=>{const on=b.dataset.v===p[w].color;b.setAttribute("aria-checked",on);b.disabled=p[o].color===b.dataset.v&&p[o].shape===p[w].shape});}
+    applyTheme(); renderMast(); if(view==="home")renderHome(); else if(view==="stats")renderStats();};
+  refresh();
+  form.addEventListener("click",e=>{const b=e.target.closest("[data-pick]"); if(!b||b.disabled) return;
+    cur()[b.dataset.w][b.dataset.pick]=b.dataset.v; refresh();});
+  onSheetClose=()=>{ if(saved) return; if(before===null) delete state.pieces; else state.pieces=JSON.parse(before); applyTheme(); render(); };
+  form.addEventListener("submit",e=>{e.preventDefault();
     state.names.a=document.getElementById("na").value.trim()||"סטיב";state.names.b=document.getElementById("nb").value.trim()||"רוני";
     state.jokes=document.getElementById("jk").value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,60);
-    save();closeSheet();render();toast("נשמר.")});
+    saved=true; save();closeSheet();render();toast("נשמר.")});
   document.getElementById("exp").addEventListener("click",async()=>{const txt=JSON.stringify({app:"al-hasapa-shelanu",exported:new Date().toISOString(),state});
     try{await navigator.clipboard.writeText(txt);toast("הגיבוי הועתק.")}catch(e){const ta=document.getElementById("expTxt");ta.hidden=false;ta.value=txt;ta.focus();ta.select();toast("סמנו והעתיקו ידנית.")}});
 });
 
 /* ================= interactions ================= */
 function setView(v){view=v;document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.view===v));
-  ["home","disc","stats"].forEach(x=>document.getElementById("v-"+x).hidden=x!==v);render();window.scrollTo({top:0})}
+  ["home","disc","stats"].forEach(x=>document.getElementById("v-"+x).hidden=x!==v);render();document.getElementById("scroller").scrollTo({top:0,left:0})}
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest(".tab");if(b)setView(b.dataset.view)});
 document.querySelector("main").addEventListener("click",e=>{
   const go=e.target.closest("[data-goto]"); if(go){setView(go.dataset.goto);return}
@@ -785,7 +879,52 @@ document.querySelector("main").addEventListener("click",e=>{
   else if(act==="yes"||act==="no"||act==="later"){state.prefs[id]=act; save(); render(); toast(act==="yes"?byId[id].n+" נוסף לערב.":act==="no"?"דילגנו.":"נשמר להמשך.")}
 });
 
-render();
+/* ================= shell helpers ================= */
+if(/[?&]rm=1\b/.test(location.search)) document.documentElement.classList.add("reduce-motion");
+const scroller=document.getElementById("scroller");
+/* Horizontal scroll indicator. Physical (left/right) maths on purpose, so RTL cannot confuse it. */
+(function(){
+  const bar=document.getElementById("hbar"),track=document.getElementById("hbTrack"),thumb=document.getElementById("hbThumb"),
+        bl=document.getElementById("hbL"),br=document.getElementById("hbR"),eL=document.getElementById("edgeL"),eR=document.getElementById("edgeR");
+  let max=0;
+  const rtl=()=>getComputedStyle(scroller).direction==="rtl";
+  const phys=()=>rtl()?scroller.scrollLeft+max:scroller.scrollLeft;      /* 0 = the physical left end */
+  function update(){
+    max=Math.max(0,scroller.scrollWidth-scroller.clientWidth);
+    const on=max>2; bar.hidden=!on; scroller.classList.toggle("has-h",on);
+    if(!on){eL.hidden=eR.hidden=true;return}
+    const tw=track.clientWidth,w=Math.max(44,tw*scroller.clientWidth/scroller.scrollWidth),f=Math.min(1,Math.max(0,phys()/max));
+    thumb.style.width=w+"px"; thumb.style.left=(f*(tw-w))+"px";
+    bl.disabled=f<=.01; br.disabled=f>=.99; eL.hidden=f<=.01; eR.hidden=f>=.99;
+  }
+  window.updateHBar=update;
+  scroller.addEventListener("scroll",update,{passive:true});
+  addEventListener("resize",update); addEventListener("load",update);
+  if(document.fonts&&document.fonts.ready) document.fonts.ready.then(update);
+  new ResizeObserver(update).observe(scroller);
+  new MutationObserver(()=>requestAnimationFrame(update)).observe(document.querySelector("main"),{childList:true,subtree:true});
+  const step=()=>Math.max(120,scroller.clientWidth*.8);
+  bl.addEventListener("click",()=>scroller.scrollBy({left:-step(),behavior:"smooth"}));
+  br.addEventListener("click",()=>scroller.scrollBy({left:step(),behavior:"smooth"}));
+  let drag=null;
+  thumb.addEventListener("pointerdown",e=>{thumb.setPointerCapture(e.pointerId);drag={x:e.clientX,p:phys()};e.preventDefault()});
+  thumb.addEventListener("pointermove",e=>{if(!drag)return;const tw=track.clientWidth,w=thumb.offsetWidth,ratio=max/Math.max(1,tw-w);
+    const p=Math.min(max,Math.max(0,drag.p+(e.clientX-drag.x)*ratio));scroller.scrollLeft=rtl()?p-max:p});
+  const end=()=>{drag=null}; thumb.addEventListener("pointerup",end); thumb.addEventListener("pointercancel",end);
+  track.addEventListener("pointerdown",e=>{if(e.target!==track)return;const r=track.getBoundingClientRect();
+    scroller.scrollBy({left:(e.clientX<r.left+(parseFloat(thumb.style.left)||0)?-1:1)*step(),behavior:"smooth"})});
+})();
+/* Hidden diagnostics: tap the logo three times to see what size the page thinks the screen is. */
+(function(){
+  const chip=document.createElement("div");chip.className="dbg";chip.hidden=true;document.body.appendChild(chip);
+  const mq=q=>matchMedia(q).matches?1:0;
+  const fill=()=>{chip.textContent=`${innerWidth}x${innerHeight} @${devicePixelRatio} phone:${mq("(max-width:720px)")} short:${mq("(max-height:520px)")} portrait:${mq("(orientation:portrait)")} scroll:${scroller.scrollWidth}/${scroller.clientWidth}`};
+  let n=0,t=0;
+  document.querySelector(".logo").addEventListener("click",()=>{const now=Date.now();n=now-t<650?n+1:1;t=now;if(n>=3){n=0;chip.hidden=!chip.hidden;fill()}});
+  addEventListener("resize",()=>{if(!chip.hidden)fill()}); setInterval(()=>{if(!chip.hidden)fill()},1000);
+})();
+
+loadPieces().then(()=>{applyTheme();render()});
 setInterval(renderMast,60000);
 
 /* ================= cloud sync ================= */

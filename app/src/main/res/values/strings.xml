@@ -3,4 +3,5 @@
 <resources>
     <string name="app_name">על הספה שלנו</string>
     <string name="player_soon">הנגן מגיע בשלב הבא. בינתיים אפשר לשוטט בספה.</string>
+    <string name="splash_description">על הספה שלנו. שלושה חתולים ישנים על הספה הוורודה.</string>
 </resources>

@@ -14,7 +14,10 @@ import java.io.ByteArrayInputStream
 /** Where the hub (the prototype's web UI) lives. Served from the APK's assets, never from the network. */
 object HubOrigin {
     const val HOST = "appassets.androidplatform.net"
-    const val URL = "https://$HOST/assets/hub/index.html"
+    private const val PAGE = "https://$HOST/assets/hub/index.html"
+
+    /** `rm=1` tells the hub the system's "remove animations" is on, so it switches its own animations off. */
+    fun url(reduceMotion: Boolean): String = if (reduceMotion) "$PAGE?rm=1" else PAGE
 }
 
 /**
@@ -25,6 +28,7 @@ object HubOrigin {
 class HubWebViewClient(
     private val context: Context,
     private val assetLoader: WebViewAssetLoader,
+    private val onPageReady: () -> Unit,
     private val onRenderProcessGone: () -> Unit,
 ) : WebViewClient() {
 
@@ -45,6 +49,10 @@ class HubWebViewClient(
         // M0 placeholder: game links will open in the isolated player from milestone 2.
         Toast.makeText(context, R.string.player_soon, Toast.LENGTH_SHORT).show()
         return true
+    }
+
+    override fun onPageFinished(view: WebView, url: String) {
+        onPageReady()
     }
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
