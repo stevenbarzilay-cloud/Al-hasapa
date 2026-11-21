@@ -185,7 +185,7 @@ private fun Note(text: String, warning: Boolean = false) {
 @Composable
 private fun PrimaryButton(text: String, onClick: () -> Unit) {
     Box(
-        Modifier.defaultMinSize(minHeight = 52.dp).clip(RoundedCornerShape(12.dp)).background(Palette.Ink).clickable(onClick = onClick)
+        Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 52.dp).clip(RoundedCornerShape(12.dp)).background(Palette.Ink).clickable(onClick = onClick)
             .padding(horizontal = 22.dp).semantics { role = Role.Button; contentDescription = text },
         contentAlignment = Alignment.Center,
     ) { Text(text, color = Palette.Cream, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) }
@@ -194,7 +194,7 @@ private fun PrimaryButton(text: String, onClick: () -> Unit) {
 @Composable
 private fun SecondaryButton(text: String, onClick: () -> Unit) {
     Box(
-        Modifier.defaultMinSize(minHeight = 52.dp).clip(RoundedCornerShape(12.dp)).border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(12.dp))
+        Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 52.dp).clip(RoundedCornerShape(12.dp)).border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(12.dp))
             .clickable(onClick = onClick).padding(horizontal = 18.dp).semantics { role = Role.Button; contentDescription = text },
         contentAlignment = Alignment.Center,
     ) { Text(text, color = Palette.Ink, fontSize = 17.sp, fontWeight = FontWeight.Medium) }
@@ -203,7 +203,7 @@ private fun SecondaryButton(text: String, onClick: () -> Unit) {
 @Composable
 private fun TextButton(text: String, onClick: () -> Unit) {
     Box(
-        Modifier.defaultMinSize(minHeight = 48.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 6.dp)
+        Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp).clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).padding(horizontal = 6.dp)
             .semantics { role = Role.Button; contentDescription = text },
         contentAlignment = Alignment.CenterStart,
     ) { Text(text, color = Palette.Ink2, fontSize = 16.sp, fontWeight = FontWeight.Medium) }

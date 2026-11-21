@@ -216,6 +216,7 @@ private fun SheetButton(label: String, description: String?, modifier: Modifier,
     Box(
         modifier
             .heightIn(min = 52.dp)
+            .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (primary) Palette.Ink else Palette.Tint)
             .clickable(onClick = onClick)

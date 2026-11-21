@@ -81,4 +81,7 @@
     <string name="who_shared_title">מי שיחק?</string>
     <string name="who_shared_hint">התוצאה תירשם על שם מי שתבחרו.</string>
     <string name="share_target_label">תוצאה על הספה</string>
+    <string name="dnd_chip">נא לא להפריע</string>
+    <string name="dnd_chip_hint">שהתראות לא יקפצו על הטלוויזיה</string>
+    <string name="dnd_close">להסתיר</string>
 </resources>

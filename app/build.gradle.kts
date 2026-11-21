@@ -17,8 +17,8 @@ android {
         applicationId = "app.couch.alhasapa"
         minSdk = 29
         targetSdk = 37
-        versionCode = 10
-        versionName = "0.5.0-m4"
+        versionCode = 11
+        versionName = "1.0.0"
     }
 
     // One fixed debug key, committed on purpose (standard "android" passwords; this is not a secret).

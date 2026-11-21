@@ -195,6 +195,7 @@ private fun CreditChip(label: String, piece: PieceStyle?, selected: Boolean, mod
     Row(
         modifier
             .heightIn(min = 56.dp)
+            .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (selected) Palette.Ink else Palette.Tint)
             .clickable(onClick = onClick)
@@ -214,6 +215,7 @@ private fun SheetAction(label: String, modifier: Modifier = Modifier, primary: B
     androidx.compose.foundation.layout.Box(
         modifier
             .heightIn(min = 56.dp)
+            .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (primary) Palette.Ink else Palette.Tint)
             .clickable(onClick = onClick)

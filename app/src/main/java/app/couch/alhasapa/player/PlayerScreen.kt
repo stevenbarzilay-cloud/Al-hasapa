@@ -102,7 +102,11 @@ fun PlayerScreen(
     onClearResult: () -> Unit = {},
     onClose: () -> Unit,
     onOpenInChrome: (String) -> Unit,
+    reduceMotion: Boolean = false,
+    dndSignals: app.couch.alhasapa.dnd.DndSignals? = null,
 ) {
+    val enter = if (reduceMotion) androidx.compose.animation.EnterTransition.None else fadeIn()
+    val exit = if (reduceMotion) androidx.compose.animation.ExitTransition.None else fadeOut()
     var webView by remember { mutableStateOf<WebView?>(null) }
     var injector by remember { mutableStateOf<DisplayInjector?>(null) }
     var generation by remember { mutableIntStateOf(0) }
@@ -256,7 +260,7 @@ fun PlayerScreen(
             AnimatedVisibility(
                 visible = stripVisible && !sheetOpen,
                 modifier = Modifier.align(Alignment.TopCenter),
-                enter = fadeIn(), exit = fadeOut(),
+                enter = enter, exit = exit,
             ) {
                 ControlStrip(
                     title = session.title,
@@ -269,11 +273,16 @@ fun PlayerScreen(
                 )
             }
 
+            app.couch.alhasapa.dnd.DndChipHost(
+                Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
+                dndSignals ?: app.couch.alhasapa.dnd.DndSignals.real(androidx.compose.ui.platform.LocalContext.current),
+            )
+
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 AnimatedVisibility(
                     visible = sheetOpen,
                     modifier = Modifier.align(Alignment.CenterStart),
-                    enter = fadeIn(), exit = fadeOut(),
+                    enter = enter, exit = exit,
                 ) {
                     TuningSheet(
                         profile = profile,
@@ -337,7 +346,7 @@ private fun ControlStrip(title: String, showPlayed: Boolean, played: Boolean, on
         StripButton(stringResource(R.string.player_back), onClick = onBack)
         StripButton("⚙ " + stringResource(R.string.player_display), onClick = onDisplay)
         Text(
-            title, color = Palette.Cream, fontSize = 20.sp, fontWeight = FontWeight.SemiBold,
+            title, color = Palette.Cream, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f), textAlign = TextAlign.Center, maxLines = 1,
         )
         if (onResult != null) StripButton(stringResource(R.string.player_result), onClick = onResult)
@@ -353,6 +362,7 @@ private fun StripButton(label: String, onClick: () -> Unit, highlighted: Boolean
     Box(
         Modifier
             .heightIn(min = 48.dp)
+            .widthIn(min = 48.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(if (highlighted) Palette.Cream else Color.Transparent)
             .clickable(onClick = onClick)
@@ -360,7 +370,7 @@ private fun StripButton(label: String, onClick: () -> Unit, highlighted: Boolean
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = if (highlighted) Palette.Ink else Palette.Cream, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = if (highlighted) Palette.Ink else Palette.Cream, fontSize = 20.sp, fontWeight = FontWeight.Medium)
     }
 }
 

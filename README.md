@@ -8,10 +8,12 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Status:** milestone 4 (results). The data layer, the isolated player with persistent logins (including two LinkedIn
-profiles), the accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, and result capture
-(the game's own Share / Copy, a native result sheet, and an Android share target) are in. Still to come: the polish pass
-(do-not-disturb chip, accessibility and RTL audit, install notes).
+**Version 1.0.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
+accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
+Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
+and a TalkBack / touch-size audit of every native screen. Nothing here was run on a phone while writing it (there is no
+device in the build environment); see "Check on the phone" below for exactly what to try first.
 
 Results (`results/`):
 
@@ -31,6 +33,24 @@ Results (`results/`):
   if it cannot be told, or two games tie, it asks instead of guessing. A head-to-head result asks "מי שיחק?" first.
 - `tools/capture_check.cjs` runs the real script in Chromium: originals still called, only shares and copies reported,
   a throwing port never reaches the page.
+
+Polish (`dnd/`, `ui/Motion.kt`, `a11y/` tests):
+
+- **Do Not Disturb chip.** Once per evening (an evening runs until 4 in the morning), while the screen is cast, a chip
+  "נא לא להפריע" appears for 15 seconds, on the hub or in the player, and opens the phone's Do Not Disturb settings. It
+  does not appear when Do Not Disturb is already on. The app never changes the setting (it has no permission to, and
+  should not). Android has no single "am I casting?" call, so it asks two ways (an extra display, a selected media route
+  that is not the phone); if your phone reports casting some other way the chip simply will not show. That is the one
+  part of this I could not check, so it logs what it sees under `AlHasapaDiag` in debug builds.
+- **Accessibility.** `AccessibilityAuditTest` walks every native screen (player strip and panels, the tuning sheet, both
+  result sheets, the share target, accounts) and fails if anything tappable has no spoken name or is smaller than
+  48 x 48 dp, and if the couch panels use less than 20 sp. Chips and pieces are read as one thing ("רוני, משחק עכשיו").
+  The hub is a web page with its own aria labels from the prototype.
+- **Hebrew and right to left.** The native theme forces right to left; the one exception is the player's layout row, which
+  uses the screen's real left and right (the game is centred, the panels stand beside it) and puts each panel's text
+  back to right to left. Digits (the clock) are left to right inside Hebrew text.
+- **Reduced motion.** With "Remove animations" on, the splash is skipped, the player's strip appears without fading,
+  and the hub is told (`?rm=1`) to stop its own transitions.
 
 TV display (`app/src/main/assets/display_profiles.json`, `display/`):
 
@@ -127,15 +147,40 @@ says "package conflicts with an existing package", the installed copy came from 
 (for example an APK built before this key existed); in that case export a backup, uninstall, and
 install again.
 
+## Check on the phone
+
+Do these in order; each one tells you which part to blame if it fails.
+
+1. **Opens.** The cats splash, then the hub (cream, the logo and tabs fixed). If it is blank or shows an error, send a
+   screenshot: the debug build shows what happened on screen, and `adb logcat -s AlHasapaDiag AlHasapaHub` has more.
+2. **Accounts.** Hub, "החשבונות": log in to NYT, Haaretz, and LinkedIn once as Steve and once as Roni. Use email and
+   password (Google refuses "continue with Google" inside any app, and this app does not work around that; use "לפתוח
+   בכרום" if a site offers nothing else). The status shows "מחובר" once logged in. If Haaretz stays "לא ידוע", open "מה
+   נשמר?" and tell me the cookie names it lists, so I can name the right one.
+3. **Logins survive.** Force-stop the app, open a game from each site: you are still logged in. LinkedIn as Steve and as
+   Roni are different people. (If the accounts screen says the WebView is too old for two LinkedIn logins, update
+   "Android System WebView" in Google Play.)
+4. **TV display.** Cast, open a Haaretz riddle (the chain): the board should fit, with a panel on each side. Tap the top
+   edge, "⚙ תצוגה", try "רחב" and "רגיל", change the zoom, "לשמור לאתר הזה", leave and come back: it is remembered.
+   NYT Wordle should also be a phone-shaped box; the NYT crossword wide.
+5. **Results.** Finish a Wordle, press the game's own Share: the result sheet should open filled in. If it does not, press
+   "תוצאה" and paste. Try Share from a LinkedIn game and pick this app in the share list: it should ask who played.
+6. **Do Not Disturb.** While casting, once per evening, the chip should appear. Tell me if it never does.
+7. **Updates.** Install a newer APK over this one without uninstalling: logins and history stay.
+
+What to expect to differ from the prototype: a few game links are Google searches standing in for a direct link (the hub
+marks them "קישור זמני"; replace them under "הקישורים שלנו"), and the Haaretz chain link in the catalogue is a dated page.
+
 ## Layout
 
 | Path | What |
 | --- | --- |
-| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `ui/` (animated splash), `ui/theme/` |
+| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `ui/` (splash, theme) |
 | `app/src/main/assets/hub/` | The prototype's web UI, `pieces.json`, bundled fonts and images |
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |
-| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (catalogue from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring) |
+| `app/src/main/assets/display_profiles.json` | How each site is shown on the TV (mode, zoom, banner CSS) |
+| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (catalogue from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring), `display_check.cjs` and `capture_check.cjs` (the injected scripts, run in real Chromium) |
 | `THIRD_PARTY/` | Font license (SIL OFL 1.1) |
 | `couch-artifact/` | The original prototype and the Haaretz layout bug screenshots, kept verbatim |
 

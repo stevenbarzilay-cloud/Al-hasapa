@@ -1,6 +1,5 @@
 package app.couch.alhasapa
 
-import android.content.ContentResolver
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -25,6 +24,7 @@ import app.couch.alhasapa.ui.WhoPlaysDialog
 import app.couch.alhasapa.diag.Diag
 import app.couch.alhasapa.diag.DiagOverlay
 import app.couch.alhasapa.ui.AppRoot
+import app.couch.alhasapa.ui.animationsRemoved
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 
 class MainActivity : ComponentActivity() {
@@ -89,7 +89,3 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEBUG) DiagOverlay.install(this)
     }
 }
-
-/** True when the user turned on "Remove animations" (or set the animation scale to 0). */
-private fun animationsRemoved(resolver: ContentResolver): Boolean =
-    Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f

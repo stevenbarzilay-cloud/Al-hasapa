@@ -24,6 +24,7 @@ import app.couch.alhasapa.results.ResultSupport
 import android.widget.Toast
 import app.couch.alhasapa.R
 import app.couch.alhasapa.diag.Diag
+import app.couch.alhasapa.ui.animationsRemoved
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 import java.time.LocalDate
 import org.json.JSONObject
@@ -51,6 +52,7 @@ class PlayerActivity : ComponentActivity() {
         )
         hideSystemBars()
 
+        val reduceMotion = animationsRemoved(contentResolver)
         val profiles = DisplayStore.load(this)
         val pieces = PiecesConfig.load(this)
         setContent {
@@ -74,6 +76,7 @@ class PlayerActivity : ComponentActivity() {
                     onSaveResult = { input -> saveResult(app, input) },
                     onClearResult = { clearResult(app) },
                     onTogglePlayed = { togglePlayed(app) },
+                    reduceMotion = reduceMotion,
                     onClose = { finish() },
                     onOpenInChrome = { url -> ChromeTab.open(this, url) },
                 )
