@@ -48,6 +48,23 @@ class HubAssetsTest {
     }
 
     @Test
+    fun theShellNeverDependsOnPercentageHeights() {
+        // Android WebView can report a layout height of 0, so `height:100%` on html/body/.app collapsed the whole hub to
+        // nothing (blank screen in M0.1-M0.3, reproduced to the pixel with the phone's own numbers). The shell is sized
+        // in pixels from innerHeight instead, and the sheet and toast are positioned inside it, not against the viewport.
+        val css = Regex("<style>(.*?)</style>", RegexOption.DOT_MATCHES_ALL).findAll(html).joinToString("\n") { it.groupValues[1] }
+        assertFalse("html/body must not set a height", Regex("""html,body\{[^}]*height""").containsMatchIn(css))
+        val app = Regex("""\.app\{([^}]*)\}""").find(css)?.groupValues?.get(1) ?: ""
+        assertTrue(".app must be fixed with a pixel height from --app-h: $app", app.contains("position:fixed") && app.contains("var(--app-h"))
+        assertFalse(".app must not use a percentage height", Regex("""height:\s*\d+%""").containsMatchIn(app))
+        assertTrue("the hub must set --app-h from innerHeight", html.contains("setProperty(\"--app-h\"") && html.contains("window.innerHeight"))
+        for (sel in listOf(".overlay", ".toast")) {
+            val rule = Regex("""\""" + sel + """\{([^}]*)\}""").find(css)?.groupValues?.get(1) ?: ""
+            assertFalse("$sel must not be position:fixed (bottom:0 collapses with a zero layout height)", rule.contains("position:fixed"))
+        }
+    }
+
+    @Test
     fun hubShipsItsPiecesCatalog() {
         assertTrue("pieces.json missing", File(hubDir, "pieces.json").isFile)
         assertTrue("hub no longer loads pieces.json", html.contains("fetch(\"pieces.json\")"))

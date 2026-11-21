@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.util.Log
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -72,7 +73,8 @@ private const val PROBE_JS = """(function(){
   var b=document.body;
   return JSON.stringify({ready:window.__ready===true,errors:(window.__errors||[]).slice(0,3),vis:document.visibilityState,
     iw:innerWidth,ih:innerHeight,dpr:devicePixelRatio,rows:document.querySelectorAll('#v-home .row').length,
-    bg:b?getComputedStyle(b).backgroundColor:null,mast:r(document.querySelector('.mast')),scroller:r(document.getElementById('scroller'))});
+    bg:b?getComputedStyle(b).backgroundColor:null,mast:r(document.querySelector('.mast')),app:r(document.querySelector('.app')),
+    scroller:r(document.getElementById('scroller')),htmlH:document.documentElement.clientHeight,appH:getComputedStyle(document.documentElement).getPropertyValue('--app-h')});
 })()"""
 
 /**
@@ -170,6 +172,9 @@ fun HubScreen(
                 factory = { ctx ->
                     Diag.log("webview: created (generation $generation)")
                     WebView(ctx).apply {
+                        // Explicit match-parent: a WebView left at the default (wrap-content) height tells the page its
+                        // layout height is 0, which collapses every percentage height. That blanked the hub in M0.1-M0.3.
+                        layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                         configureHub()
                         webChromeClient = console
                         webViewClient = HubWebViewClient(

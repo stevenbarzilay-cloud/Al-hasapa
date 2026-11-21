@@ -42,7 +42,11 @@ class HubWebViewClient(
     override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
         val url = request.url
         if (url.host == HubOrigin.HOST) {
-            return assetLoader.shouldInterceptRequest(url)
+            // Anything on our own host that is not a bundled asset (the page's automatic favicon request, say) gets a
+            // local 404: it must never fall through toward the network.
+            return assetLoader.shouldInterceptRequest(url) ?: WebResourceResponse(
+                "text/plain", "utf-8", 404, "Not found", emptyMap(), ByteArrayInputStream(ByteArray(0)),
+            )
         }
         return WebResourceResponse(
             "text/plain", "utf-8", 403, "Blocked",

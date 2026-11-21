@@ -21,6 +21,12 @@ Hub notes:
   tones). Steve's colour drives the "red" role of the interface and Roni's the "pink" role. The tests check
   that every colour stays readable. The choice is stored in the state JSON as `state.pieces` (additive:
   older backups without it still import).
+- **WebView layout-height trap.** Android's WebView can report a layout height of 0 to the page (innerHeight stays
+  correct), which collapses `height:100%`, `100vh` and `bottom:0`. In M0.1-M0.3 that blanked the whole hub: the page
+  said it had drawn, but its scroll area was 0 px tall. The WebView now has explicit match-parent layout params, and
+  the hub shell is `position:fixed` with a pixel height set from `innerHeight` (`--app-h`); the sheet and toast live
+  inside it. `HubAssetsTest.theShellNeverDependsOnPercentageHeights` keeps it that way. When testing in a desktop
+  browser, force `html,body{height:0!important}` to emulate the condition.
 - Diagnostics: tap the logo three times to show what size the page believes the screen is.
 - A blank screen is never an acceptable failure. If the page does not load, or loads but does not draw itself
   within 4 s, a native error screen shows the reason with a retry button; if the page's own script crashes, the
