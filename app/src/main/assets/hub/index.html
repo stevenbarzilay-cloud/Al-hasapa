@@ -137,6 +137,13 @@ img{max-width:100%;height:auto;display:block}
 .logo{margin:0;line-height:0}
 .logo img{height:64px;width:auto;aspect-ratio:900/444}
 .mast .spacer{flex:1}
+/* On the phone: the switch between playing here and being the TV's keyboard. */
+.modes{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--tint);border:1px solid var(--line-2);flex:none}
+.modes[hidden]{display:none}
+.mode{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 13px;border-radius:999px;font-weight:600;font-size:.88em;color:var(--ink-2)}
+.mode[aria-selected="true"]{background:var(--ink);color:var(--cream)}
+.mode svg{width:18px;height:18px;flex:none}
+@media (max-width:460px){.mode .long{display:none}.mode{padding:0 11px}}
 .mast .date{color:var(--ink-2);font-size:.9em;white-space:nowrap}
 .who{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:999px;padding:0 14px;min-height:44px;font-weight:500;font-size:.9em}
 .who:hover{background:var(--tint)}
@@ -409,6 +416,14 @@ footer .joke{font-style:italic}
   <div class="wrap">
     <h1 class="logo"><img src="img/logo.webp" alt="על הספה שלנו" width="900" height="444"></h1>
     <span class="spacer"></span>
+    <div class="modes" id="modes" role="tablist" aria-label="מעבר בין מצב משחק למצב מקלדת לטלוויזיה" hidden>
+      <button class="mode" type="button" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M10.5 5h3"/></svg>
+        משחק</button>
+      <button class="mode" type="button" role="tab" aria-selected="false" data-act="kbmode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 10h.01M9.5 10h.01M13 10h.01M16.5 10h.01M7.5 14h9"/></svg>
+        <span>מקלדת<span class="long"> לטלוויזיה</span></span></button>
+    </div>
     <span class="date" id="date"></span>
     <button class="who" id="who" type="button" aria-label="מי על הספה, והבדיחות שלנו"></button>
   </div>
@@ -1045,6 +1060,9 @@ document.querySelector("main").addEventListener("click",e=>{
 /* ================= shell helpers ================= */
 if(/[?&]rm=1\b/.test(location.search)) document.documentElement.classList.add("reduce-motion");
 if(/[?&]tv=1\b/.test(location.search)) document.documentElement.classList.add("tv","reduce-motion");
+try{ if(NATIVE&&NATIVE.keyboardMode&&NATIVE.keyboardMode()==="yes") document.getElementById("modes").hidden=false; }catch(e){}
+/* The header is outside <main>, so the switch has its own listener. */
+document.getElementById("modes").addEventListener("click",e=>{if(e.target.closest('[data-act="kbmode"]')&&NATIVE&&NATIVE.openKeyboardMode)NATIVE.openKeyboardMode()});
 const scroller=document.getElementById("scroller");
 /* Horizontal scroll indicator. Physical (left/right) maths on purpose, so RTL cannot confuse it. */
 (function(){

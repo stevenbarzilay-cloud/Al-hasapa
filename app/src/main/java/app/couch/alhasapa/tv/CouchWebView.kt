@@ -46,6 +46,10 @@ object WebTyper {
             }
             // No key code for it (Hebrew, symbols): insert it into the focused field the way a paste would.
             is Delivery.Text -> web.evaluateJavascript(insertScript(d.text), null)
+            is Delivery.Hold -> {
+                val t = android.os.SystemClock.uptimeMillis()
+                web.dispatchKeyEvent(KeyEvent(t, t, if (d.down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, d.keyCode, 0, 0))
+            }
         }
     }
 

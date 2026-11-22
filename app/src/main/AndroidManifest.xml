@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- The phone as the TV's keyboard: Android 17 asks before an app reaches devices on the home network. -->
+    <uses-permission android:name="android.permission.ACCESS_LOCAL_NETWORK" />
 
     <application
         android:name=".CouchApp"
@@ -42,6 +44,14 @@
             tools:ignore="DiscouragedApi"
             android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
+            android:theme="@style/Theme.AlHasapa" />
+
+        <!-- Keyboard mode: the phone as the TV app's keyboard. The phone's own keyboard stays up while it is open. -->
+        <activity
+            android:name=".keyboard.KeyboardModeActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
+            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"
             android:theme="@style/Theme.AlHasapa" />
 
         <!-- The share target: "Share" in any game or app, choose this one, and the result lands on tonight's page. -->

@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.5.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.6.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -274,6 +274,34 @@ The hub has a **הגדרות** tab (on the phone and the TV):
 
 Google sign-in is not offered anywhere, because Google blocks it inside an embedded browser; use email and password.
 
+## The phone as the TV's keyboard (1.6)
+
+Typing with a remote is slow, and games like Krillion are about typing fast. With both apps installed, the phone becomes the TV
+app's keyboard:
+
+- **On the phone**, the hub's header has a switch: **משחק** (play on the phone, as always) and **מקלדת לטלוויזיה** (keyboard mode).
+  A long press on the app's icon has "מקלדת לטלוויזיה" too. "משחק" at the top of keyboard mode goes back.
+- **The first time**, the TV shows a card with four digits ("טלפון רוצה להקליד כאן"); type them on the phone. After that they know
+  each other and connect by themselves whenever keyboard mode opens and the TV app is in front.
+- **Typing**: the phone's own keyboard (Gboard, Hebrew or English) is up, and every letter goes to the TV as it is typed, into whatever
+  the TV shows: the game in front, or a field of the hub (the settings' links are much easier this way). English letters, digits and
+  punctuation arrive as real key presses (a desktop game that listens for keys gets them); Hebrew and emoji are inserted into the field.
+  Suggestions and corrections are fine: only the difference is sent, so the TV's field always matches the phone's line. Under the line:
+  **Esc**, **Tab**, the four **arrows** (held down, the game sees the key held) and **⌫**; and a big **Enter** with a cat's paw that
+  presses it (it comes down on every Enter, the keyboard's own too).
+- **On the TV**, a small red phone at the top of the dock shows that a phone is connected.
+
+How it works: the TV app listens on the home network while it is in front (port 47123, announced as `_couchkeys._tcp`), and the phone finds
+it there, or where it found it last time, or at an address typed by hand (the TV shows its address under ⓘ). Only devices on the home
+network can connect, only a paired phone can type (a random token from the pairing; six wrong codes close pairing for five minutes), at most
+at a human pace, and the TV sends back nothing but the name of the screen it shows. Android 17 asks once on the phone to allow "devices on
+the local network". If they cannot see each other (a guest network that keeps devices apart, for one), the phone says so and offers to
+type the TV's address.
+
+Not checked on the devices (nothing here can run them): the connection between the Pixel and the Mi Box, and how instant it feels. The
+link itself is tested end to end over a real socket (pairing with a wrong and a right code, typing, keys held, coming back without a
+code), and so is the way the phone's keyboard edits become keystrokes.
+
 ## Check on the phone
 
 Do these in order; each one tells you which part to blame if it fails.
@@ -305,7 +333,7 @@ marks them "קישור זמני"; replace them under "הקישורים שלנו"
 | Path | What |
 | --- | --- |
 | `app/src/tv/` | What is only in the TV build: the TV launcher entry and its banner |
-| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `tv/` (the remote's focus navigation, the paw, the keyboard, the dock, full-screen video), `diag/` (startup timings, crash report, flight recorder, main-thread watchdog, the information text), `ui/` (splash, loading cover, crash screen, theme) |
+| `app/src/main/java/app/couch/alhasapa/` | Kotlin: `MainActivity`, `hub/` (WebView host), `data/` (state, backups), `catalog/`, `scoring/`, `bridge/` (hub to native), `player/` and `accounts/` (the isolated browser), `display/` (TV profiles), `results/` (capture, sheet, share target), `dnd/`, `tv/` (the remote's focus navigation, the paw, the keyboard, the dock, full-screen video), `remote/` and `keyboard/` (the phone as the TV's keyboard: the link, pairing, keyboard mode), `diag/` (startup timings, crash report, flight recorder, main-thread watchdog, the information text), `ui/` (splash, loading cover, crash screen, theme) |
 | `app/src/main/assets/hub/` | The prototype's web UI, `pieces.json`, bundled fonts and images |
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |

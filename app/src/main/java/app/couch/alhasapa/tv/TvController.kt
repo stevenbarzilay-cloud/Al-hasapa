@@ -22,7 +22,7 @@ enum class InputMode { NAV, PAW }
 enum class Zone { PAGE, NATIVE }
 
 /** A short message shown on screen when the way of controlling things changes or something is worth knowing. */
-enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE }
+enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE }
 
 /** A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up). */
 enum class TvPanel { INFO }
@@ -125,6 +125,22 @@ class TvController(val enabled: Boolean, density: Float) {
         panel = p; zone = Zone.NATIVE; focusedId = PANEL_CLOSE_ID          // one OK closes it again
         Flight.log("tv: panel $p open")
     }
+
+    /** The name of this screen, shown on the phone when it is the TV's keyboard ("עמוד הבית", the game's name). */
+    var screenTitle: String = ""
+
+    /**
+     * What a phone typed (see remote/RemoteKeys), into this screen's page: the WebView takes the keys the same way as from the app's own
+     * keyboard, so a game that listens for keys gets them and a field gets its text.
+     */
+    fun remoteInput(list: List<Delivery>) {
+        if (!enabled) return
+        web?.let { w -> if (!w.hasFocus()) w.requestFocus() }
+        for (d in list) typer(d)
+    }
+
+    /** Shows [h] for a few seconds (from outside the remote too: a phone that just connected as the keyboard). */
+    fun notice(h: TvHint) { if (enabled) say(h) }
 
     /** Puts the focus on the app's button [id] (a screen's main button, so a single OK presses it). */
     fun focus(id: String) { if (enabled) { zone = Zone.NATIVE; focusedId = id } }

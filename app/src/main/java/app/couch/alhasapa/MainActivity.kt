@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import app.couch.alhasapa.accounts.AccountsActivity
+import app.couch.alhasapa.keyboard.KeyboardModeActivity
 import app.couch.alhasapa.bridge.HubBridge
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.data.PiecesConfig
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         tv = TvHost(this)
+        tv.title = getString(R.string.remote_screen_home)
         Diag.log("activity: onCreate, build ${BuildConfig.VERSION_NAME}, android ${Build.VERSION.RELEASE} (api ${Build.VERSION.SDK_INT})")
         Diag.log("webview package: " + (WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" } ?: "NONE"))
         val dm = resources.displayMetrics
@@ -73,6 +75,10 @@ class MainActivity : ComponentActivity() {
 
             override fun openAccounts() {
                 runOnUiThread { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) }
+            }
+
+            override fun openKeyboardMode() {
+                runOnUiThread { startActivity(Intent(this@MainActivity, KeyboardModeActivity::class.java)) }
             }
         })
         val reduceMotion = animationsRemoved(contentResolver)

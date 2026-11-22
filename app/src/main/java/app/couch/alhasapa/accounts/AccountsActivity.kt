@@ -74,6 +74,7 @@ class AccountsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tv = TvHost(this)
+        tv.title = getString(app.couch.alhasapa.R.string.remote_screen_accounts)
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),

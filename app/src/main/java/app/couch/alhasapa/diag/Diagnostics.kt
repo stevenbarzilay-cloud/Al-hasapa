@@ -27,6 +27,8 @@ object Diagnostics {
     fun text(context: Context): String = buildString {
         appendLine(Startup.environment(context))
         appendLine(memory(context))
+        val keys = app.couch.alhasapa.remote.RemoteKeys.ui.value
+        if (keys.listening) appendLine("phone keyboard: address ${keys.address.ifBlank { "unknown" }}, phones connected: ${keys.phones.joinToString().ifBlank { "none" }}")
         Startup.last(context)?.let { appendLine(); appendLine("--- the last start ---"); appendLine(it) }
         CrashReport.pending(context)?.let { appendLine(); appendLine("--- the last crash ---"); appendLine(it.take(1_800)) }
         val p = Flight.previous

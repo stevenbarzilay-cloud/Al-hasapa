@@ -32,8 +32,18 @@ class TvHost(private val activity: ComponentActivity) {
             // the whole window, so the window behind it becomes a plain colour: nothing extra to paint under every frame of a game.
             activity.window.decorView.post { runCatching { activity.window.setBackgroundDrawableResource(app.couch.alhasapa.R.color.cream) } }
         }
-        activity.lifecycle.addObserver(LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_PAUSE || e == Lifecycle.Event.ON_DESTROY) controller.release() })
+        activity.lifecycle.addObserver(LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_PAUSE || e == Lifecycle.Event.ON_DESTROY) controller.release()
+            // The phone-as-keyboard types into the screen in front.
+            if (enabled && e == Lifecycle.Event.ON_RESUME) app.couch.alhasapa.remote.RemoteKeys.attach(controller)
+            if (enabled && (e == Lifecycle.Event.ON_PAUSE || e == Lifecycle.Event.ON_DESTROY)) app.couch.alhasapa.remote.RemoteKeys.detach(controller)
+        })
     }
+
+    /** The name of this screen for the phone's status line. */
+    var title: String
+        get() = controller.screenTitle
+        set(value) { controller.screenTitle = value; if (app.couch.alhasapa.remote.RemoteKeys.front === controller) app.couch.alhasapa.remote.RemoteKeys.server?.screen = value }
 
     @Composable
     fun Layer(content: @Composable () -> Unit) = TvLayer(controller, content)

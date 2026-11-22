@@ -45,6 +45,7 @@ class PlayerActivity : ComponentActivity() {
         tv = TvHost(this)
         val app = application as CouchApp
         session = buildSession(app) ?: run { finish(); return }
+        tv.title = session.title
         Diag.log("player: ${session.title} (${if (session.loginMode) "login" else "game"}) profile ${session.profile}")
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE

@@ -112,4 +112,13 @@ class TvPreviewTest {
         c.toggleSlim()
         save("tv-player-dock-slim.png")
     }
+
+    @Test
+    fun drawThePairingCardOnTheTv() {
+        val c = TvController(true, 2f)
+        app.couch.alhasapa.remote.RemoteKeys.ui.value = app.couch.alhasapa.remote.RemoteKeys.Ui(listening = true, code = "4821", codeFor = "Pixel 8", phones = listOf("Pixel 7"))
+        rule.setContent { AlHasapaTheme { TvLayer(c) { Box(Modifier.fillMaxSize().background(Palette.Cream)) } } }
+        save("tv-pairing.png")
+        app.couch.alhasapa.remote.RemoteKeys.ui.value = app.couch.alhasapa.remote.RemoteKeys.Ui()
+    }
 }

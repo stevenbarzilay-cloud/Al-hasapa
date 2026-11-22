@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -112,6 +113,14 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
                 }
             }
             HintPill(c, Modifier.align(Alignment.TopCenter).padding(top = 12.dp))
+            // A phone asking to be the keyboard: the four digits to type on it. And a short note when one connects.
+            val remote by app.couch.alhasapa.remote.RemoteKeys.ui.collectAsState()
+            var phones by remember { androidx.compose.runtime.mutableIntStateOf(remote.phones.size) }
+            androidx.compose.runtime.LaunchedEffect(remote.phones.size) {
+                if (remote.phones.size > phones) c.notice(TvHint.PHONE)
+                phones = remote.phones.size
+            }
+            remote.code?.let { PairingCard(it, remote.codeFor.orEmpty(), Modifier.align(Alignment.TopCenter).padding(top = 12.dp)) }
             CursorOverlay(c)
         }
     }
@@ -137,6 +146,8 @@ private fun TvDock(c: TvController) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
     ) {
+        val linked = app.couch.alhasapa.remote.RemoteKeys.ui.collectAsState().value.phones.isNotEmpty()
+        if (linked) PhoneBadge()
         if (extras != null) extras(c.slim) else {
             Spacer(Modifier.weight(1f))
             PawButton(c)
@@ -212,6 +223,38 @@ fun ShapeIcon(portrait: Boolean, color: Color, size: Dp = 30.dp) {
     }
 }
 
+/** A phone is connected as the keyboard: a small red phone at the top of the dock. Not a button. */
+@Composable
+private fun PhoneBadge() {
+    val label = stringResource(R.string.remote_badge)
+    Box(Modifier.size(40.dp).clip(CircleShape).background(Palette.Tint).semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        ShapeIcon(portrait = true, color = Palette.Red, size = 26.dp)
+    }
+}
+
+/** The four digits a phone needs to pair as the keyboard, large, at the top of the screen while it waits. */
+@Composable
+private fun PairingCard(code: String, phone: String, modifier: Modifier) {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        Row(
+            modifier.widthIn(max = 820.dp).clip(RoundedCornerShape(28.dp)).background(Palette.Ink.copy(alpha = 0.96f))
+                .padding(horizontal = 28.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(22.dp),
+        ) {
+            PawIcon(40.dp, Palette.Red, outline = Palette.Ink)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.remote_pair_title) + if (phone.isNotBlank()) " ($phone)" else "", fontSize = 22.sp, color = Palette.Cream, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.remote_pair_body), fontSize = 18.sp, color = Palette.Cream.copy(alpha = 0.8f))
+            }
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                Text(code.toCharArray().joinToString(" "), fontSize = 46.sp, fontWeight = FontWeight.Bold, color = Palette.Cream,
+                    modifier = Modifier.semantics { contentDescription = code })
+            }
+        }
+    }
+}
+
 /** Opens the information panel: what to photograph when something does not work. Reachable from every screen, even if a page hangs. */
 @Composable
 fun InfoButton(c: TvController, modifier: Modifier = Modifier.width(64.dp), height: Dp = 48.dp) {
@@ -269,6 +312,7 @@ private fun HintPill(c: TvController, modifier: Modifier) {
         TvHint.NAV_ON -> stringResource(R.string.tv_hint_nav)
         TvHint.NO_TARGETS -> stringResource(R.string.tv_hint_none)
         TvHint.TYPE -> stringResource(R.string.tv_hint_type)
+        TvHint.PHONE -> stringResource(R.string.tv_hint_phone)
         null -> null
     }
     AnimatedVisibility(visible = text != null, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {

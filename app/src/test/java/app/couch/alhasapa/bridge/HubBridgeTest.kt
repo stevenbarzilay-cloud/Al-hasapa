@@ -144,4 +144,17 @@ class HubBridgeTest {
         val d = bridge.diagnostics()
         assertTrue(d.isNotBlank()); assertFalse(d.contains("@"))
     }
+
+    @Test
+    fun keyboardModeIsOfferedOnThePhoneOnly() {
+        var opened = 0
+        val b = HubBridge(context, repo, Catalog.load(context), object : HubBridge.Actions {
+            override fun play(gameId: String) {}
+            override fun openAccounts() {}
+            override fun openKeyboardMode() { opened++ }
+        })
+        b.openKeyboardMode()
+        if (app.couch.alhasapa.BuildConfig.TV) { assertEquals("no", b.keyboardMode()); assertEquals("the TV is the one being typed into", 0, opened) }
+        else { assertEquals("yes", b.keyboardMode()); assertEquals(1, opened) }
+    }
 }

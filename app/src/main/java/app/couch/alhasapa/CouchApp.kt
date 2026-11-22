@@ -13,6 +13,8 @@ import app.couch.alhasapa.diag.Diagnostics
 import app.couch.alhasapa.diag.Flight
 import app.couch.alhasapa.diag.Startup
 import app.couch.alhasapa.diag.Watchdog
+import app.couch.alhasapa.remote.RemoteKeys
+import app.couch.alhasapa.tv.TvMode
 import java.io.File
 
 /** Owns the two things every screen shares: the state and the catalogue. Created lazily, so tests that never touch them pay nothing. */
@@ -22,7 +24,7 @@ class CouchApp : Application() {
         Startup.mark("application")
         Flight.start(this)
         CrashReport.install(this)
-        registerActivityLifecycleCallbacks(Visibility())
+        registerActivityLifecycleCallbacks(Visibility(this))
         // Not under the unit tests: their main looper is paused on purpose, which a watchdog would take for a frozen app.
         if (Build.FINGERPRINT != "robolectric") {
             Watchdog(onSample = { Flight.log(Diagnostics.memory(this)) }).start()
@@ -49,20 +51,28 @@ class CouchApp : Application() {
         Flight.flushNow()
     }
 
-    /** Which of the app's screens are showing: the flight recorder's "was it in front when it ended". */
-    private class Visibility : ActivityLifecycleCallbacks {
+    /**
+     * Which of the app's screens are showing: the flight recorder's "was it in front when it ended", and on a TV the phone-as-keyboard
+     * link, which listens only while the app is in front.
+     */
+    private class Visibility(private val app: CouchApp) : ActivityLifecycleCallbacks {
         private var started = 0
+        private val tv = TvMode.isTelevision(app)
 
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Flight.log("${activity.javaClass.simpleName} created")
         override fun onActivityStarted(activity: Activity) {
             started++
             Flight.session(true, activity.javaClass.simpleName)
+            if (tv && started == 1 && Build.FINGERPRINT != "robolectric") RemoteKeys.foreground(app, true)
         }
         override fun onActivityResumed(activity: Activity) = Flight.log("${activity.javaClass.simpleName} in front")
         override fun onActivityPaused(activity: Activity) = Flight.log("${activity.javaClass.simpleName} paused")
         override fun onActivityStopped(activity: Activity) {
             started = (started - 1).coerceAtLeast(0)
-            if (started == 0) { Flight.session(false, activity.javaClass.simpleName); Flight.log("in the background") }
+            if (started == 0) {
+                Flight.session(false, activity.javaClass.simpleName); Flight.log("in the background")
+                if (tv) RemoteKeys.foreground(app, false)
+            }
         }
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
         override fun onActivityDestroyed(activity: Activity) = Flight.log("${activity.javaClass.simpleName} closed")

@@ -20,6 +20,9 @@ enum class KbLayout { ENGLISH, HEBREW, SYMBOLS }
 sealed interface Delivery {
     data class Code(val keyCode: Int, val shift: Boolean = false) : Delivery
     data class Text(val text: String) : Delivery
+
+    /** Half a key press: down now, up later (a key held, like an arrow in a game that moves while it is held). */
+    data class Hold(val keyCode: Int, val down: Boolean) : Delivery
 }
 
 object KbLayouts {

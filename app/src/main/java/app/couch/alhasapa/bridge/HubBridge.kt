@@ -9,6 +9,7 @@ import app.couch.alhasapa.catalog.Catalog
 import app.couch.alhasapa.data.Backup
 import app.couch.alhasapa.data.StateRepository
 import app.couch.alhasapa.diag.Diagnostics
+import app.couch.alhasapa.tv.TvMode
 import org.json.JSONObject
 
 /**
@@ -35,6 +36,9 @@ class HubBridge(
 
         /** Open the accounts screen. */
         fun openAccounts()
+
+        /** Open keyboard mode: the phone becomes the TV app's keyboard. */
+        fun openKeyboardMode() {}
     }
 
     /** `{rev, fresh, state}`: `fresh` is true on the very first run, when the page may bring over what it stored itself. */
@@ -64,6 +68,13 @@ class HubBridge(
 
     @JavascriptInterface
     fun openAccounts() = actions.openAccounts()
+
+    /** "yes" on the phone, where the hub offers the switch to keyboard mode (the phone as the TV's keyboard); "no" on the TV itself. */
+    @JavascriptInterface
+    fun keyboardMode(): String = if (TvMode.isTelevision(context)) "no" else "yes"
+
+    @JavascriptInterface
+    fun openKeyboardMode() { if (!TvMode.isTelevision(context)) actions.openKeyboardMode() }
 
     /** What the settings page shows about the app: versions, device, how long the last start took, and the last crash if there was one. */
     @JavascriptInterface
