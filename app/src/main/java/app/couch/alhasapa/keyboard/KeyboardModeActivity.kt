@@ -42,6 +42,7 @@ class KeyboardModeActivity : ComponentActivity() {
             override fun retry() = client.retry()
             override fun address(a: String) = client.useAddress(a)
             override fun permission() = askLocalNetwork.launch(LOCAL_NETWORK)
+            override fun pointer(m: KeyLink.Msg) = client.send(m)
         }
         setContent {
             AlHasapaTheme {

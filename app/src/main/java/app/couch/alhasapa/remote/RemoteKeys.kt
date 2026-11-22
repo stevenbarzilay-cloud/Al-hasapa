@@ -64,12 +64,16 @@ object RemoteKeys {
     /** What a paired phone typed, on the main thread: into the page of the screen in front. */
     fun deliver(m: KeyLink.Msg) {
         val c = front
-        if (c == null) { Flight.log("phone keyboard: typed while no screen is in front"); return }
-        val list = when (m) {
-            is KeyLink.Msg.Text -> TypedKeys.deliveries(m.s)
-            is KeyLink.Msg.Press -> listOf(TypedKeys.forKey(m.key, m.action))
-            else -> return
+        if (c == null) { if (m !is KeyLink.Msg.Pointer) Flight.log("phone keyboard: input while no screen is in front"); return }
+        when (m) {
+            is KeyLink.Msg.Text -> c.remoteInput(TypedKeys.deliveries(m.s))
+            is KeyLink.Msg.Press -> c.remoteInput(listOf(TypedKeys.forKey(m.key, m.action)))
+            is KeyLink.Msg.Pointer -> c.remotePointer(m.on)
+            is KeyLink.Msg.Move -> c.remoteMove(m.dx, m.dy)
+            KeyLink.Msg.Click -> c.remoteClick()
+            is KeyLink.Msg.Drag -> c.remoteDrag(m.on)
+            is KeyLink.Msg.Scroll -> c.remoteScroll(m.dy)
+            else -> {}
         }
-        c.remoteInput(list)
     }
 }

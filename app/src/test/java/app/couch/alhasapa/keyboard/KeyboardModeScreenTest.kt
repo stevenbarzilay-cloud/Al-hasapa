@@ -3,7 +3,11 @@ package app.couch.alhasapa.keyboard
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -33,6 +37,14 @@ class KeyboardModeScreenTest {
         override fun retry() { sent += "retry" }
         override fun address(a: String) { sent += "address:$a" }
         override fun permission() { sent += "permission" }
+        override fun pointer(m: KeyLink.Msg) { sent += when (m) {
+            is KeyLink.Msg.Pointer -> "pointer:${m.on}"
+            is KeyLink.Msg.Move -> "move:" + (if (m.dx > 0) "right" else if (m.dx < 0) "left" else "-") + (if (m.dy > 0) "down" else if (m.dy < 0) "up" else "")
+            KeyLink.Msg.Click -> "click"
+            is KeyLink.Msg.Drag -> "drag:${m.on}"
+            is KeyLink.Msg.Scroll -> "scroll:" + (if (m.dy > 0) "down" else "up")
+            else -> "?"
+        } }
     }
     private var state by mutableStateOf<KeyClient.State>(KeyClient.State.Looking)
     private var game = 0
@@ -88,5 +100,42 @@ class KeyboardModeScreenTest {
         rule.onNode(hasContentDescription("חץ שמאלה")).performClick()
         rule.waitForIdle()
         assertTrue("an arrow is held while pressed: down, then up", sent.takeLast(2) == listOf("key:LEFT:DOWN", "key:LEFT:UP"))
+    }
+
+    @Test
+    fun theTouchpadIsTuckedAwayUntilPulledOutAndDrivesThePaw() {
+        state = KeyClient.State.Connected("MiBOX4", "Krillion"); show()
+        val tab = hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")
+        rule.onNode(tab).assertIsDisplayed()
+        rule.onNodeWithText("משטח מגע").assertIsNotDisplayed()
+        rule.onNode(tab).performClick(); rule.waitForIdle()
+        assertEquals(listOf("pointer:true"), sent)
+        rule.onNodeWithText("משטח מגע").assertIsDisplayed()
+        val pad = rule.onNode(hasContentDescription("מזיזים את הכפה עם אצבע אחת · נגיעה קצרה לוחצת · שתי אצבעות גוללות"))
+        sent.clear()
+        pad.performTouchInput { click(center) }
+        assertEquals("a short touch is a click", listOf("click"), sent)
+        sent.clear()
+        pad.performTouchInput { down(center); repeat(6) { moveBy(Offset(30f, 10f), delayMillis = 20) }; up() }
+        assertTrue("a swipe moves the paw that way: $sent", sent.isNotEmpty() && sent.all { it == "move:rightdown" })
+        sent.clear()
+        pad.performTouchInput {
+            down(0, center); down(1, center + Offset(60f, 0f))
+            repeat(5) { moveBy(0, Offset(0f, 25f), delayMillis = 20); moveBy(1, Offset(0f, 25f), delayMillis = 0) }
+            up(0); up(1)
+        }
+        assertTrue("two fingers scroll: $sent", sent.isNotEmpty() && sent.all { it == "scroll:down" })
+        sent.clear()
+        rule.onNode(hasContentDescription("גרירה")).performClick()
+        rule.onNode(hasContentDescription("גוררים · לחיצה משחררת")).assertIsDisplayed()
+        rule.onNode(hasContentDescription("סגירת משטח המגע")).performClick(); rule.waitForIdle()
+        assertEquals("closing lifts the finger and puts the paw away", listOf("drag:true", "drag:false", "pointer:false"), sent)
+        rule.onNodeWithText("משטח מגע").assertIsNotDisplayed()
+    }
+
+    @Test
+    fun theTouchpadIsOnlyThereWhenConnected() {
+        state = KeyClient.State.Looking; show()
+        rule.onNode(hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")).assertDoesNotExist()
     }
 }

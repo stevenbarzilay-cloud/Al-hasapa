@@ -158,6 +158,14 @@
     <string name="remote_pair_title">טלפון רוצה להקליד כאן</string>
     <string name="remote_pair_body">מקלידים את הקוד בטלפון, במצב מקלדת לטלוויזיה</string>
     <string name="remote_badge">טלפון מחובר כמקלדת</string>
+    <string name="tv_hint_phone_paw">הכפה בשליטת הטלפון · נגיעה קצרה בלוח לוחצת · שתי אצבעות גוללות</string>
+    <string name="kb_pad_handle">משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח</string>
+    <string name="kb_pad_hint">מזיזים את הכפה עם אצבע אחת · נגיעה קצרה לוחצת · שתי אצבעות גוללות</string>
+    <string name="kb_pad_click">לחיצה</string>
+    <string name="kb_pad_drag">גרירה</string>
+    <string name="kb_pad_drag_on">גוררים · לחיצה משחררת</string>
+    <string name="kb_pad_close">סגירת משטח המגע</string>
+    <string name="kb_pad">משטח מגע</string>
     <string name="tv_hint_phone">הטלפון מחובר כמקלדת. מה שמקלידים בו נכתב כאן</string>
     <string name="player_page_died">הדף של המשחק נסגר פעמיים ברצף, כנראה חסר זיכרון בממיר. אפשר לנסות שוב או לחזור.</string>
     <string name="stopped_title">בפעם הקודמת האפליקציה נעצרה באמצע</string>

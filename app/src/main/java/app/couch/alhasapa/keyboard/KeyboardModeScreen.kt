@@ -15,7 +15,24 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -93,6 +110,9 @@ interface KeySink {
     fun retry()
     fun address(a: String)
     fun permission()
+
+    /** The touchpad: [KeyLink.Msg.Pointer], [KeyLink.Msg.Move], [KeyLink.Msg.Click], [KeyLink.Msg.Drag], [KeyLink.Msg.Scroll]. */
+    fun pointer(m: KeyLink.Msg) {}
 }
 
 /**
@@ -114,7 +134,162 @@ fun KeyboardModeScreen(state: KeyClient.State, sink: KeySink, onGame: () -> Unit
                 KeyClient.State.Wait -> Message(stringResource(R.string.kb_wait)) { Pill(stringResource(R.string.kb_retry), dark = false) { sink.retry() } }
             }
         }
+        // The paw's touchpad, tucked away at the right edge until it is wanted (most of the app is easier with the remote).
+        if (state is KeyClient.State.Connected) PawDrawer(sink)
     }
+}
+
+/**
+ * The touchpad drawer. Closed, only a small tab with a paw sticks out at the right edge, and the whole screen is the keyboard's. Pulled out
+ * (or the tab touched) the pad slides in from the right, below the switch at the top; pushed back, or the tab or ✕ touched, it goes away.
+ * While it is out the TV shows the paw, and it is the same paw as the remote's.
+ */
+@Composable
+private fun BoxScope.PawDrawer(sink: KeySink) {
+    val scope = rememberCoroutineScope()
+    val shown = remember { Animatable(0f) }
+    var open by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
+    fun settle(toOpen: Boolean) {
+        if (toOpen != open) {
+            open = toOpen
+            if (!toOpen && dragging) { dragging = false; sink.pointer(KeyLink.Msg.Drag(false)) }
+            sink.pointer(KeyLink.Msg.Pointer(toOpen))
+        }
+        scope.launch { shown.animateTo(if (toOpen) 1f else 0f, spring(dampingRatio = 0.85f, stiffness = 500f)) }
+    }
+    DisposableEffect(Unit) { onDispose { if (open) sink.pointer(KeyLink.Msg.Pointer(false)) } }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        BoxWithConstraints(Modifier.matchParentSize().padding(top = 76.dp, bottom = 8.dp)) {
+            val density = LocalDensity.current
+            val handle = 34.dp
+            val panel = (maxWidth - 40.dp).coerceAtMost(480.dp)
+            val panelPx = with(density) { panel.toPx() }
+            val left = with(density) { (maxWidth - handle).toPx() } - panelPx * shown.value
+            val drag = rememberDraggableState { delta -> scope.launch { shown.snapTo((shown.value - delta / panelPx).coerceIn(0f, 1f)) } }
+            Row(
+                Modifier.fillMaxHeight().absoluteOffset { IntOffset(left.roundToInt(), 0) }
+                    .draggable(drag, Orientation.Horizontal, onDragStopped = { v -> settle(if (abs(v) > 600f) v < 0 else shown.value > 0.5f) }),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                // The tab: a paw on the ink, at the edge of the screen, low, beside the big Enter (where the edge is free; higher up it
+                // would sit on the row of keys).
+                val tabLabel = stringResource(R.string.kb_pad_handle)
+                Box(
+                    Modifier.padding(bottom = 22.dp).width(handle).height(112.dp).clip(RoundedCornerShape(topStart = 18.dp, bottomStart = 18.dp)).background(Palette.Ink)
+                        .clickable { settle(!open) }.semantics { role = Role.Button; contentDescription = tabLabel },
+                    contentAlignment = Alignment.Center,
+                ) { PawIcon(24.dp, Palette.Red, outline = Palette.Ink) }
+                Column(
+                    Modifier.width(panel).fillMaxHeight().clip(RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp)).background(Palette.Card)
+                        .border(BorderStroke(1.5.dp, Palette.Line2), RoundedCornerShape(topStart = 22.dp, bottomStart = 22.dp)).padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            PawIcon(22.dp, Palette.Red, outline = Palette.Card)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.kb_pad), fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.weight(1f))
+                            val close = stringResource(R.string.kb_pad_close)
+                            Box(
+                                Modifier.size(40.dp).clip(CircleShape).background(Palette.Tint).clickable { settle(false) }
+                                    .semantics { role = Role.Button; contentDescription = close },
+                                contentAlignment = Alignment.Center,
+                            ) { Text("✕", fontSize = 18.sp, color = Palette.Ink) }
+                        }
+                    }
+                    TouchPad(sink, Modifier.fillMaxWidth().weight(1f)) { if (dragging) dragging = false }
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            val haptics = LocalHapticFeedback.current
+                            PadButton(stringResource(R.string.kb_pad_click), on = false, Modifier.weight(1f)) {
+                                dragging = false
+                                sink.pointer(KeyLink.Msg.Click); haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            PadButton(stringResource(if (dragging) R.string.kb_pad_drag_on else R.string.kb_pad_drag), on = dragging, Modifier.weight(1f)) {
+                                dragging = !dragging
+                                sink.pointer(KeyLink.Msg.Drag(dragging))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The pad itself: one finger moves the paw (faster swipes go further, like a laptop's), a short touch is a tap where the paw is, two fingers
+ * scroll the page under it. Moves go out at most sixty times a second, each the sum of what happened since the last.
+ */
+@Composable
+private fun TouchPad(sink: KeySink, modifier: Modifier, onTapped: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    val hint = stringResource(R.string.kb_pad_hint)
+    Box(
+        modifier.clip(RoundedCornerShape(20.dp)).background(Palette.Tint).border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(20.dp))
+            .semantics { contentDescription = hint }
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val first = awaitFirstDown(requireUnconsumed = false)
+                    first.consume()
+                    val start = first.uptimeMillis
+                    var end = start
+                    var travel = 0f
+                    var fingers = 1
+                    var dx = 0f; var dy = 0f; var scroll = 0f
+                    var sentAt = start
+                    fun flush(now: Long) {
+                        if (dx != 0f || dy != 0f) {
+                            val mx = dx / density; val my = dy / density
+                            val speed = hypot(mx, my) / (now - sentAt).coerceAtLeast(1L)          // dp per ms
+                            val gain = 1f + ((speed - 0.25f) * 2.2f).coerceIn(0f, 2.5f)
+                            sink.pointer(KeyLink.Msg.Move(mx * gain, my * gain))
+                            dx = 0f; dy = 0f
+                        }
+                        if (scroll != 0f) { sink.pointer(KeyLink.Msg.Scroll(scroll / density)); scroll = 0f }
+                        sentAt = now
+                    }
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val down = event.changes.filter { it.pressed }
+                        end = event.changes.maxOf { it.uptimeMillis }
+                        if (down.isEmpty()) break
+                        fingers = maxOf(fingers, down.size)
+                        if (down.size >= 2) {
+                            scroll += down.map { it.position.y - it.previousPosition.y }.average().toFloat()
+                        } else {
+                            val d = down[0].position - down[0].previousPosition
+                            travel += d.getDistance(); dx += d.x; dy += d.y
+                        }
+                        event.changes.forEach { it.consume() }
+                        if (end - sentAt >= 16) flush(end)
+                    }
+                    flush(end)
+                    if (fingers == 1 && travel < 8.dp.toPx() && end - start < 300) {
+                        sink.pointer(KeyLink.Msg.Click)
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onTapped()
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        PawIcon(84.dp, Palette.Line, outline = Palette.Tint)
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Text(hint, fontSize = 14.sp, color = Palette.Ink2, textAlign = TextAlign.Center, modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun PadButton(label: String, on: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier.height(52.dp).clip(RoundedCornerShape(14.dp)).background(if (on) Palette.Red else Palette.Ink).clickable(onClick = onClick)
+            .semantics { role = Role.Button; contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Palette.Cream, maxLines = 1) }
 }
 
 /** Playing here, or being the TV's keyboard: one switch, the same in the hub's header. */

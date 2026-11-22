@@ -22,6 +22,7 @@ class KeyLinkTest {
             Msg.Hi("tv1", "MiBOX4"), Msg.Hello("ph1", "Pixel 8", ""), Msg.NeedCode, Msg.Pair("0421"), Msg.Wrong(2), Msg.Paired("ab".repeat(32)),
             Msg.Ok("Krillion"), Msg.Screen("עמוד הבית"), Msg.Text("octopus"), Msg.Text("שלום 😀"), Msg.Press(KeyLink.Key.ENTER, KeyLink.Action.TAP),
             Msg.Press(KeyLink.Key.LEFT, KeyLink.Action.DOWN), Msg.Press(KeyLink.Key.LEFT, KeyLink.Action.UP), Msg.Ping, Msg.Pong, Msg.Bye("code"),
+            Msg.Pointer(true), Msg.Pointer(false), Msg.Move(12.5f, -3.25f), Msg.Click, Msg.Drag(true), Msg.Drag(false), Msg.Scroll(-40f),
         )
         for (m in all) {
             val line = KeyLink.encode(m)
@@ -70,5 +71,12 @@ class KeyLinkTest {
         assertEquals(TextMirror.Edit(1, "😃"), TextMirror.diff("a😀", "a😃"))
         assertEquals(TextMirror.Edit(1, "ם"), TextMirror.diff("שלו", "שלם"))
         assertTrue(TextMirror.diff("same", "same").isEmpty)
+    }
+
+    @Test
+    fun aMoveOrScrollIsNeverHugeOrNotANumber() {
+        assertEquals(Msg.Move(400f, -400f), KeyLink.decode("{\"t\":\"move\",\"dx\":99999,\"dy\":-99999}"))
+        assertEquals(Msg.Move(0f, 0f), KeyLink.decode("{\"t\":\"move\",\"dx\":\"NaN\",\"dy\":\"x\"}"))
+        assertEquals(Msg.Scroll(400f), KeyLink.decode("{\"t\":\"scroll\",\"dy\":1e9}"))
     }
 }

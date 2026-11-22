@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.6.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.7.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -289,6 +289,12 @@ app's keyboard:
   Suggestions and corrections are fine: only the difference is sent, so the TV's field always matches the phone's line. Under the line:
   **Esc**, **Tab**, the four **arrows** (held down, the game sees the key held) and **⌫**; and a big **Enter** with a cat's paw that
   presses it (it comes down on every Enter, the keyboard's own too).
+- **The paw's touchpad (1.7)**, for the few places the remote does not reach (most of the app is easier with the remote): a dark tab
+  with a red paw sticks out of the right edge of keyboard mode. Pull it out (or touch it) and the touchpad slides in below the switch;
+  push it back, or touch the tab or ✕, and the whole screen is the keyboard's again. While it is out the TV shows the paw (the same
+  paw as the remote's, so the dock's paw button lights up): one finger moves it (faster swipes go further), a short touch taps where
+  it is, two fingers scroll the page under it, "לחיצה" taps, "גרירה" holds the finger down so moves drag (touch it again to let go).
+  Putting the pad away hides the paw again, unless the remote had turned it on.
 - **On the TV**, a small red phone at the top of the dock shows that a phone is connected.
 
 How it works: the TV app listens on the home network while it is in front (port 47123, announced as `_couchkeys._tcp`), and the phone finds

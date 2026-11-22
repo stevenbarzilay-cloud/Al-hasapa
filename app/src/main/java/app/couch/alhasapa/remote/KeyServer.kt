@@ -150,7 +150,7 @@ class KeyServer(
                 if (store.phoneFor(m.token) != null) { welcome(); true } else askForCode()
             }
             is Msg.Pair -> checkCode(m.code)
-            is Msg.Text, is Msg.Press -> {
+            is Msg.Text, is Msg.Press, is Msg.Pointer, is Msg.Move, Msg.Click, is Msg.Drag, is Msg.Scroll -> {
                 if (ready && atHumanPace()) main.post { onInput(m) }
                 true
             }
@@ -201,18 +201,21 @@ class KeyServer(
             return true
         }
 
-        /** A person types at most a few dozen keys a second; anything faster is dropped. */
+        /** A person types at most a few dozen keys a second and the touchpad sends at most sixty moves; anything faster is dropped. */
         private fun atHumanPace(): Boolean {
             val now = SystemClock.elapsedRealtime() / 1000
             if (now != second) { second = now; inSecond = 0 }
-            return ++inSecond <= 60
+            return ++inSecond <= 150
         }
 
         fun close(bye: String?) {
             if (!peers.remove(this)) return
             if (bye != null) send(Msg.Bye(bye))
             sender.execute { runCatching { socket.close() } }
-            if (ready) Flight.log("phone keyboard: $name left")
+            if (ready) {
+                Flight.log("phone keyboard: $name left")
+                main.post { onInput(Msg.Pointer(false)) }               // its paw goes away with it, and a finger that was down is lifted
+            }
             // A phone that was being paired and went away: the TV stops showing the code (it comes back if the phone does).
             if (!ready) synchronized(lock) { if (peers.none { !it.ready }) { codeFor = null; if (code != null) code = null } }
             publish()

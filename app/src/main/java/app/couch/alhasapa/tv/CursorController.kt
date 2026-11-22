@@ -88,6 +88,20 @@ class CursorController(private val density: Float) {
         okPressed = false; okLong = false
     }
 
+    /** A move from the phone's touchpad: by [dx], [dy] pixels (a drag goes along if the finger is down). */
+    fun moveBy(dx: Float, dy: Float, sink: TouchSink) = move(dx, dy, sink)
+
+    /** The phone's drag switch: the finger goes down where the cursor is ([down]), or up again. */
+    fun press(down: Boolean, sink: TouchSink) {
+        if (down && !dragging) { dragging = true; sink.down(x, y) } else if (!down && dragging) { dragging = false; sink.up(x, y) }
+    }
+
+    /** A tap where the cursor is (a short touch on the phone's touchpad). A finger that was down is lifted first. */
+    fun tapHere(sink: TouchSink) {
+        if (dragging) { dragging = false; sink.up(x, y) }
+        sink.tap(x, y)
+    }
+
     /** Let go of everything (the keyboard opened, the app paused). */
     fun cancel(sink: TouchSink) {
         held.clear(); heldMs = 0L; okPressed = false; okLong = false

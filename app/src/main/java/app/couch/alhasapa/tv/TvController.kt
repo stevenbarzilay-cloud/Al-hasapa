@@ -22,7 +22,7 @@ enum class InputMode { NAV, PAW }
 enum class Zone { PAGE, NATIVE }
 
 /** A short message shown on screen when the way of controlling things changes or something is worth knowing. */
-enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE }
+enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW }
 
 /** A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up). */
 enum class TvPanel { INFO }
@@ -138,6 +138,64 @@ class TvController(val enabled: Boolean, density: Float) {
         web?.let { w -> if (!w.hasFocus()) w.requestFocus() }
         for (d in list) typer(d)
     }
+
+    // ---- the phone's touchpad drives the same paw ----
+
+    /** The paw was turned on by the phone's touchpad (so the touchpad going away turns it off again). */
+    private var phonePaw = false
+
+    /** How many of this screen's pixels one dp of the phone's touchpad moves the paw: a full swipe across the pad is about half the TV. */
+    private val padScale: Float get() = (cursor.width / 640f).coerceAtLeast(1f)
+
+    /** The touchpad came out ([on]): the paw shows (it is the same paw as the remote's). It went back: navigation as before. */
+    fun remotePointer(on: Boolean) {
+        if (!enabled) return
+        if (on) {
+            if (keyboardOpen) closeKeyboard()
+            if (mode != InputMode.PAW) { togglePaw(); phonePaw = true }
+            cursorVisible = true; sync()
+            say(TvHint.PHONE_PAW)
+        } else {
+            cursor.press(false, sink); sync()
+            if (phonePaw && mode == InputMode.PAW) togglePaw()
+            phonePaw = false
+        }
+    }
+
+    fun remoteMove(dxDp: Float, dyDp: Float) {
+        if (!enabled) return
+        if (mode != InputMode.PAW) remotePointer(true)
+        cursor.moveBy(dxDp * padScale, dyDp * padScale, sink)
+        cursorVisible = true; sync()
+    }
+
+    fun remoteClick() {
+        if (!enabled) return
+        if (mode != InputMode.PAW) remotePointer(true)
+        cursor.tapHere(sink); sync()
+    }
+
+    fun remoteDrag(down: Boolean) {
+        if (!enabled) return
+        if (down && mode != InputMode.PAW) remotePointer(true)
+        cursor.press(down, sink); sync()
+    }
+
+    /** Two fingers on the touchpad: the page under the paw scrolls, as with a mouse's wheel (fingers down, the page comes down). */
+    fun remoteScroll(dyDp: Float) {
+        if (!enabled) return
+        onScrolled(dyDp)
+        val d = decor ?: return
+        val props = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_MOUSE }
+        val coords = MotionEvent.PointerCoords().apply { x = cursor.x; y = cursor.y; setAxisValue(MotionEvent.AXIS_VSCROLL, dyDp / SCROLL_DP_PER_NOTCH) }
+        val t = SystemClock.uptimeMillis()
+        val ev = MotionEvent.obtain(t, t, MotionEvent.ACTION_SCROLL, 1, arrayOf(props), arrayOf(coords), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_MOUSE, 0)
+        d.dispatchGenericMotionEvent(ev)
+        ev.recycle()
+    }
+
+    /** Every scroll from the touchpad, for tests. */
+    var onScrolled: (dyDp: Float) -> Unit = {}
 
     /** Shows [h] for a few seconds (from outside the remote too: a phone that just connected as the keyboard). */
     fun notice(h: TvHint) { if (enabled) say(h) }
@@ -457,6 +515,9 @@ class TvController(val enabled: Boolean, density: Float) {
 
         /** The information panel's close button. */
         const val PANEL_CLOSE_ID = "panel-close"
+
+        /** Two fingers moving this many dp on the touchpad scroll one notch of a mouse's wheel. */
+        const val SCROLL_DP_PER_NOTCH = 20f
 
         /** Tests put a fake page here before the screen is built. */
         var PageNavOverride: PageNav? = null

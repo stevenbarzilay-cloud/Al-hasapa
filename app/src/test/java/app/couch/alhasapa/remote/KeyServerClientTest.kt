@@ -68,10 +68,15 @@ class KeyServerClientTest {
         phone.send(Msg.Press(KeyLink.Key.ENTER, KeyLink.Action.TAP))
         waitFor("what was typed reached the TV, in order") { typed.size == 2 }
         assertEquals(listOf(Msg.Text("octopus"), Msg.Press(KeyLink.Key.ENTER, KeyLink.Action.TAP)), typed.toList())
+        phone.send(Msg.Pointer(true)); phone.send(Msg.Move(5f, 6f)); phone.send(Msg.Click); phone.send(Msg.Scroll(-12f))
+        waitFor("the touchpad's moves reached the TV") { typed.size == 6 }
+        assertEquals(listOf(Msg.Pointer(true), Msg.Move(5f, 6f), Msg.Click, Msg.Scroll(-12f)), typed.drop(2))
+        typed.clear()
 
         // The next time: no code, straight in.
         phone.stop()
         waitFor("the TV saw it leave") { server.ui.value.phones.isEmpty() }
+        waitFor("and put its paw away") { typed.contains(Msg.Pointer(false)) }
         val again = client()
         again.start()
         waitFor("connected again without a code") { again.state.value is KeyClient.State.Connected }

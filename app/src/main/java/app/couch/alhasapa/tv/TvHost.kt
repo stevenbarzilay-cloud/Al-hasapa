@@ -26,6 +26,8 @@ class TvHost(private val activity: ComponentActivity) {
         // Keys are taken at the window, before the focused view (a WebView would eat the arrows). Not an Activity override:
         // androidx marks ComponentActivity.dispatchKeyEvent as restricted.
         if (enabled) {
+            // Where touches (the paw's) are injected; set now, so the phone's touchpad works before the remote's first key.
+            controller.decor = activity.window.decorView
             val original = activity.window.callback
             activity.window.callback = KeyInterceptCallback(original) { controller.decor = activity.window.decorView; controller.handleKey(it) }
             // The picture of the cats is the starting window's (what shows while the app starts). Once the screen draws itself it covers

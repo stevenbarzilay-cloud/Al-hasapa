@@ -339,4 +339,46 @@ class TvControllerTest {
         assertTrue(js.contains("insertText"))
         WebTyper.deliver(null, Delivery.Text("x"))                // no page, no crash
     }
+
+    // ---- the phone's touchpad ----
+
+    @Test
+    fun thePhonesTouchpadDrivesThePawAndPutsItAwayAgain() {
+        val (c, page) = screen(); val seen = ArrayList<String>()
+        c.onInjected = { a, x, y -> seen += "${MotionEvent.actionToString(a)} ${x.toInt()},${y.toInt()}" }
+        assertEquals(InputMode.NAV, c.mode)
+        c.remotePointer(true)
+        assertEquals("the pad came out: the paw shows", InputMode.PAW, c.mode); assertEquals(TvHint.PHONE_PAW, c.hint)
+        val x0 = c.cursorX; val y0 = c.cursorY
+        c.remoteMove(10f, -5f)
+        assertEquals("a dp of the pad is a few of the TV's pixels", x0 + 10f * (1000f / 640f), c.cursorX, 0.01f)
+        assertEquals(y0 - 5f * (1000f / 640f), c.cursorY, 0.01f)
+        assertTrue("moving is not touching", seen.isEmpty())
+        c.remoteClick(); idle(TvController.TAP_MS + 20)
+        assertEquals("a short touch on the pad taps where the paw is", listOf("ACTION_DOWN", "ACTION_UP"), seen.map { it.substringBefore(' ') })
+        seen.clear()
+        c.remoteDrag(true); c.remoteMove(20f, 0f); c.remoteDrag(false)
+        assertEquals(listOf("ACTION_DOWN", "ACTION_MOVE", "ACTION_UP"), seen.map { it.substringBefore(' ') })
+        var scrolled = 0f; c.onScrolled = { scrolled += it }
+        c.remoteScroll(-30f); assertEquals(-30f, scrolled, 0f)
+        c.remotePointer(false)
+        assertEquals("the pad went back: navigating as before", InputMode.NAV, c.mode)
+        assertTrue("and the page has the focus again", page.calls.contains("enter null"))
+    }
+
+    @Test
+    fun aPawTheRemoteTurnedOnStaysWhenThePhonesPadGoesAway() {
+        val (c, _) = screen()
+        c.togglePaw()
+        c.remotePointer(true); c.remotePointer(false)
+        assertEquals("it was not the phone's to turn off", InputMode.PAW, c.mode)
+    }
+
+    @Test
+    fun aFingerLeftDownIsLiftedWhenThePhoneGoes() {
+        val (c, _) = screen(); val seen = ArrayList<Int>(); c.onInjected = { a, _, _ -> seen += a }
+        c.remoteDrag(true); assertTrue(c.dragging)
+        c.remotePointer(false)
+        assertFalse(c.dragging); assertEquals(listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP), seen)
+    }
 }

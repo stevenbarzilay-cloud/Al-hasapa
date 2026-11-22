@@ -15,6 +15,7 @@ import org.json.JSONObject
  *     TV    → phone  wrong {left} | paired {token}
  *     TV    → phone  ok {screen}, then screen {screen}    ready; what the TV is showing (for the phone's status line)
  *     phone → TV     text {s} | key {k, a} | ping
+ *     phone → TV     pointer {on} | move {dx, dy} | click | drag {on} | scroll {dy}     the touchpad (dp of the phone's pad)
  *     TV    → phone  pong | bye {why}
  *
  * Only keys go to the TV and only the screen's name comes back: nothing a page shows or holds ever leaves the TV.
@@ -59,6 +60,17 @@ object KeyLink {
         data class Screen(val screen: String) : Msg
         data class Text(val s: String) : Msg
         data class Press(val key: Key, val action: Action) : Msg
+
+        /** The touchpad came out ([on]) or went back: the TV's paw shows, or goes away. */
+        data class Pointer(val on: Boolean) : Msg
+        /** Move the paw by this much (in dp of the phone's touchpad). */
+        data class Move(val dx: Float, val dy: Float) : Msg
+        /** A tap where the paw is. */
+        data object Click : Msg
+        /** The finger down where the paw is ([on]: moves are then a drag), or up again. */
+        data class Drag(val on: Boolean) : Msg
+        /** Two fingers moved [dy] dp on the touchpad: the page under the paw scrolls. */
+        data class Scroll(val dy: Float) : Msg
         data object Ping : Msg
         data object Pong : Msg
         data class Bye(val why: String) : Msg
@@ -75,6 +87,11 @@ object KeyLink {
         is Msg.Screen -> JSONObject().put("t", "screen").put("screen", m.screen)
         is Msg.Text -> JSONObject().put("t", "text").put("s", m.s)
         is Msg.Press -> JSONObject().put("t", "key").put("k", m.key.name).put("a", m.action.name.lowercase())
+        is Msg.Pointer -> JSONObject().put("t", "pointer").put("on", m.on)
+        is Msg.Move -> JSONObject().put("t", "move").put("dx", round2(m.dx)).put("dy", round2(m.dy))
+        Msg.Click -> JSONObject().put("t", "click")
+        is Msg.Drag -> JSONObject().put("t", "drag").put("on", m.on)
+        is Msg.Scroll -> JSONObject().put("t", "scroll").put("dy", round2(m.dy))
         Msg.Ping -> JSONObject().put("t", "ping")
         Msg.Pong -> JSONObject().put("t", "pong")
         is Msg.Bye -> JSONObject().put("t", "bye").put("why", m.why)
@@ -100,12 +117,22 @@ object KeyLink {
                 val action = runCatching { Action.valueOf(o.optString("a", "tap").uppercase()) }.getOrNull() ?: return null
                 Msg.Press(key, action)
             }
+            "pointer" -> Msg.Pointer(o.optBoolean("on"))
+            "move" -> Msg.Move(limit(o.optDouble("dx", 0.0)), limit(o.optDouble("dy", 0.0)))
+            "click" -> Msg.Click
+            "drag" -> Msg.Drag(o.optBoolean("on"))
+            "scroll" -> Msg.Scroll(limit(o.optDouble("dy", 0.0)))
             "ping" -> Msg.Ping
             "pong" -> Msg.Pong
             "bye" -> Msg.Bye(s("why"))
             else -> null
         }
     }
+
+    /** A move or a scroll is never more than this many dp at once (and never "not a number"). */
+    private fun limit(v: Double): Float = if (v.isNaN()) 0f else v.coerceIn(-400.0, 400.0).toFloat()
+
+    private fun round2(v: Float): Double = Math.round(v * 100.0) / 100.0
 
     /** Only devices in the home itself may connect: private, link-local and loopback addresses. */
     fun isHomeAddress(a: InetAddress): Boolean {
