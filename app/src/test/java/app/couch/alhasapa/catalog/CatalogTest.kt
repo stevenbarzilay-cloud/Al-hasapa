@@ -129,6 +129,17 @@ class CatalogTest {
         val ids = (0 until hub.getJSONArray("games").length()).map { hub.getJSONArray("games").getJSONObject(it).getString("id") }
         assertTrue("c1" in ids)
     }
+
+    @Test
+    fun eachDialedCardOpensItsOwnGameNotTheSitesHomePage() {
+        // Both used to open https://dialed.gg, a long showcase page (twice the size of a game's page, with animated demos) on which the
+        // game still had to be found; on the TV box it did not come up at all. The site has a page for each game.
+        assertEquals("https://dialed.gg/color", catalog.game("dialed")!!.u)
+        assertEquals("https://dialed.gg/sound", catalog.game("dialedsound")!!.u)
+        // The player stays on the site (its scripts come from cdn.dialed.gg, a subdomain).
+        val hosts = catalog.allowedHosts(catalog.game("dialed")!!, catalog.game("dialed")!!.u)
+        assertTrue(Catalog.hostAllowed("dialed.gg", hosts)); assertTrue(Catalog.hostAllowed("cdn.dialed.gg", hosts))
+    }
 }
 
 private val DecisionAllow = app.couch.alhasapa.player.NavigationPolicy.Decision.Allow

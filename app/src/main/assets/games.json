@@ -407,7 +407,7 @@
    "s": "dl",
    "k": "חושים",
    "m": "◐",
-   "u": "https://dialed.gg",
+   "u": "https://dialed.gg/color",
    "d": "רואים צבע לרגע ומשחזרים אותו מהזיכרון.",
    "metric": "none",
    "lib": 1
@@ -418,7 +418,7 @@
    "s": "dl",
    "k": "חושים",
    "m": "∿",
-   "u": "https://dialed.gg",
+   "u": "https://dialed.gg/sound",
    "d": "שומעים טון ומשחזרים את התדר.",
    "metric": "none",
    "lib": 1

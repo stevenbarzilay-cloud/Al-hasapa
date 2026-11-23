@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.3.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -228,6 +228,12 @@ want to play on, starting with Krillion and NYT:
   runs, only when it is not there, touching nothing else (`tools/display_check.cjs` checks all of that in Chromium, and the generated
   script was run against the real page). The answer field takes the keys by itself and Enter sends, so the phone's keyboard is all
   the game needs after "BEGIN DESCENT".
+- **1.9.3: each Dialed card opens its own game.** "Dialed · צבע" and "Dialed · צליל" both opened `https://dialed.gg`, the site's
+  showcase page (twice the size of a game's page, with animated demos), on which the game still had to be found; on the TV box it did
+  not come up. They now open `https://dialed.gg/color` and `https://dialed.gg/sound` (the prototype in `couch-artifact/` keeps the old
+  links; a link saved in the hub's settings still wins). Whether that is all Dialed needs on the box is not known: nothing in its
+  pages turns a browser away or sends it to another site, so if it still does not come up, the report (ⓘ) now says what happened to
+  the page.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24
