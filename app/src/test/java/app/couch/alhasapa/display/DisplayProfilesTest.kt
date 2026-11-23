@@ -55,10 +55,26 @@ class DisplayProfilesTest {
 
     @Test
     fun anUnknownSiteIsSavedUnderItsHostAndFirstPathSegment() {
+        val url = "https://www.some-game.example/play/today"
+        val r = profiles.resolve(url, null)
+        assertEquals("some-game.example/play", profiles.keyFor(url, r))
+        assertEquals("some-game.example", profiles.keyFor("https://some-game.example", profiles.resolve("https://some-game.example", null)))
+    }
+
+    @Test
+    fun aSiteInTheTableIsSavedUnderItsOwnKeyAndItsTvPreferencesHoldOnEveryPageWhateverWasSaved() {
+        // Krillion is in the table for its low-power mode on a TV (see DisplayScript); it is shown as it is, like before.
         val url = "https://www.krillion.io/play/today"
         val r = profiles.resolve(url, null)
-        assertEquals("krillion.io/play", profiles.keyFor(url, r))
-        assertEquals("krillion.io", profiles.keyFor("https://krillion.io", profiles.resolve("https://krillion.io", null)))
+        assertEquals(DisplayMode.NATIVE, r.profile.mode)
+        assertEquals("krillion.io", profiles.keyFor(url, r))
+        assertEquals(mapOf("krillion-low-power" to "1"), r.profile.tvStorage)
+        // Something saved for one page of it, under a longer key (as versions before 1.9.2 saved it), does not hide them.
+        val saved = JSONObject().put("krillion.io/play", JSONObject().put("zoom", 130))
+        val again = profiles.resolve(url, saved)
+        assertEquals(130, again.profile.zoom); assertTrue(again.fromUser)
+        assertEquals(mapOf("krillion-low-power" to "1"), again.profile.tvStorage)
+        assertTrue("and no other site gets them", profiles.resolve("https://www.nytimes.com/games/wordle/index.html", null).profile.tvStorage.isEmpty())
     }
 
     @Test

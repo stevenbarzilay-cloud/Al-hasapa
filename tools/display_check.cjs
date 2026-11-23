@@ -38,6 +38,37 @@ const PAGE = (meta) => `<!doctype html><meta charset=utf-8>${meta}<style>html,bo
   await page.goto('https://example.test/');
   await page.evaluate(script); await page.evaluate(script); await page.evaluate(script);
   ok(await page.evaluate(() => document.querySelectorAll('#couch-display-css').length) === 1, 'exactly one style element after three runs');
+  // On a TV, for a site whose profile names it (Krillion's low-power mode): the site's own preference is set before the page's first
+  // script runs, only when it is not there, and nothing else in the storage is touched.
+  const tvFile = process.argv[2] + '/display-tv-krillion.js';
+  if (fs.existsSync(tvFile)) {
+    const tvScript = fs.readFileSync(tvFile, 'utf8');
+    const KEY = 'krillion-low-power';
+    const SEEN = `<!doctype html><meta charset=utf-8><script>window.__seen = localStorage.getItem('${KEY}')</script><div class="smartbanner">x</div>`;
+    for (const [before, expected, what] of [[null, '1', 'not chosen yet: on'], ['0', '0', 'switched off in the game: stays off'], ['1', '1', 'already on: stays on']]) {
+      const c = await browser.newContext({ viewport: { width: 880, height: 540 } });
+      const p = await c.newPage();
+      await p.route('**/*', r => r.fulfill({ contentType: 'text/html', body: SEEN }));
+      await p.goto('https://krillion.test/'); await p.evaluate(([k, v]) => { localStorage.clear(); localStorage.setItem('other', 'kept'); if (v !== null) localStorage.setItem(k, v); }, [KEY, before]);
+      await p.addInitScript({ content: tvScript });
+      await p.goto('https://krillion.test/play'); await p.waitForLoadState('load');
+      const r = await p.evaluate((k) => ({ seen: window.__seen, now: localStorage.getItem(k), other: localStorage.getItem('other'), n: localStorage.length, banner: getComputedStyle(document.querySelector('.smartbanner')).display }), KEY);
+      ok(r.seen === expected && r.now === expected, `TV preference, ${what} (the page's first script saw ${JSON.stringify(r.seen)})`);
+      ok(r.other === 'kept' && r.n === 2, 'nothing else in the storage is touched');
+      ok(r.banner === 'none', 'and the rest of the display script still runs');
+      await c.close();
+    }
+    // A page whose storage is closed (a browser in a private mode throws): the script goes on.
+    const c = await browser.newContext({ viewport: { width: 880, height: 540 } });
+    const p = await c.newPage();
+    await p.addInitScript(() => { Object.defineProperty(window, 'localStorage', { get() { throw new Error('closed'); } }); });
+    await p.addInitScript({ content: tvScript });
+    await p.route('**/*', r => r.fulfill({ contentType: 'text/html', body: '<!doctype html><div class="smartbanner">x</div>' }));
+    const errors = []; p.on('pageerror', e => errors.push(e.message));
+    await p.goto('https://krillion.test/'); await p.waitForLoadState('load');
+    ok(await p.evaluate(() => getComputedStyle(document.querySelector('.smartbanner')).display) === 'none' && errors.length === 0, 'closed storage: no error, the display script still runs');
+    await c.close();
+  } else ok(false, 'display-tv-krillion.js is missing (run the display unit tests first)');
   await browser.close();
   console.log(bad ? `\n${bad} FAILED` : '\nall passed');
   process.exit(bad ? 1 : 0);

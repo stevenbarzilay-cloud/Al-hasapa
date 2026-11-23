@@ -85,7 +85,7 @@ object PlayerWebView {
  * runs at document start where the WebView allows it, and is re-run on the live page whenever the profile changes.
  * [origins] are the origin rules the script may run on (the game's own sites).
  */
-class DisplayInjector(private val view: WebView, private val origins: Set<String>) {
+class DisplayInjector(private val view: WebView, private val origins: Set<String>, private val tv: Boolean = false) {
     private var handler: ScriptHandler? = null
     private var script: String? = null
     private var documentStart = false
@@ -94,7 +94,7 @@ class DisplayInjector(private val view: WebView, private val origins: Set<String
     val runsAtDocumentStart: Boolean get() = documentStart
 
     fun apply(profile: DisplayProfile) {
-        val next = DisplayScript.build(profile)
+        val next = DisplayScript.build(profile, tv)
         if (next == script) return
         script = next
         runCatching { handler?.remove() }

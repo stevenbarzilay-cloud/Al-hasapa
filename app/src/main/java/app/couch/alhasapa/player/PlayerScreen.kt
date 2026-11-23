@@ -286,7 +286,10 @@ fun PlayerScreen(
                                         webChromeClient = video          // a game's full-screen video
                                         usedProfile = PlayerWebView.configure(this, session.profile)
                                         Diag.log("player: webview created, profile ${session.profile} -> $usedProfile, display ${profile.mode.id}")
-                                        val inj = DisplayInjector(this, DisplayInjector.originRules(session.allowedHosts, session.roaming))
+                                        val inj = DisplayInjector(this, DisplayInjector.originRules(session.allowedHosts, session.roaming), tv = tv != null)
+                                        if (tv != null && profile.tvStorage.isNotEmpty()) {
+                                            app.couch.alhasapa.diag.Flight.log("player: on the TV this site's own lighter graphics are asked for (${profile.tvStorage.keys.joinToString()})")
+                                        }
                                         inj.apply(profile)                          // before the first load, so the first page is already right
                                         injector = inj
                                         if (result != null) CaptureInjector.install(this, session, gate) { c -> onCaptured(c) }

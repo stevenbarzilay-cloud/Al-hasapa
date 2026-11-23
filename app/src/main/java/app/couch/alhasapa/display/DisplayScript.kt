@@ -13,16 +13,27 @@ import org.json.JSONObject
  * real WebView that was ignored and the page laid out at the narrow box's width, cutting the game off. The page is now sized the
  * way a real phone does it: the WebView itself is that big (see ScaledFrame) and is shrunk to fit.
  * It never reads the page, never touches the game, and never sends anything anywhere.
+ *
+ * One more thing, on a TV only ([build] with tv = true) and only for a site whose profile names it ([DisplayProfile.tvStorage]): it
+ * switches on the site's own display preference when the people have not chosen either way. That is Krillion's "Low-power mode"
+ * (the game's own setting, "Lighter graphics and fewer background animations"): Krillion draws two full-screen canvases sixty times a
+ * second, which a TV box cannot keep up with (it froze the picture on one, and at its full graphics a key took too long to show for a
+ * game with 25 seconds a question). Only that named key is looked at, and it is set only when it is not there: a choice made in the
+ * game's own settings stays.
  */
 object DisplayScript {
-    fun build(profile: DisplayProfile): String {
+    fun build(profile: DisplayProfile, tv: Boolean = false): String {
         val css = buildString {
             if (!profile.dark) append(":root{color-scheme:light only}")
             if (profile.injectCss) append(profile.css)
         }
+        val prefs = if (tv && profile.tvStorage.isNotEmpty()) {
+            val pairs = JSONObject().apply { profile.tvStorage.forEach { (k, v) -> put(k, v) } }.toString()
+            "  try{var P=${quote(pairs)};P=JSON.parse(P);for(var k in P){if(window.localStorage.getItem(k)===null)window.localStorage.setItem(k,P[k])}}catch(e){}\n"
+        } else ""
         return """
 (function(){
-  var CSS=${quote(css)}, LIGHT=${!profile.dark};
+$prefs  var CSS=${quote(css)}, LIGHT=${!profile.dark};
   function head(){return document.head||document.documentElement}
   function light(){
     if(!LIGHT) return;

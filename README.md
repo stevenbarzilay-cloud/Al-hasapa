@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -217,6 +217,17 @@ want to play on, starting with Krillion and NYT:
   arrows no longer wander to buttons behind it; a `__Host-` cookie is handed over for its own host (a browser refuses it with a
   Domain); a login can be sent when the phone cannot tell whether it is signed in (Haaretz); and on a TV each screen asks to keep the
   display mode that is on (a precaution: a page that plays video can make a box change the HDMI mode, which blanks the TV).
+- **1.9.2: Krillion in its own low-power mode on the TV.** Krillion (seven prompts, 25 seconds each, typed) froze the box's picture
+  once and was too slow to play. Looked at here in Chromium at the TV's page size: it draws two full-screen canvases sixty times a
+  second (at the screen's full pixel count), runs eleven endless animations and keeps a layer 27 screens tall ready to move. With the
+  processor slowed six-fold that is about 10 frames a second with the page's thread saturated. The game has a setting of its own for
+  weak devices, "Low-power mode" (a quarter of the canvas pixels, 30 frames a second, fewer particles, the decorative animations
+  paused): about 49 frames a second in the same measurement, and a typed key on the screen within 50 ms. On a TV the app now switches
+  that setting on when the game opens, unless the people chose otherwise in Krillion's own settings (which stays as they left it):
+  `display_profiles.json` names the site's own preference (`tvStorage`), and the display script sets it before the page's first script
+  runs, only when it is not there, touching nothing else (`tools/display_check.cjs` checks all of that in Chromium, and the generated
+  script was run against the real page). The answer field takes the keys by itself and Enter sends, so the phone's keyboard is all
+  the game needs after "BEGIN DESCENT".
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

@@ -63,6 +63,12 @@ data class DisplayProfile(
     /** Where the view is centred on the page when zoomed in past what the page can re-fit (0..1 across and down). */
     val panX: Double = 0.5,
     val panY: Double = 0.5,
+    /**
+     * On a TV only: the site's OWN display preferences (the ones its settings page keeps in the browser's storage, by name), switched
+     * on when the people have not chosen either way. Krillion's "Low-power mode": the game as its author made it for weak devices.
+     * From the built-in table only; never part of what is saved for a site.
+     */
+    val tvStorage: Map<String, String> = emptyMap(),
 ) {
     /** The placement actually used: panels only make sense beside a phone-shaped game, anything else gets a top bar. */
     val place: UiPlace
@@ -96,6 +102,7 @@ data class DisplayProfile(
         uiSize = if (o.has("uiSize")) UiSize.of(o.optString("uiSize")) ?: uiSize else uiSize,
         panX = if (o.has("panX")) o.optDouble("panX", panX).coerceIn(0.0, 1.0) else panX,
         panY = if (o.has("panY")) o.optDouble("panY", panY).coerceIn(0.0, 1.0) else panY,
+        tvStorage = o.optJSONObject("tvStorage")?.let { t -> t.keys().asSequence().associateWith { t.optString(it) } } ?: tvStorage,
     )
 
     companion object {
@@ -132,7 +139,11 @@ class DisplayProfiles(json: String) {
         var p = defaults
         builtIn.firstOrNull { it.first == best }?.let { p = p.overlay(it.second) }
         if (user) p = p.overlay(o)
-        return Resolved(best, p, user)
+        // The TV's preferences for a site are not a matter of how one page is shown: they hold for every page of the site, whatever
+        // was saved for a page of it (a saved, more specific key would otherwise hide the built-in entry that names them).
+        val tvStorage = builtIn.filter { matches(it.first, host, path) }.sortedBy { it.first.length }
+            .fold(emptyMap<String, String>()) { all, (_, entry) -> all + DisplayProfile().overlay(entry).tvStorage }
+        return Resolved(best, p.copy(tvStorage = tvStorage), user)
     }
 
     /** The key a new override is saved under when nothing matched: the host plus the first path segment. */

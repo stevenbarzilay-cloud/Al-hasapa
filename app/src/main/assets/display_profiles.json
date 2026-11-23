@@ -14,6 +14,7 @@
   { "match": "nytimes.com/crosswords/game/daily", "mode": "wide", "vw": 1280 },
   { "match": "nytimes.com/crosswords/game/mini", "mode": "portrait-fit", "_note": "my guess, not in the brief: the Mini is a phone-shaped board" },
   { "match": "nytimes.com/puzzles", "mode": "portrait-fit", "_note": "my guess, not in the brief: Spelling Bee, Letter Boxed, Tiles, Sudoku are phone-shaped" },
-  { "match": "linkedin.com/games", "mode": "portrait-fit", "vw": 430, "vh": 800 }
+  { "match": "linkedin.com/games", "mode": "portrait-fit", "vw": 430, "vh": 800 },
+  { "match": "krillion.io", "tvStorage": { "krillion-low-power": "1" }, "_note": "On a TV only: Krillion's own 'Low-power mode' (its settings page keeps it under this name) is on unless the people chose otherwise. Measured with the processor slowed six-fold at the TV's page size: about 10 frames a second with the page's thread saturated at full graphics; about 49, and a key on the screen within 50 ms, in low-power mode." }
  ]
 }
