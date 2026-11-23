@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -185,12 +185,17 @@ its own history and logins (it is a different app); until accounts and sync exis
 **1.9: a TV app of its own.** Three changes after the evening of 23 November 2026, when the people asked for a TV app they would
 want to play on, starting with Krillion and NYT:
 
-- **The TV's own home** (`home/TvHome.kt`). The TV no longer opens the phone's web hub (four to six seconds to be ready on the box): it
-  opens a native home at once. At the top the day, the evening so far ("שיחקנו 1 מתוך 25 · 2 נקודות ספה"), the two of us and whether the
-  phone is connected; then "המדף של הערב", the shelf as a row of big cards (what is left to play first, the played ones after with ✓),
-  and "עוד משחקים", the rest. The remote's arrows move between the cards (the card in focus grows and wears a red ring, and its
-  description shows under the rows), OK opens the game. "החשבונות" opens the accounts, and "הגדרות ועוד" the full web hub as before (the
-  links, adding a game, the backup); Back from it returns to the home.
+- **The TV's own home** (`home/TvHome.kt`, `home/HomeNav.kt`). The TV no longer opens the phone's web hub (four to six seconds to be
+  ready on the box): it opens a native home at once. At the top the day, the evening so far ("שיחקנו 1 מתוך 25 · 2 נקודות ספה") and
+  the two of us; then "המדף של הערב", the shelf as a row of big cards (what is left to play first, the played ones after with ✓), and
+  "עוד משחקים", the rest; under them what the card in focus is; at the foot "החשבונות", "הגדרות ועוד" (the full web hub as before:
+  the links, adding a game, the backup; the cats cover it while it loads, and Back from it returns to the home) and "מידע לתיקון
+  תקלות", and whether the phone is connected. There is no dock on the home (nothing there to point at or type into), and everything
+  fits one TV screen.
+  The remote moves by the home's shape, like a TV's own home screen: Left and Right walk along a row to its very end (the row moves so
+  the card in focus sits near its start, the card before it peeking in), Up and Down change rows and each row keeps its place, at the
+  edges the focus stays. The card in focus grows and wears a red ring; OK opens it; after a game was played the focus is on the next
+  one left. Only the cards near the screen exist at any moment (a lazy row), so the home is light for the box.
 - **Sign in on the phone, the TV gets it** (`remote/LoginHandoff.kt`, `remote/LoginCrypto.kt`). Typing a password with a remote is
   miserable, and NYT's sign-in page stayed white on the box. In keyboard mode on the phone, "התחברות לטלוויזיה" lists the sites whose
   login can go (NYT and Haaretz: the sites of the accounts screen that share the TV's one browser), says whether the phone is signed in
@@ -203,6 +208,15 @@ want to play on, starting with Krillion and NYT:
 - **The pairing token no longer crosses the network after pairing.** The TV's greeting carries a new nonce each time and the phone
   answers with a proof (HMAC of the nonce under the token) instead of the token. A phone app from before 1.9 still types (it sends the
   token as before) but cannot hand over a login.
+- **1.9.1, two mistakes of 1.9.0 found before it reached the TV.** On the phone every game opened from the hub crashed the app: the
+  function that opens a game and the hub's own `play` had the same name, and the one called itself until the stack ran out (nothing
+  tested what the hub's page asks of the app; `MainActivityHubActionsTest` now presses what the page presses, and fails with that very
+  crash on the old code). And on the TV's home the arrows could not get past the fifth card of a row: 1.9.0 moved by where buttons are
+  on the screen, and a card scrolled out of sight is nowhere (`TvHomeRemoteTest` now walks every card of the shelf on a TV-sized
+  screen, checks each is wholly on the screen when in focus, and opens Krillion with OK). Also: with the information panel open the
+  arrows no longer wander to buttons behind it; a `__Host-` cookie is handed over for its own host (a browser refuses it with a
+  Domain); a login can be sent when the phone cannot tell whether it is signed in (Haaretz); and on a TV each screen asks to keep the
+  display mode that is on (a precaution: a page that plays video can make a box change the HDMI mode, which blanks the TV).
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

@@ -46,6 +46,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -179,20 +181,25 @@ private fun TopStrip(state: KeyClient.State, onGame: () -> Unit, onLogins: () ->
 private fun LoginsDialog(items: List<app.couch.alhasapa.remote.LoginHandoff.Item>, handoff: KeyClient.Handoff?, onSend: (String) -> Unit, onClose: () -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            // The phone lies on its side here, so the screen is low: the way out is at the top, and the rest scrolls if it has to.
             Column(
-                Modifier.widthIn(max = 560.dp).clip(RoundedCornerShape(24.dp)).background(Palette.Cream)
-                    .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(24.dp)).padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                Modifier.widthIn(max = 600.dp).clip(RoundedCornerShape(24.dp)).background(Palette.Cream)
+                    .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(24.dp)).verticalScroll(rememberScrollState()).padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(stringResource(R.string.logins_title), fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.logins_title), fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.weight(1f))
+                    Pill(stringResource(R.string.logins_close), dark = false, onClick = onClose)
+                }
                 Text(stringResource(R.string.logins_body), fontSize = 14.sp, color = Palette.Ink2)
                 for (it in items) {
                     Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Column(Modifier.weight(1f)) {
                             Text(it.name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
-                            Text(stringResource(if (it.signedIn) R.string.logins_signed_in else R.string.logins_signed_out), fontSize = 13.sp, color = Palette.Ink2)
+                            val status = when (it.signedIn) { true -> R.string.logins_signed_in; false -> R.string.logins_signed_out; null -> R.string.logins_signed_unknown }
+                            Text(stringResource(status), fontSize = 13.sp, color = Palette.Ink2)
                         }
-                        if (it.signedIn) {
+                        if (it.signedIn != false) {
                             val busy = handoff is KeyClient.Handoff.Sending && handoff.site == it.id
                             Pill(stringResource(if (busy) R.string.logins_sending else R.string.logins_send), dark = true) { if (!busy) onSend(it.id) }
                         }
@@ -216,7 +223,6 @@ private fun LoginsDialog(items: List<app.couch.alhasapa.remote.LoginHandoff.Item
                     }
                     if (line != null) Text(line, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (h is KeyClient.Handoff.Done) Palette.Ink else Palette.Red)
                 }
-                Pill(stringResource(R.string.logins_close), dark = false, onClick = onClose)
             }
         }
     }

@@ -58,17 +58,23 @@ class TvHomeTest {
         val played = ArrayList<String>()
         var more = 0
         var accounts = 0
+        var info = 0
         rule.setContent {
-            AlHasapaTheme { TvHome(m, phoneConnected = true, onPlay = { played += it }, onAccounts = { accounts++ }, onMore = { more++ }) }
+            AlHasapaTheme {
+                TvHome(m, phoneConnected = true, nav = HomeNav(), onPlay = { played += it }, onAccounts = { accounts++ }, onMore = { more++ }, onInfo = { info++ })
+            }
         }
         rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
         rule.onNodeWithText("הטלפון מחובר: מקלידים ממנו").assertIsDisplayed()
         rule.onNodeWithText("שיחקנו 1 מתוך ${m.total}", substring = true).assertIsDisplayed()
-        rule.onNode(hasContentDescription("Krillion, שיחקנו הערב")).performScrollTo().performClick()
-        assertEquals(listOf("krillion"), played)
-        rule.onNodeWithText("הגדרות ועוד").performScrollTo().performClick()
-        rule.onNodeWithText("החשבונות").performScrollTo().performClick()
-        assertEquals(1, more); assertEquals(1, accounts)
+        // By touch (the phone's touchpad moves a paw that taps): the cards on the screen and the buttons are plain buttons.
+        val first = m.tonight.first()
+        rule.onNode(hasContentDescription(first.title)).performClick()
+        assertEquals(listOf(first.id), played)
+        rule.onNodeWithText("הגדרות ועוד").performClick()
+        rule.onNodeWithText("החשבונות").performClick()
+        rule.onNodeWithText("מידע לתיקון תקלות").performClick()
+        assertEquals(1, more); assertEquals(1, accounts); assertEquals(1, info)
     }
 
     @Test

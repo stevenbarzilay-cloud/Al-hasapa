@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -46,6 +48,7 @@ class KeyboardModeScreenTest {
         override fun logins() = listOf(
             app.couch.alhasapa.remote.LoginHandoff.Item("nyt", "NYT Games", signedIn = true),
             app.couch.alhasapa.remote.LoginHandoff.Item("hz", "הארץ משחקים", signedIn = false),
+            app.couch.alhasapa.remote.LoginHandoff.Item("my", "אתר שלא ברור", signedIn = null),
         )
         override fun sendLogin(site: String) { sent += "login:$site" }
     }
@@ -195,7 +198,10 @@ class KeyboardModeScreenTest {
         rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertIsDisplayed()
         rule.onNodeWithText("מחובר בטלפון").assertIsDisplayed()
         rule.onNodeWithText("לא מחובר בטלפון", substring = true).assertIsDisplayed()
-        rule.onNodeWithText("לשלוח").performClick()                                // only NYT has the button: the phone is signed in there
+        rule.onNodeWithText("לא ברור אם מחובר בטלפון", substring = true).assertIsDisplayed()
+        // A button where the phone is signed in (NYT) and where that cannot be told; none where it is not (Haaretz here).
+        rule.onAllNodesWithText("לשלוח").assertCountEquals(2)
+        rule.onAllNodesWithText("לשלוח")[0].performClick()
         assertEquals(listOf("login:nyt"), sent)
         handoff = KeyClient.Handoff.Sending("nyt")
         rule.onNodeWithText("שולח…").assertIsDisplayed()
@@ -203,6 +209,9 @@ class KeyboardModeScreenTest {
         rule.onNodeWithText("✓ ההתחברות ל-NYT Games עברה לטלוויזיה").assertIsDisplayed()
         handoff = KeyClient.Handoff.Failed("nyt", "update-tv")
         rule.onNodeWithText("הטלוויזיה לא ענתה: צריך לעדכן בה את האפליקציה").assertIsDisplayed()
+        // The way out is at the top of the dialog, on the screen whatever the list's length (the phone lies on its side: a low screen).
+        val close = rule.onNodeWithText("סגירה").assertIsDisplayed().fetchSemanticsNode()
+        assertTrue("the close button is whole on the screen: ${close.boundsInWindow}", close.boundsInWindow.height >= close.size.height - 1f)
         rule.onNodeWithText("סגירה").performClick()
         rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertDoesNotExist()
     }

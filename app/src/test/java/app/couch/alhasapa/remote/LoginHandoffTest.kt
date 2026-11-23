@@ -25,7 +25,7 @@ class LoginHandoffTest {
         mapOf(
             "https://nytimes.com/" to "NYT-S=0^abc; nyt-a=xyz",
             "https://www.nytimes.com/" to "NYT-S=0^abc; nyt-a=xyz; datadome=bot-check; nyt-gdpr=0",
-            "https://myaccount.nytimes.com/" to "NYT-S=0^abc",
+            "https://myaccount.nytimes.com/" to "NYT-S=0^abc; __Host-csrf=tok",
         ),
     )
 
@@ -40,22 +40,28 @@ class LoginHandoffTest {
     @Test
     fun theSitesCookiesGoOncePerNameForTheWholeSiteButNotTheAntiBotOnes() {
         val c = LoginHandoff.collect(nyt, phone)
-        assertEquals(listOf("NYT-S", "nyt-a", "nyt-gdpr"), c.map { it.line.substringBefore('=') })
-        assertTrue(c.all { it.url == "https://nytimes.com/" })
+        assertEquals(listOf("NYT-S", "nyt-a", "nyt-gdpr", "__Host-csrf"), c.map { it.line.substringBefore('=') })
+        assertTrue(c.dropLast(1).all { it.url == "https://nytimes.com/" })
+        assertEquals("a __Host- cookie stays on its own host, with no Domain (a browser refuses it otherwise)",
+            LoginHandoff.Cookie("https://myaccount.nytimes.com/", "__Host-csrf=tok; Path=/; Secure; Max-Age=5184000"), c.last())
         assertEquals("NYT-S=0^abc; Domain=.nytimes.com; Path=/; Secure; Max-Age=5184000", c.first().line)
-        assertTrue(LoginHandoff.signedIn(nyt, phone))
-        assertFalse(LoginHandoff.signedIn(nyt, FakeJar(mapOf("https://www.nytimes.com/" to "nyt-a=xyz"))))
+        assertEquals(true, LoginHandoff.signedIn(nyt, phone))
+        assertEquals(false, LoginHandoff.signedIn(nyt, FakeJar(mapOf("https://www.nytimes.com/" to "nyt-a=xyz"))))
+        // Haaretz: the name of its session cookie is not known, so cookies that say nothing either way are "cannot tell" (and may be sent).
+        val hz = catalog.sites.getValue("hz")
+        assertNull(LoginHandoff.signedIn(hz, FakeJar(mapOf("https://www.haaretz.co.il/" to "_ga=1; theme=light"))))
+        assertEquals(false, LoginHandoff.signedIn(hz, FakeJar()))
     }
 
     @Test
     fun theTvTakesOnlyCookiesForTheSitesOwnDomainsOverHttps() {
         val json = LoginHandoff.payload("nyt", LoginHandoff.collect(nyt, phone))
         val (site, cookies) = LoginHandoff.parse(json, catalog.sites)!!
-        assertEquals("nyt", site.id); assertEquals(3, cookies.size)
+        assertEquals("nyt", site.id); assertEquals(4, cookies.size)
         val tv = FakeJar()
-        assertEquals(3, LoginHandoff.apply(tv, cookies))
+        assertEquals(4, LoginHandoff.apply(tv, cookies))
         assertEquals(1, tv.flushed)
-        assertTrue(tv.set.all { it.first == "https://nytimes.com/" })
+        assertTrue(tv.set.all { it.first == "https://nytimes.com/" || it.first == "https://myaccount.nytimes.com/" })
 
         val sneaky = """{"site":"nyt","cookies":[{"u":"https://evil.example/","c":"x=1"},{"u":"http://nytimes.com/","c":"y=2"},{"u":"https://www.nytimes.com/","c":"z=3"}]}"""
         assertEquals(listOf("z=3"), LoginHandoff.parse(sneaky, catalog.sites)!!.second.map { it.line })

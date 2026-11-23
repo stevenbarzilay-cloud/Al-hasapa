@@ -18,6 +18,7 @@ import app.couch.alhasapa.diag.Flight
 import app.couch.alhasapa.tv.CouchWebView
 import java.io.File
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -48,18 +49,44 @@ class MainActivityTvTest {
         else -> null
     }
 
+    private fun remote(vararg codes: Int) {
+        for (code in codes) {
+            scenario!!.onActivity { a ->
+                a.window.callback.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code))
+                a.window.callback.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code))
+            }
+            rule.waitForIdle()
+        }
+    }
+
+    private val inFocus = androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "נבחר")
+
     @Test
-    fun theTvOpensOnItsOwnHomeWithTheDockAndNoKeyboardAndTheWebHubIsOneStepAway() {
+    fun theTvOpensOnItsOwnHomeAndTheRemoteOpensAGame() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
         launch()
-        rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertIsDisplayed()
-        rule.onNode(hasContentDescription("פתיחת מקלדת")).assertIsDisplayed()
-        rule.onNode(hasContentDescription("מידע לתיקון תקלות")).assertIsDisplayed()
         rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
-        rule.onNode(hasContentDescription("q")).assertDoesNotExist()
+        rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertDoesNotExist()        // no dock on the home
+        rule.onNode(hasContentDescription("q")).assertDoesNotExist()                          // and no keyboard
         scenario!!.onActivity { a -> assertNull("no web page behind the home: it is native", webOf(a.window.decorView)) }
-        // The full hub (links, adding a game, the backup) is one button away, and it is the web hub as before.
-        rule.onNodeWithText("הגדרות ועוד").performScrollTo().performClick()
-        rule.waitForIdle()
+        // The first game left to play has the focus from the start: one OK on the remote opens it.
+        rule.onNode(hasContentDescription("Wordle").and(inFocus)).assertIsDisplayed()
+        remote(android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+        scenario!!.onActivity { a ->
+            val started = org.robolectric.Shadows.shadowOf(a).nextStartedActivity
+            assertEquals(app.couch.alhasapa.player.PlayerActivity::class.java.name, started.component!!.className)
+            assertEquals("connections", started.getStringExtra(app.couch.alhasapa.player.PlayerActivity.EXTRA_GAME))
+        }
+    }
+
+    @Test
+    fun theFullHubIsOneStepFromTheHomeAndBackComesHome() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
+        launch()
+        // Down to the other games, down to the buttons, along to "הגדרות ועוד", OK.
+        remote(android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT)
+        rule.onNode(hasContentDescription("הגדרות ועוד").and(inFocus)).assertIsDisplayed()
+        remote(android.view.KeyEvent.KEYCODE_DPAD_CENTER)
         scenario!!.onActivity { a ->
             val web = webOf(a.window.decorView)
             assertNotNull("the hub's WebView is there", web)
@@ -69,8 +96,29 @@ class MainActivityTvTest {
             web!!.onCreateInputConnection(android.view.inputmethod.EditorInfo())
         }
         rule.waitForIdle()
+        rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertIsDisplayed()         // the hub is a page: the dock is back
+        rule.onNode(hasContentDescription("פתיחת מקלדת")).assertIsDisplayed()
         rule.onNode(hasContentDescription("q")).assertDoesNotExist()
-        scenario!!.onActivity { assertFalse(it.isFinishing) }
+        // Back leaves the hub for the home (the page gets a moment to answer first), and the focus is where it was.
+        scenario!!.onActivity { a -> a.onBackPressedDispatcher.onBackPressed() }
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofSeconds(1))
+        rule.waitForIdle()
+        rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
+        rule.onNode(hasContentDescription("הגדרות ועוד").and(inFocus)).assertIsDisplayed()
+        rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertDoesNotExist()
+        scenario!!.onActivity { a -> assertNull(webOf(a.window.decorView)); assertFalse(a.isFinishing) }
+    }
+
+    @Test
+    fun theInformationPanelOpensFromTheHomeWithTheRemote() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
+        launch()
+        remote(android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.onNodeWithText("אם משהו לא עובד", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("app ", substring = true).assertIsDisplayed()
+        remote(android.view.KeyEvent.KEYCODE_BACK)
+        rule.onNodeWithText("אם משהו לא עובד", substring = true).assertDoesNotExist()
+        rule.onNode(hasContentDescription("מידע לתיקון תקלות").and(inFocus)).assertIsDisplayed()
     }
 
     @Test
@@ -91,7 +139,7 @@ class MainActivityTvTest {
         rule.waitForIdle()
         rule.onNodeWithText("בפעם הקודמת האפליקציה נעצרה באמצע").assertDoesNotExist()
         assertFalse(Flight.previous!!.endedInFront)
-        rule.onNode(hasContentDescription("מידע לתיקון תקלות")).assertIsDisplayed()
+        rule.onNodeWithText("המדף של הערב").assertIsDisplayed()                 // and the home is there
     }
 
     @Test

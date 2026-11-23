@@ -61,7 +61,7 @@ class KeyboardModeActivity : ComponentActivity() {
             override fun sendLogin(site: String) {
                 val s = (application as CouchApp).catalog.sites[site] ?: return
                 val cookies = LoginHandoff.collect(s, LoginReceiver.jar(s.profile))
-                if (cookies.isEmpty() || !LoginHandoff.signedIn(s, LoginReceiver.jar(s.profile))) { client.loginsFailed(site, "no-login"); return }
+                if (cookies.isEmpty() || LoginHandoff.signedIn(s, LoginReceiver.jar(s.profile)) == false) { client.loginsFailed(site, "no-login"); return }
                 Flight.log("logins: sending ${s.name} to the TV (${cookies.size} cookies)")
                 client.sendLogins(site, LoginHandoff.payload(site, cookies))
             }

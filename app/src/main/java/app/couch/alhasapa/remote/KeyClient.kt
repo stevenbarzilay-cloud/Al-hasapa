@@ -58,7 +58,6 @@ class KeyClient(
 
     private class Pending(val site: String, val payload: String, val pair: java.security.KeyPair, val key: String)
     @Volatile private var pending: Pending? = null
-    private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "keys-timer").apply { isDaemon = true } }
 
     private val running = AtomicBoolean(false)
     private val wake = LinkedBlockingQueue<Unit>()
@@ -105,7 +104,8 @@ class KeyClient(
         pending = p
         _handoff.value = Handoff.Sending(site)
         write(Msg.LoginsKey(p.key))
-        timer.schedule({
+        // The connection's own timer (it lives as long as the connection): a TV that says nothing has an app from before 1.9.
+        pinger?.schedule({
             if (pending === p) { pending = null; _handoff.value = Handoff.Failed(site, "update-tv") }
         }, 8, TimeUnit.SECONDS)
     }
@@ -221,6 +221,8 @@ class KeyClient(
             stopPinging()
             if (socket === s) socket = null
             runCatching { s.close() }
+            // A login that was on its way when the connection dropped did not arrive.
+            pending?.let { p -> pending = null; _handoff.value = Handoff.Failed(p.site, "not-connected") }
         }
         if (answered && _state.value is State.Connected) _state.value = State.Connecting(address)
         return answered

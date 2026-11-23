@@ -19,7 +19,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import app.couch.alhasapa.home.HomeModel
+import app.couch.alhasapa.home.HomeNav
 import app.couch.alhasapa.home.TvHome
+import app.couch.alhasapa.tv.TvPanel
 import app.couch.alhasapa.remote.RemoteKeys
 import java.time.LocalDate
 import app.couch.alhasapa.accounts.AccountsActivity
@@ -51,10 +53,35 @@ class MainActivity : ComponentActivity() {
     /** On a TV: the full web hub, opened from the native home ("הגדרות ועוד"); Back from it returns to the home. */
     private var webHub by mutableStateOf(false)
 
-    /** A game from the hub or the TV's home: head to head asks whose turn it is first. */
-    private fun play(gameId: String) {
+    /** How the remote moves on the TV's home, kept here so the home finds its place again after the hub or a game. */
+    private val homeNav = HomeNav()
+
+    /**
+     * Opens a game, from the hub or the TV's home. Head to head (LinkedIn): each person plays alone, in their own account, so it asks
+     * whose turn it is first. On the main thread.
+     */
+    private fun openGame(gameId: String) {
         val game = (application as CouchApp).catalog.game(gameId) ?: return
         if (game.isDuel) whoPlaysFor = gameId else startActivity(PlayerActivity.gameIntent(this, gameId, null))
+    }
+
+    /**
+     * What the hub's page can ask of the app (it calls from its own thread). A property, so a test can press what the page presses.
+     *
+     * 1.9.0 crashed here on every game opened from the hub: the activity's function was also called `play`, and inside this object
+     * `play(gameId)` meant the object's own `play`, which called itself until the stack ran out. Hence the different name, and the
+     * explicit `this@MainActivity`.
+     */
+    internal val hubActions = object : HubBridge.Actions {
+        override fun play(gameId: String) { runOnUiThread { this@MainActivity.openGame(gameId) } }
+
+        override fun openAccounts() {
+            runOnUiThread { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) }
+        }
+
+        override fun openKeyboardMode() {
+            runOnUiThread { startActivity(Intent(this@MainActivity, KeyboardModeActivity::class.java)) }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,18 +107,7 @@ class MainActivity : ComponentActivity() {
 
         val app = application as CouchApp
         val pieces = PiecesConfig.load(this)
-        val bridge = HubBridge(this, app.repo, { app.catalog }, object : HubBridge.Actions {
-            // Head to head (LinkedIn): each person plays alone, in their own account, so ask whose turn it is.
-            override fun play(gameId: String) { runOnUiThread { play(gameId) } }
-
-            override fun openAccounts() {
-                runOnUiThread { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) }
-            }
-
-            override fun openKeyboardMode() {
-                runOnUiThread { startActivity(Intent(this@MainActivity, KeyboardModeActivity::class.java)) }
-            }
-        })
+        val bridge = HubBridge(this, app.repo, { app.catalog }, hubActions)
         val reduceMotion = animationsRemoved(contentResolver)
         // Only on a real cold start (not after rotation or coming back), and never with "remove animations" on.
         // On a TV the splash always plays: some boxes ship with the animation scale at zero, and the splash does not depend on it.
@@ -124,14 +140,18 @@ class MainActivity : ComponentActivity() {
                     TvHome(
                         model = model,
                         phoneConnected = remote.phones.isNotEmpty(),
-                        onPlay = ::play,
+                        nav = homeNav,
+                        onPlay = { id -> openGame(id) },
                         onAccounts = { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) },
-                        onMore = { Flight.log("home: the full hub"); webHub = true },
+                        // The hub is a page: the arrows begin inside it, as they did when the TV opened on it.
+                        onMore = { Flight.log("home: the full hub"); tv.controller.pageFirst(); webHub = true },
+                        onInfo = { tv.controller.openPanel(TvPanel.INFO) },
                     )
                 } else {
-                    // On a TV the web hub is a step away from the home, and Back from it goes back there.
+                    // On a TV the web hub is a step away from the home (the cats cover it until it is ready), and Back from it goes
+                    // back to the home.
                     AppRoot(
-                        playSplash = playSplash && !tv.enabled, reduceMotion = reduceMotion,
+                        playSplash = if (tv.enabled) true else playSplash, reduceMotion = reduceMotion,
                         onExit = { if (tv.enabled) webHub = false else finish() }, bridge = bridge,
                     )
                 }

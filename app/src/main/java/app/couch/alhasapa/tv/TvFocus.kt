@@ -42,19 +42,25 @@ fun Modifier.tvTarget(onClick: () -> Unit): Modifier = tvTarget(null, null, onCl
 fun newTvId(): String = "t" + ids.incrementAndGet()
 
 /** As [tvTarget], with the button's own [id] (so it can draw itself differently when focused) and a [label] shown in the dock while focused. */
-fun Modifier.tvTarget(id: String?, label: String?, onClick: () -> Unit): Modifier = composed {
+fun Modifier.tvTarget(id: String?, label: String?, onClick: () -> Unit): Modifier = tvTarget(id, label, bring = true, onClick = onClick)
+
+/**
+ * As above. [bring] false: the screen scrolls to the focused button itself (the home's rows of cards), so this one does not ask to be
+ * scrolled into view (two scrolls of one row at once fight each other).
+ */
+fun Modifier.tvTarget(id: String?, label: String?, bring: Boolean, onClick: () -> Unit): Modifier = composed {
     val tv = LocalTv.current
     val myId = remember { id ?: newTvId() }
     val latest by rememberUpdatedState(onClick)
     var androidFocused by remember { mutableStateOf(false) }
     val remote = tv != null && tv.isFocused(myId)
     val lit = remote || androidFocused
-    val bring = remember { BringIntoViewRequester() }
+    val requester = remember { BringIntoViewRequester() }
     if (tv != null) DisposableEffect(tv, myId) { onDispose { tv.unregister(myId) } }
-    LaunchedEffect(remote) { if (remote) bring.bringIntoView() }
+    LaunchedEffect(remote, bring) { if (remote && bring) requester.bringIntoView() }
     LaunchedEffect(remote, label) { if (remote && label != null) tv?.focusLabel = label }
     this
-        .bringIntoViewRequester(bring)
+        .bringIntoViewRequester(requester)
         .onGloballyPositioned { c -> tv?.register(myId, c.boundsInWindow().toBox()) { latest() } }
         .onFocusChanged { androidFocused = it.isFocused }
         .drawWithContent {

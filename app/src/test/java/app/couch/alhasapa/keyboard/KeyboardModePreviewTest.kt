@@ -69,4 +69,23 @@ class KeyboardModePreviewTest {
 
     @Test fun pairing() { show(KeyClient.State.NeedCode("MiTV", left = 2)); save("phone-keyboard-code.png") }
     @Test fun notFound() { show(KeyClient.State.NotFound(KeyClient.NO_TV)); save("phone-keyboard-notfound.png") }
+    @Test fun loginsDialog() {
+        val withLogins = object : KeySink by sink {
+            override fun logins() = listOf(
+                app.couch.alhasapa.remote.LoginHandoff.Item("nyt", "NYT Games", signedIn = true),
+                app.couch.alhasapa.remote.LoginHandoff.Item("hz", "הארץ משחקים", signedIn = null),
+            )
+        }
+        rule.setContent {
+            AlHasapaTheme {
+                KeyboardModeScreen(KeyClient.State.Connected("MiTV", "עמוד הבית"), withLogins, onGame = {}, handoff = KeyClient.Handoff.Done("nyt", 6))
+            }
+        }
+        rule.onNode(androidx.compose.ui.test.hasText("התחברות לטלוויזיה")).performClick()
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        // The top strip with the button, and the dialog (its own window).
+        val img = rule.onNode(androidx.compose.ui.test.isDialog()).captureToImage().asAndroidBitmap()
+        File(dir, "phone-logins-dialog.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
 }

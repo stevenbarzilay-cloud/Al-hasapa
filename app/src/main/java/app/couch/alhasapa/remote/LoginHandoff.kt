@@ -21,8 +21,11 @@ object LoginHandoff {
         fun flush() {}
     }
 
-    /** A site on the phone's list: whether the phone is signed in to it. */
-    data class Item(val id: String, val name: String, val signedIn: Boolean)
+    /**
+     * A site on the phone's list. [signedIn]: whether the phone is signed in to it; null when that cannot be told (Haaretz: its session
+     * cookie's name is not known), and then sending is still offered.
+     */
+    data class Item(val id: String, val name: String, val signedIn: Boolean?)
 
     /** One cookie to set on the TV: the address it is set for and the whole `Set-Cookie` line. */
     data class Cookie(val url: String, val line: String)
@@ -58,6 +61,12 @@ object LoginHandoff {
                 val name = pair.substringBefore('=').trim()
                 val value = pair.substringAfter('=', "").trim()
                 if (name.isEmpty() || !pair.contains('=') || DEVICE_BOUND.matches(name)) continue
+                // A "__Host-" cookie belongs to one host and a browser refuses it with a Domain: it is set for the host it came from.
+                if (name.startsWith("__Host-")) {
+                    val key = "$host|$name"
+                    if (key !in out) out[key] = Cookie("https://$host/", "$name=$value; Path=/; Secure; Max-Age=$MAX_AGE_S")
+                    continue
+                }
                 val key = "$domain|$name"
                 if (key !in out) out[key] = Cookie("https://$domain/", "$name=$value; Domain=.$domain; Path=/; Secure; Max-Age=$MAX_AGE_S")
             }
@@ -83,10 +92,17 @@ object LoginHandoff {
         site to list
     }.getOrNull()
 
-    /** Whether the phone's browser is signed in to [site] (by the site's session cookie, see LoginDetector). */
-    fun signedIn(site: Site, jar: Jar): Boolean {
+    /**
+     * Whether the phone's browser is signed in to [site] (by the site's session cookie, see LoginDetector): true, false, or null when
+     * the site has cookies but none that says either way.
+     */
+    fun signedIn(site: Site, jar: Jar): Boolean? {
         val header = urls(site).mapNotNull { jar.get(it) }.joinToString("; ")
-        return app.couch.alhasapa.accounts.LoginDetector.status(header, site) == app.couch.alhasapa.accounts.LoginDetector.Status.LOGGED_IN
+        return when (app.couch.alhasapa.accounts.LoginDetector.status(header, site)) {
+            app.couch.alhasapa.accounts.LoginDetector.Status.LOGGED_IN -> true
+            app.couch.alhasapa.accounts.LoginDetector.Status.LOGGED_OUT -> false
+            app.couch.alhasapa.accounts.LoginDetector.Status.UNKNOWN -> null
+        }
     }
 
     /** Puts [cookies] in the TV's [jar] and writes it to disk. How many were set. */

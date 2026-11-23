@@ -158,6 +158,7 @@
     <string name="logins_body">מתחברים לאתר כאן בטלפון, ושולחים את ההתחברות לטלוויזיה. היא עוברת מוצפנת ברשת הביתית, רק לטלוויזיה שצימדתם, ושם נשמרת כמו התחברות רגילה.</string>
     <string name="logins_signed_in">מחובר בטלפון</string>
     <string name="logins_signed_out">לא מחובר בטלפון: קודם להתחבר כאן (מסך החשבונות)</string>
+    <string name="logins_signed_unknown">לא ברור אם מחובר בטלפון: אפשר לנסות לשלוח</string>
     <string name="logins_send">לשלוח</string>
     <string name="logins_sending">שולח…</string>
     <string name="logins_done">✓ ההתחברות ל-%1$s עברה לטלוויזיה</string>

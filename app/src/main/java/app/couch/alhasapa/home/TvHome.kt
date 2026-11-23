@@ -5,10 +5,10 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +18,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,15 +29,20 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -53,6 +62,7 @@ import app.couch.alhasapa.data.PieceStyle
 import app.couch.alhasapa.data.PiecesConfig
 import app.couch.alhasapa.scoring.Scoring
 import app.couch.alhasapa.tv.LocalTv
+import app.couch.alhasapa.tv.Zone
 import app.couch.alhasapa.tv.tvTarget
 import app.couch.alhasapa.ui.PieceIcon
 import app.couch.alhasapa.ui.theme.Palette
@@ -125,72 +135,135 @@ data class HomeModel(
     }
 }
 
-private val CardWidth = 172.dp
-private val CardHeight = 132.dp
+private val CardWidth = 164.dp
+private val CardHeight = 130.dp
+private val CardGap = 16.dp
+private val Side = 28.dp
+
+/** How far from the row's start the card in focus sits once the row has moved on: enough to show the edge of the card before it. */
+private val Peek = 56.dp
+
+const val CARD_PREFIX = "home-"
+const val ACCOUNTS_ID = "home:accounts"
+const val MORE_ID = "home:more"
+const val INFO_ID = "home:info"
+
+fun cardId(gameId: String) = CARD_PREFIX + gameId
 
 /**
- * The TV's home (1.9): the evening and the two of us at the top, then the shelf as a row of big cards, then the rest. Native, so it is
- * there at once (the web hub took four to six seconds to be ready on the TV box) and the remote's arrows move between the cards without
- * a page in between. The card in focus grows and wears a red ring; under the rows, what it is. The full web hub (the links, adding a
- * game, the backup) is one button away, "הגדרות ועוד".
+ * The TV's home (1.9): the evening and the two of us at the top, then the shelf as a row of big cards, then the rest of the games, then
+ * the app's own buttons. Native, so it is there at once (the web hub took four to six seconds to be ready on the TV box). There is no
+ * dock here (nothing to point at or type into): the whole width is the games'.
+ *
+ * The remote moves by the home's shape ([HomeNav]): Left and Right along a row, to its very end; Up and Down between rows, each row
+ * keeping its place. The row moves so that the card in focus sits near its start, like the rows of a TV's own home screen, and the card
+ * grows and wears a red ring; under the rows, what it is. OK opens the game. After a game was played the focus is on the next one left.
+ * (1.9.0 drew every card in a plain row and moved by where buttons are on the screen; a card out of sight is nowhere, so the arrows
+ * never got past the fifth card.)
+ *
+ * The full web hub (the links, adding a game, the backup) is one button away, "הגדרות ועוד".
  */
 @Composable
 fun TvHome(
     model: HomeModel,
     phoneConnected: Boolean,
+    nav: HomeNav,
     onPlay: (String) -> Unit,
     onAccounts: () -> Unit,
     onMore: () -> Unit,
+    onInfo: () -> Unit,
 ) {
     val tv = LocalTv.current
-    val first = model.tonight.firstOrNull() ?: model.more.firstOrNull()
-    // The first focus: the first game left to play tonight (the controller's own first pick would be the leftmost, the wrong end here).
-    LaunchedEffect(Unit) { if (tv != null && tv.focusedId == null && first != null) tv.focus(cardId(first.id)) }
-    val focused = (model.tonight + model.more).firstOrNull { tv != null && tv.isFocused(cardId(it.id)) }
+    val tonightIds = remember(model.tonight) { model.tonight.map { cardId(it.id) } }
+    val moreIds = remember(model.more) { model.more.map { cardId(it.id) } }
+    val pillIds = remember { listOf(ACCOUNTS_ID, MORE_ID, INFO_ID) }
+    val ok: (String) -> Unit = { id ->
+        when (id) {
+            ACCOUNTS_ID -> onAccounts()
+            MORE_ID -> onMore()
+            INFO_ID -> onInfo()
+            else -> onPlay(id.removePrefix(CARD_PREFIX))
+        }
+    }
+    // The home's shape, for the remote: read when a key comes, so it is simply kept up to date.
+    SideEffect { nav.rows = listOf(tonightIds, moreIds, pillIds); nav.onOk = ok }
+    if (tv != null) {
+        DisposableEffect(tv, nav) {
+            nav.rows = listOf(tonightIds, moreIds, pillIds); nav.onOk = ok
+            tv.screenNav = nav
+            tv.dockHidden = true
+            onDispose { if (tv.screenNav === nav) tv.screenNav = null; tv.dockHidden = false }
+        }
+    }
+    val focusedId = tv?.focusedId?.takeIf { tv.zone == Zone.NATIVE }
+    val panel = tv?.panel
+    // Never without a focus while the home is in front: when it opens, when the information panel closes, back from the hub.
+    LaunchedEffect(focusedId, panel, tonightIds, moreIds) {
+        if (tv != null && panel == null && nav.position(tv.focusedId) == null) nav.home()?.let { tv.focus(it) }
+    }
+    LaunchedEffect(focusedId) { nav.note(focusedId) }
+    // A game was played (the shelf puts it after the ones still left): the focus goes on to the next one left.
+    var doneSeen by remember { mutableIntStateOf(model.done) }
+    LaunchedEffect(model.done) {
+        if (tv != null && model.done > doneSeen) tonightIds.firstOrNull()?.let { tv.focus(it) }
+        doneSeen = model.done
+    }
+    val focusRow = nav.position(focusedId)?.first
+    val focused = remember(focusedId, model) { (model.tonight + model.more).firstOrNull { cardId(it.id) == focusedId } }
+    // Everything fits a TV screen; on a smaller window the page scrolls to the row in focus.
+    val sections = remember { List(3) { BringIntoViewRequester() } }
+    LaunchedEffect(focusRow) { if (focusRow != null) sections[focusRow].bringIntoView() }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
-            Modifier.fillMaxSize().background(Palette.Cream).verticalScroll(rememberScrollState()).padding(vertical = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.fillMaxSize().background(Palette.Cream).verticalScroll(rememberScrollState()).padding(top = 18.dp, bottom = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Header(model, phoneConnected)
-            RowTitle(stringResource(R.string.home_tonight))
-            if (model.tonight.isEmpty()) {
-                Text(stringResource(R.string.home_empty), fontSize = 18.sp, color = Palette.Ink2, modifier = Modifier.padding(horizontal = 28.dp))
-            } else {
-                Cards(model.tonight, onPlay)
+            Header(model)
+            Column(Modifier.bringIntoViewRequester(sections[0])) {
+                RowTitle(stringResource(R.string.home_tonight))
+                if (model.tonight.isEmpty()) {
+                    Text(stringResource(R.string.home_empty), fontSize = 18.sp, color = Palette.Ink2, modifier = Modifier.padding(horizontal = Side, vertical = 12.dp))
+                } else {
+                    Cards(model.tonight, tonightIds.indexOf(focusedId), onPlay)
+                }
             }
             if (model.more.isNotEmpty()) {
-                RowTitle(stringResource(R.string.home_more))
-                Cards(model.more, onPlay)
+                Column(Modifier.bringIntoViewRequester(sections[1])) {
+                    RowTitle(stringResource(R.string.home_more))
+                    Cards(model.more, moreIds.indexOf(focusedId), onPlay)
+                }
             }
             // What the card in focus is (the cards themselves only have room for the name).
             Text(
                 focused?.let { "${it.title} · ${it.siteName} · ${it.description}" }.orEmpty(),
-                fontSize = 17.sp, color = Palette.Ink2, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 28.dp).heightIn(min = 44.dp),
+                fontSize = 17.sp, color = Palette.Ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = Side).heightIn(min = 24.dp),
             )
-            Row(Modifier.padding(horizontal = 28.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Pill(stringResource(R.string.home_accounts), onAccounts)
-                Pill(stringResource(R.string.home_more_settings), onMore)
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = Side).bringIntoViewRequester(sections[2]),
+                horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Pill(ACCOUNTS_ID, stringResource(R.string.home_accounts), onAccounts)
+                Pill(MORE_ID, stringResource(R.string.home_more_settings), onMore)
+                Pill(INFO_ID, stringResource(R.string.tv_info_title), onInfo)
+                Spacer(Modifier.weight(1f))
+                Text(
+                    stringResource(if (phoneConnected) R.string.home_phone_on else R.string.home_phone_off),
+                    fontSize = 15.sp, color = if (phoneConnected) Palette.Red else Palette.Ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
 }
 
-fun cardId(gameId: String) = "home-$gameId"
-
 @Composable
-private fun Header(model: HomeModel, phoneConnected: Boolean) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 28.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun Header(model: HomeModel) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = Side), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(stringResource(R.string.app_name), fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.semantics { heading() })
+            Text(stringResource(R.string.app_name), fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.semantics { heading() })
             Text(
                 model.day + " · " + stringResource(R.string.home_progress, model.done, model.total) + " · " + stringResource(R.string.panel_points, model.points),
-                fontSize = 18.sp, color = Palette.Ink2,
-            )
-            Text(
-                stringResource(if (phoneConnected) R.string.home_phone_on else R.string.home_phone_off),
-                fontSize = 15.sp, color = if (phoneConnected) Palette.Red else Palette.Ink2,
+                fontSize = 17.sp, lineHeight = 22.sp, color = Palette.Ink2, maxLines = 1,
             )
         }
         Person(model.pieceA, model.nameA)
@@ -209,25 +282,35 @@ private fun Person(style: PieceStyle, name: String) {
 
 @Composable
 private fun RowTitle(text: String) {
-    Text(text, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.padding(horizontal = 28.dp).semantics { heading() })
+    Text(text, fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.padding(horizontal = Side).semantics { heading() })
 }
 
+/**
+ * One row of cards. Only the cards near the screen exist (a lazy row: the shelf and the rest are some sixty cards, a lot for a TV box
+ * to draw at once), and the row itself moves to the card in focus ([focusIndex], -1 when the focus is in another row).
+ */
 @Composable
-private fun Cards(cards: List<HomeCard>, onPlay: (String) -> Unit) {
-    // A plain scrolling row, not a lazy one: every card is laid out, so the remote's arrows can reach the ones beyond the edge, and the
-    // row scrolls to the card in focus.
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(18.dp),
+private fun Cards(cards: List<HomeCard>, focusIndex: Int, onPlay: (String) -> Unit) {
+    val state = rememberLazyListState()
+    val peek = with(LocalDensity.current) { Peek.roundToPx() }
+    LaunchedEffect(focusIndex) {
+        if (focusIndex >= 0) state.animateScrollToItem(focusIndex, if (focusIndex == 0) 0 else -peek)
+    }
+    // No keys: when a played game moves to the end of the shelf, the row stays where it is and the next game takes its place.
+    LazyRow(
+        state = state,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = Side, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(CardGap),
     ) {
-        for (c in cards) GameCard(c) { onPlay(c.id) }
+        items(cards.size) { i -> GameCard(cards[i]) { onPlay(cards[i].id) } }
     }
 }
 
 @Composable
 private fun GameCard(card: HomeCard, onClick: () -> Unit) {
     val tv = LocalTv.current
-    val id = remember(card.id) { cardId(card.id) }
+    val id = cardId(card.id)
     val focused = tv?.isFocused(id) == true
     val scale by animateFloatAsState(if (focused) 1.08f else 1f, tween(120), label = "card")
     val played = stringResource(R.string.home_played)
@@ -238,7 +321,7 @@ private fun GameCard(card: HomeCard, onClick: () -> Unit) {
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .shadow(if (focused) 10.dp else 0.dp, shape)
             .clip(shape)
-            .tvTarget(id, card.title, onClick)
+            .tvTarget(id, card.title, bring = false, onClick = onClick)        // the row moves to the card itself (see Cards)
             .background(Palette.Card)
             .border(if (focused) BorderStroke(4.dp, Palette.Red) else BorderStroke(1.dp, Palette.Line2), shape)
             .semantics(mergeDescendants = true) {
@@ -247,37 +330,36 @@ private fun GameCard(card: HomeCard, onClick: () -> Unit) {
             },
     ) {
         Box(Modifier.fillMaxWidth().weight(1f).background(card.color), contentAlignment = Alignment.Center) {
-            Text(card.mark, fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+            Text(card.mark, fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, maxLines = 1)
             if (card.played) {
                 Box(
-                    Modifier.align(Alignment.TopStart).padding(8.dp).size(30.dp).clip(CircleShape).background(Palette.Ink),
+                    Modifier.align(Alignment.TopStart).padding(8.dp).size(28.dp).clip(CircleShape).background(Palette.Ink),
                     contentAlignment = Alignment.Center,
-                ) { Text("✓", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Palette.Cream) }
+                ) { Text("✓", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Palette.Cream) }
             }
         }
-        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            Text(card.title, fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(if (card.played) played else card.kind, fontSize = 14.sp, color = if (card.played) Palette.Red else Palette.Ink2, maxLines = 1)
+        Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)) {
+            Text(card.title, fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(if (card.played) played else card.kind, fontSize = 14.sp, lineHeight = 18.sp, color = if (card.played) Palette.Red else Palette.Ink2, maxLines = 1)
         }
     }
 }
 
 @Composable
-private fun Pill(label: String, onClick: () -> Unit) {
+private fun Pill(id: String, label: String, onClick: () -> Unit) {
     val tv = LocalTv.current
-    val id = remember { app.couch.alhasapa.tv.newTvId() }
     val lit = tv?.isFocused(id) == true
     Box(
         Modifier
-            .heightIn(min = 52.dp)
+            .heightIn(min = 46.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(Palette.Tint)
             .tvTarget(id, label, onClick)                       // in focus it takes the red, like every button of the app
             .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(14.dp))
-            .padding(horizontal = 22.dp)
+            .padding(horizontal = 20.dp)
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = if (lit) Palette.Cream else Palette.Ink)
+        Text(label, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = if (lit) Palette.Cream else Palette.Ink, maxLines = 1)
     }
 }

@@ -30,6 +30,7 @@ class TvHost(private val activity: ComponentActivity) {
             controller.decor = activity.window.decorView
             val original = activity.window.callback
             activity.window.callback = KeyInterceptCallback(original) { controller.decor = activity.window.decorView; controller.handleKey(it) }
+            keepDisplayMode()
             // The picture of the cats is the starting window's (what shows while the app starts). Once the screen draws itself it covers
             // the whole window, so the window behind it becomes a plain colour: nothing extra to paint under every frame of a game.
             activity.window.decorView.post { runCatching { activity.window.setBackgroundDrawableResource(app.couch.alhasapa.R.color.cream) } }
@@ -40,6 +41,20 @@ class TvHost(private val activity: ComponentActivity) {
             if (enabled && e == Lifecycle.Event.ON_RESUME) app.couch.alhasapa.remote.RemoteKeys.attach(controller)
             if (enabled && (e == Lifecycle.Event.ON_PAUSE || e == Lifecycle.Event.ON_DESTROY)) app.couch.alhasapa.remote.RemoteKeys.detach(controller)
         })
+    }
+
+    /**
+     * The picture's mode (its size and rate) stays what it is while this screen is in front. A page that plays video can make a TV box
+     * change the mode to the video's rate, which blanks the TV for seconds over HDMI, and some boxes do not come back from it cleanly.
+     * A precaution (the box that this app is used on froze its picture once and wakes badly from standby; neither is explained): asking
+     * for the mode that is already on changes nothing by itself.
+     */
+    private fun keepDisplayMode() {
+        runCatching {
+            @Suppress("DEPRECATION") // the window's display, on every version the TV build runs on
+            val mode = activity.windowManager.defaultDisplay.mode
+            activity.window.attributes = activity.window.attributes.apply { preferredDisplayModeId = mode.modeId }
+        }.onFailure { app.couch.alhasapa.diag.Flight.log("tv: could not keep the display mode: $it") }
     }
 
     /** The name of this screen for the phone's status line. */

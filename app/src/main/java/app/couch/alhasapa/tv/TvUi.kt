@@ -92,7 +92,7 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalTv provides c, LocalLayoutDirection provides LayoutDirection.Ltr) {
         Box(Modifier.fillMaxSize().onSizeChanged { c.resize(it.width.toFloat(), it.height.toFloat()) }) {
             Row(Modifier.fillMaxSize()) {
-                TvDock(c)
+                if (!c.dockHidden) TvDock(c)
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     // The app's own screens are right to left, like on the phone.
                     Box(Modifier.weight(1f).fillMaxWidth()) {

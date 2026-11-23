@@ -31,6 +31,26 @@ enum class TvPanel { INFO }
 const val PAGE_ID = "page"
 
 /**
+ * A screen that knows its own shape (the TV's home: rows of cards, most of them beyond the edge of the screen) moves the focus itself.
+ * The controller's general rule (the nearest button that way, by where the buttons are on the screen) cannot do that: a card that is
+ * scrolled out of sight has no place on the screen, so in 1.9.0 the arrows could not get past the fifth card of the shelf.
+ */
+interface ScreenNav {
+    /**
+     * The arrow [dir] was pressed with the focus on the button [focused] (null: on nothing yet). The id to move to, [STAY] to stay
+     * put, or null when it is not this screen's business (the controller's general rule then decides).
+     */
+    fun move(focused: String?, dir: Dir): String?
+
+    /** OK was pressed on [focused]. True when this screen acted on it (a card not on the screen right now has no button to press). */
+    fun ok(focused: String?): Boolean = false
+
+    companion object {
+        const val STAY = "\u0000stay"
+    }
+}
+
+/**
  * The TV's remote control, as one object per screen: the cursor (a virtual finger), the on-screen keyboard and what to do with
  * each key. Inert (every key passes through) when [enabled] is false, which is always the case on a phone.
  *
@@ -71,6 +91,15 @@ class TvController(val enabled: Boolean, density: Float) {
     private val targets = LinkedHashMap<String, NavTarget>()
     private val actions = HashMap<String, () -> Unit>()
     var pageBox: Box? = null
+
+    /** The screen's own way of moving the focus (the TV's home), asked before the general rule. Not while a panel lies over the screen. */
+    var screenNav: ScreenNav? = null
+
+    /** A screen that needs no dock (the TV's home: nothing there to point at or type into) hides it and takes the whole width. */
+    var dockHidden by mutableStateOf(false)
+
+    /** A screen with a page is about to show (the web hub, opened from the home): the arrows begin in the page, as when the app starts. */
+    fun pageFirst() { zone = Zone.PAGE; focusedId = null }
 
     /**
      * The WebView of this screen (the hub, or the game): the page the arrows walk and the keyboard types into. Each screen has its own;
@@ -361,14 +390,23 @@ class TvController(val enabled: Boolean, density: Float) {
             }
             return
         }
+        // The information panel has one button, and the focus is on it: nothing behind the panel can be reached with the arrows.
+        if (panel != null) return
+        screenNav?.let { nav ->
+            when (val next = nav.move(focusedId.takeIf { zone == Zone.NATIVE }, dir)) {
+                null -> {}                                                  // not the screen's business: the general rule
+                ScreenNav.STAY -> return
+                else -> { zone = Zone.NATIVE; focusedId = next; return }
+            }
+        }
         val from = focusedId?.let { targets[it]?.box }
         if (from == null) {
             // Nothing is focused yet: begin with the first button (top left), or the page if there are none.
-            val first = targets.values.minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { it.box.l })
+            val first = onScreen().minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { it.box.l })
             if (first != null) { zone = Zone.NATIVE; focusedId = first.id } else if (page != null) enterPage(dir)
             return
         }
-        val candidates = targets.values.toList() + listOfNotNull(page?.let { NavTarget(PAGE_ID, it) })
+        val candidates = onScreen() + listOfNotNull(page?.let { NavTarget(PAGE_ID, it) })
         val next = Spatial.next(from, candidates, dir, exclude = focusedId) ?: return
         if (next.id == PAGE_ID) enterPage(dir) else { zone = Zone.NATIVE; focusedId = next.id }
     }
@@ -381,17 +419,21 @@ class TvController(val enabled: Boolean, density: Float) {
     /** The page has nothing further that way: the focus goes to the nearest of the app's buttons, if there is one. */
     private fun leavePage(dir: Dir) {
         val from = pageBox ?: return
-        val next = Spatial.next(from, targets.values.toList(), dir) ?: return
+        val next = Spatial.next(from, onScreen(), dir) ?: return
         pageNav.blur()
         zone = Zone.NATIVE; focusedId = next.id
     }
 
     /** OK: press what is focused. */
     fun activate() {
-        if (zone == Zone.NATIVE) { focusedId?.let { actions[it]?.invoke() }; return }
+        if (zone == Zone.NATIVE) {
+            if (panel == null && screenNav?.ok(focusedId) == true) return
+            focusedId?.let { actions[it]?.invoke() }
+            return
+        }
         if (pageBox == null || panel != null) {
             // A screen with no page (the accounts list, the crash report): the first OK lands on the first button, the next one presses.
-            targets.values.minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { it.box.l })?.let { zone = Zone.NATIVE; focusedId = it.id }
+            onScreen().minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { it.box.l })?.let { zone = Zone.NATIVE; focusedId = it.id }
             return
         }
         pageNav.activate { r ->
@@ -424,6 +466,9 @@ class TvController(val enabled: Boolean, density: Float) {
     // ---- the app's buttons register where they are, so the arrows can find them ----
 
     fun register(id: String, box: Box, onClick: () -> Unit) { targets[id] = NavTarget(id, box); actions[id] = onClick }
+
+    /** The buttons that have a place on the screen: one scrolled out of sight reports an empty box, which is nowhere to go. */
+    private fun onScreen(): List<NavTarget> = targets.values.filter { it.box.w > 0f && it.box.h > 0f }
 
     fun unregister(id: String) {
         targets.remove(id); actions.remove(id)

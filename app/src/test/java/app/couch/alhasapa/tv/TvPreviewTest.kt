@@ -87,16 +87,28 @@ class TvPreviewTest {
             app.couch.alhasapa.data.CouchState.setEntry(it, app.couch.alhasapa.data.CouchState.dayKey(date), "krillion", org.json.JSONObject().put("w", "").put("t", 1L))
         }
         val model = app.couch.alhasapa.home.HomeModel.from(state, catalog, pieces, date)
+        val nav = app.couch.alhasapa.home.HomeNav()
         rule.setContent {
             AlHasapaTheme {
-                TvLayer(c) { app.couch.alhasapa.home.TvHome(model, phoneConnected = true, onPlay = {}, onAccounts = {}, onMore = {}) }
+                TvLayer(c) {
+                    app.couch.alhasapa.home.TvHome(model, phoneConnected = true, nav = nav, onPlay = {}, onAccounts = {}, onMore = {}, onInfo = {})
+                }
             }
         }
         rule.waitForIdle()
         val dir = File("build/previews").apply { mkdirs() }
-        val img = rule.onRoot().captureToImage().asAndroidBitmap()
-        File(dir, "tv-home.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-        org.junit.Assert.assertTrue(File(dir, "tv-home.png").length() > 5_000)
+        fun shot(name: String) {
+            val img = rule.onRoot().captureToImage().asAndroidBitmap()
+            File(dir, name).outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            org.junit.Assert.assertTrue(File(dir, name).length() > 5_000)
+        }
+        shot("tv-home.png")
+        // Further along the shelf (the row has moved), then the other games.
+        repeat(8) { rule.runOnIdle { c.navigate(Dir.LEFT) }; rule.waitForIdle() }
+        shot("tv-home-along.png")
+        rule.runOnIdle { c.navigate(Dir.DOWN) }; rule.waitForIdle()
+        repeat(3) { rule.runOnIdle { c.navigate(Dir.LEFT) }; rule.waitForIdle() }
+        shot("tv-home-more.png")
     }
 
     private fun save(name: String) {

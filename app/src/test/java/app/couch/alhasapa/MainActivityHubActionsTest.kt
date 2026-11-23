@@ -1,0 +1,111 @@
+package app.couch.alhasapa
+
+import android.content.Context
+import android.os.Looper
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ActivityScenario
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.couch.alhasapa.accounts.AccountsActivity
+import app.couch.alhasapa.diag.CrashReport
+import app.couch.alhasapa.diag.Flight
+import app.couch.alhasapa.keyboard.KeyboardModeActivity
+import app.couch.alhasapa.player.PlayerActivity
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.Shadows.shadowOf
+import org.robolectric.annotation.Config
+
+/**
+ * What the hub's page asks of the app when a game, the accounts or keyboard mode is pressed. Nothing covered this path before, and
+ * 1.9.0 shipped with it broken: every game opened from the hub crashed the app (the function that opens a game called itself until the
+ * stack ran out). These press exactly what the page's bridge presses.
+ */
+@RunWith(AndroidJUnit4::class)
+@Config(sdk = [37], application = CouchApp::class)
+class MainActivityHubActionsTest {
+    @get:Rule val rule = createEmptyComposeRule()
+    private val context: Context = ApplicationProvider.getApplicationContext()
+    private var scenario: ActivityScenario<MainActivity>? = null
+
+    @Before fun noReportOfAPreviousRun() { CrashReport.clear(context); Flight.acknowledgePrevious() }
+    @After fun close() { scenario?.close() }
+
+    private fun launch(): ActivityScenario<MainActivity> = ActivityScenario.launch(MainActivity::class.java).also { scenario = it; rule.waitForIdle() }
+
+    @Test
+    fun aGamePressedInTheHubOpensInThePlayer() {
+        launch().onActivity { a ->
+            a.hubActions.play("wordle")
+            shadowOf(Looper.getMainLooper()).idle()
+            val started = shadowOf(a).nextStartedActivity
+            assertEquals(PlayerActivity::class.java.name, started.component!!.className)
+            assertEquals("wordle", started.getStringExtra(PlayerActivity.EXTRA_GAME))
+            assertNull("once", shadowOf(a).nextStartedActivity)
+        }
+    }
+
+    @Test
+    fun andFromThePagesOwnThreadAsThePageReallyCalls() {
+        val s = launch()
+        val called = CountDownLatch(1)
+        s.onActivity { a -> Thread({ a.hubActions.play("connections"); called.countDown() }, "JavaBridge").start() }
+        assertTrue(called.await(5, TimeUnit.SECONDS))
+        s.onActivity { a ->
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals("connections", shadowOf(a).nextStartedActivity.getStringExtra(PlayerActivity.EXTRA_GAME))
+        }
+    }
+
+    @Test
+    fun aHeadToHeadGameAsksWhoPlaysFirstAndThenOpensForThatPerson() {
+        val s = launch()
+        s.onActivity { a ->
+            a.hubActions.play("queens")
+            shadowOf(Looper.getMainLooper()).idle()
+            assertNull("not opened yet: whose turn is it?", shadowOf(a).nextStartedActivity)
+        }
+        rule.waitForIdle()
+        rule.onNodeWithText("מי משחק?").assertIsDisplayed()
+        rule.onNode(hasContentDescription("משחק: רוני")).performClick()
+        rule.waitForIdle()
+        s.onActivity { a ->
+            val started = shadowOf(a).nextStartedActivity
+            assertEquals("queens", started.getStringExtra(PlayerActivity.EXTRA_GAME))
+            assertEquals("b", started.getStringExtra(PlayerActivity.EXTRA_WHO))
+        }
+    }
+
+    @Test
+    fun aGameThatIsNotInTheCatalogueOpensNothing() {
+        launch().onActivity { a ->
+            a.hubActions.play("no-such-game")
+            shadowOf(Looper.getMainLooper()).idle()
+            assertNull(shadowOf(a).nextStartedActivity)
+        }
+    }
+
+    @Test
+    fun theAccountsAndKeyboardModeOpen() {
+        launch().onActivity { a ->
+            a.hubActions.openAccounts()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(AccountsActivity::class.java.name, shadowOf(a).nextStartedActivity.component!!.className)
+            a.hubActions.openKeyboardMode()
+            shadowOf(Looper.getMainLooper()).idle()
+            assertEquals(KeyboardModeActivity::class.java.name, shadowOf(a).nextStartedActivity.component!!.className)
+        }
+    }
+}
