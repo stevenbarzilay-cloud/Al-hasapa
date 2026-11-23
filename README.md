@@ -290,7 +290,9 @@ problem cannot be seen from inside it. 1.8.1 takes the app out of it as far as a
 - **Light drawing** (`player/LightDrawing.kt`): the game's WebView gets a software layer, so the page is painted by the processor and
   the box's graphics only show the finished picture. Slower, with no video or WebGL, but it cannot hold the drawing stuck. Per site, on
   the TV only, kept on the device (not in the backup). The game menu (☰) has "ציור: מלא / קל" to switch it either way, and a site that
-  opens light says so for a moment.
+  opens light says so for a moment. A game that held the picture stuck in the last two runs (the flight recorder says so: at least 4
+  seconds waiting for a frame after its page loaded) opens light from the first start of 1.8.1, so Krillion does not have to freeze
+  again first; each such freeze is acted on once, so switching back to "מלא" is kept.
 - **The report**: Android's records of how the app ended are matched to the run they belong to (the 23 November report showed an older
   run's freeze as the previous run's end); a run with no record says the box was restarted or unplugged with the app still there; a line
   with the screen's mode; "typing began" when the phone starts typing; and, a few seconds after a game loads, how many videos (and how

@@ -37,6 +37,8 @@ class CouchApp : Application() {
         val tv = TvMode.isTelevision(this)
         // On a TV: the box going to standby closes the game and puts the app behind the home screen (see Standby).
         if (tv) Standby.install(this, screens::alive) { it is MainActivity }
+        // On a TV: a game that held the picture stuck before (the flight recorder says so) opens the light way.
+        if (tv) LightDrawing.fromEarlierFreezes(this)
         // Not under the unit tests: their main looper is paused on purpose, which a watchdog would take for a frozen app.
         if (Build.FINGERPRINT != "robolectric") {
             val guard = if (tv) drawGuard(screens) else null

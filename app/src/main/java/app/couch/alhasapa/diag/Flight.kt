@@ -124,6 +124,27 @@ object Flight {
 
     fun froze(frame: String): Boolean = freezes(frame).isNotEmpty()
 
+    /**
+     * The game pages that held the picture stuck in the last two runs: a freeze of the main thread waiting for the screen that lasted
+     * at least [minMs] (or never ended) while a game page was open, with that page's host (the last "page loaded" before it, the game
+     * not closed in between). Each as (a fingerprint of the freeze, the host).
+     */
+    fun drawFreezes(minMs: Long = 4_000): List<Pair<String, String>> = listOf(previous?.log.orEmpty(), older).flatMap { log ->
+        val list = entries(log)
+        list.indices.filter { i -> list[i].contains(Watchdog.STUCK) && list[i].contains("yncAndDrawFrame") }.mapNotNull { i ->
+            val free = list.drop(i + 1).firstOrNull { it.contains(Watchdog.FREE) }
+            val ms = free?.let { FREE_MS.find(it)?.groupValues?.get(1)?.toLongOrNull() }
+            if (free != null && (ms ?: 0) < minMs) return@mapNotNull null
+            val loaded = (i - 1 downTo 0).firstOrNull { list[it].contains(LOADED) } ?: return@mapNotNull null
+            if ((loaded + 1 until i).any { list[it].contains("PlayerActivity closed") || list[it].contains("PlayerActivity paused") }) return@mapNotNull null
+            val host = list[loaded].substringAfter(LOADED).substringBefore(')').trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+            list[i].hashCode().toString() to host
+        }
+    }
+
+    private const val LOADED = "player: page loaded ("
+    private val FREE_MS = Regex("after (\\d+) ms")
+
     private val STAMP = Regex("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}")
 
     /** The previous run's report has been seen: it is not shown again on the next start. */

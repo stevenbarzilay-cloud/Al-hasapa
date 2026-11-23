@@ -2,6 +2,7 @@ package app.couch.alhasapa.player
 
 import android.content.Context
 import androidx.core.content.edit
+import app.couch.alhasapa.diag.Flight
 
 /**
  * Sites whose game is drawn without the graphics chip on this device ("ציור קל"): the WebView gets a software layer, so the page is
@@ -24,6 +25,26 @@ object LightDrawing {
         val k = key(host) ?: return false
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(k, false)
     }
+
+    /**
+     * Once per start on a TV: a game that held the picture stuck in the last two runs (seen in the flight recorder, before the guard
+     * existed or before it acted) is drawn the light way from now on. Each freeze is acted on once, so turning a site back to full
+     * drawing in the menu is not undone by the same old freeze.
+     */
+    fun fromEarlierFreezes(context: Context) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val found = Flight.drawFreezes()
+        val seen = prefs.getStringSet(SEEN, null).orEmpty()
+        val fresh = found.filter { it.first !in seen }
+        if (fresh.isEmpty()) return
+        for (host in fresh.map { it.second }.distinct()) {
+            set(context, host, true)
+            Flight.log("drawing: $host held the picture stuck in an earlier run; drawn the light way from now on")
+        }
+        prefs.edit(commit = true) { putStringSet(SEEN, found.map { it.first }.toSet()) }
+    }
+
+    private const val SEEN = "_freezes_seen"
 
     /** Written at once (commit): the guard may end the app right after. Safe from any thread. */
     fun set(context: Context, host: String?, on: Boolean) {
