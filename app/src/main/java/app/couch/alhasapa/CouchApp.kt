@@ -130,7 +130,10 @@ class CouchApp : Application() {
         }
     }
 
-    val repo: StateRepository by lazy { StateRepository(FileStateStore(File(filesDir, "state.json"))) }
+    val repo: StateRepository by lazy {
+        // The first thing done with the state: what a new catalogue asks of the choices made here before (see CatalogUpdate).
+        StateRepository(FileStateStore(File(filesDir, "state.json"))).also { app.couch.alhasapa.catalog.CatalogUpdate.apply(this, it) }
+    }
 
     private val base: Catalog by lazy { Catalog.load(this) }
     private var catalogRevision = -1L

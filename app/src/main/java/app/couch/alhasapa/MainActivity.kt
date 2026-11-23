@@ -141,6 +141,7 @@ class MainActivity : ComponentActivity() {
                         model = model,
                         phoneConnected = remote.phones.isNotEmpty(),
                         nav = homeNav,
+                        phoneOlder = remote.older, phoneNewer = remote.newer,
                         onPlay = { id -> openGame(id) },
                         onAccounts = { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) },
                         // The hub is a page: the arrows begin inside it, as they did when the TV opened on it.

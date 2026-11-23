@@ -72,7 +72,7 @@ class HubBridgeTest {
     @Test
     fun theCatalogueReachesThePageWithThePersonsLinksApplied() {
         var c = JSONObject(bridge.loadCatalog())
-        assertEquals(54, c.getJSONArray("games").length())
+        assertEquals(68, c.getJSONArray("games").length())
         assertEquals("eleven sites and our own", 12, c.getJSONObject("sites").length())
         fun game(id: String) = (0 until c.getJSONArray("games").length()).map { c.getJSONArray("games").getJSONObject(it) }.first { it.getString("id") == id }
         assertEquals(game("hzchain").getString("u0"), game("hzchain").getString("u"))
@@ -136,7 +136,7 @@ class HubBridgeTest {
         cat = cat.withCustom(org.json.JSONArray("""[{"id":"c9","n":"Ours","s":"my","k":"ידע","m":"O","u":"https://games.example.org/x","metric":"none"}]"""))
         b.play("c9")
         assertTrue("c9" in played)
-        assertEquals(55, JSONObject(b.loadCatalog()).getJSONArray("games").length())
+        assertEquals(69, JSONObject(b.loadCatalog()).getJSONArray("games").length())
     }
 
     @Test

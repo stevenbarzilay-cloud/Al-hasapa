@@ -429,10 +429,54 @@
    "s": "mu",
    "k": "מוזיקה",
    "m": "Ba",
-   "u": "https://bandle.app",
+   "u": "https://bandle.app/",
    "d": "מזהים שיר כשהכלים נכנסים אחד אחד.",
    "metric": "guesses",
    "lib": 1
+  },
+  {
+   "id": "songless",
+   "n": "Songless",
+   "s": "mu",
+   "k": "מוזיקה",
+   "m": "So",
+   "u": "https://lessgames.com/songless",
+   "d": "מזהים שיר מקטע קצרצר, בכמה שפחות ניסיונות.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "albumdle",
+   "n": "Albumdle",
+   "s": "mu",
+   "k": "מוזיקה",
+   "m": "Al",
+   "u": "https://statt-land-song.ch/albumdle/",
+   "d": "מנחשים את האמן, האלבום ושנת היציאה לפי העטיפה.",
+   "metric": "none",
+   "pick": 1
+  },
+  {
+   "id": "beatlesdaily",
+   "n": "The Beatles Daily",
+   "s": "mu",
+   "k": "מוזיקה",
+   "m": "Be",
+   "u": "https://playfliplist.com/daily/beatles/",
+   "d": "מזהים שיר של הביטלס משנייה אחת.",
+   "metric": "none",
+   "pick": 5
+  },
+  {
+   "id": "spotle",
+   "n": "Spotle",
+   "s": "mu",
+   "k": "מוזיקה",
+   "m": "Sp",
+   "u": "https://spotle.io/",
+   "d": "מנחשים את האמן או הלהקה לפי רמזים שמתקבלים אחרי כל ניחוש.",
+   "metric": "none",
+   "pick": 8
   },
   {
    "id": "moreless",
@@ -445,6 +489,61 @@
    "metric": "none",
    "lib": 1,
    "placeholder": true
+  },
+  {
+   "id": "framed",
+   "n": "Framed",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Fr",
+   "u": "https://framed.wtf/",
+   "d": "מזהים סרט לפי פריימים.",
+   "metric": "guesses",
+   "lib": 1
+  },
+  {
+   "id": "catfishing",
+   "n": "Catfishing",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Ca",
+   "u": "https://catfishing.net/",
+   "d": "מנחשים ערך בוויקיפדיה לפי הקטגוריות שלו. עשרה ערכים ביום.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "dozen",
+   "n": "The Dozen: Daily Trivia",
+   "s": "tr",
+   "k": "ידע",
+   "m": "12",
+   "u": "https://dailydozentrivia.com/",
+   "d": "סיבוב טריוויה יומי, בהשראת תחרות הטריוויה The Dozen.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "disorderly",
+   "n": "Disorderly",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Di",
+   "u": "https://playdisorderly.com/",
+   "d": "מסדרים קבוצת פריטים בסדר הנכון, בכמה שפחות ניסיונות.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
+   "id": "magsize",
+   "n": "Magnitudle: Size It Up",
+   "s": "tr",
+   "k": "חושים",
+   "m": "Sz",
+   "u": "https://magnitudle.com/size-it-up",
+   "d": "משנים את הגודל של עצם עד שהוא נראה נכון ליד עצם מוכר. חמישה סיבובים ביום.",
+   "metric": "none",
+   "lib": 1
   },
   {
    "id": "meduyeket",
@@ -524,6 +623,17 @@
    "why": "שני אהובים במשחק אחד"
   },
   {
+   "id": "originle",
+   "n": "Originle",
+   "s": "geo",
+   "k": "גיאוגרפיה",
+   "m": "Or",
+   "u": "https://originle.io/",
+   "d": "פוגשים אדם חדש, שומעים את הסיפור שלו ומנחשים מאיזו מדינה הוא. שלושה ניחושים.",
+   "metric": "none",
+   "lib": 1
+  },
+  {
    "id": "worldle",
    "n": "Worldle",
    "s": "geo",
@@ -547,25 +657,15 @@
   },
   {
    "id": "timeguessr",
-   "n": "TimeGuessr",
+   "n": "TimeGuessr Daily",
    "s": "geo",
    "k": "גיאוגרפיה",
    "m": "TG",
-   "u": "https://timeguessr.com",
-   "d": "תמונה אחת: איפה ומתי צולמה.",
+   "u": "https://timeguessr.com/play?mode=daily",
+   "d": "מנחשים איפה ובאיזו שנה צולם כל תצלום.",
    "metric": "none",
-   "why": "נראה מעולה על מסך גדול"
-  },
-  {
-   "id": "framed",
-   "n": "Framed",
-   "s": "tr",
-   "k": "ידע",
-   "m": "Fr",
-   "u": "https://framed.wtf",
-   "d": "מזהים סרט לפי פריימים.",
-   "metric": "guesses",
-   "why": "מושלם לטלוויזיה"
+   "why": "נראה מעולה על מסך גדול",
+   "pick": 3
   },
   {
    "id": "boxoffice",
@@ -584,11 +684,66 @@
    "s": "tr",
    "k": "ידע",
    "m": "Ci",
-   "u": "https://www.google.com/search?q=Cinematrix%20daily%20movie%20grid",
-   "d": "ממלאים טבלה בסרטים שמתאימים לשורה ולטור.",
+   "u": "https://www.vulture.com/article/daily-movie-grid-trivia-game-cinematrix.html",
+   "d": "ממלאים לוח 3×3 בסרטים שמתאימים גם לרמז של השורה וגם לרמז של העמודה.",
    "metric": "none",
    "why": "דיונים טובים על הספה",
-   "placeholder": true
+   "pick": 7
+  },
+  {
+   "id": "actorle",
+   "n": "Actorle",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Ac",
+   "u": "https://actorle.com/",
+   "d": "מנחשים מי שיחק בסרטים ברשימה כששמות הסרטים מוסתרים.",
+   "metric": "none",
+   "pick": 2
+  },
+  {
+   "id": "thrice",
+   "n": "Thrice",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Th",
+   "u": "https://thrice.geekswhodrink.com/",
+   "d": "בכל סיבוב יש שלוש שאלות שמובילות לאותה תשובה.",
+   "metric": "none",
+   "pick": 4
+  },
+  {
+   "id": "flickle",
+   "n": "Flickle",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Fl",
+   "u": "https://flickle.app/",
+   "d": "מזהים סרט מקטעי וידאו קצרים שנחשפים בהדרגה.",
+   "metric": "none",
+   "pick": 6
+  },
+  {
+   "id": "chronotrivia",
+   "n": "Chrono Trivia",
+   "s": "tr",
+   "k": "ידע",
+   "m": "Ch",
+   "u": "https://chronotrivia.com/",
+   "d": "מסדרים אירועים לפי סדר כרונולוגי, עם קטגוריות כמו מוזיקה, בידור והיסטוריה.",
+   "metric": "none",
+   "pick": 9
+  },
+  {
+   "id": "magweigh",
+   "n": "Magnitudle: Weigh It Up",
+   "s": "tr",
+   "k": "מספרים",
+   "m": "Wg",
+   "u": "https://magnitudle.com/weigh-it-up",
+   "d": "מעריכים כמה פריטים צריך כדי לאזן את המאזניים.",
+   "metric": "none",
+   "pick": 10
   },
   {
    "id": "codenames",

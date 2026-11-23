@@ -721,7 +721,9 @@ function renderHome(){
 }
 
 /* ================= under the cushions ================= */
-function queue(){return GAMES.filter(g=>!inLib(g)&&!state.prefs[g.id]).concat(GAMES.filter(g=>state.prefs[g.id]==="later"))}
+/* The suggestions, one at a time: the ones picked by hand first (by their "pick"), then the rest as the catalogue has them, then the ones put off. */
+function queue(){const fresh=GAMES.filter(g=>!inLib(g)&&!state.prefs[g.id]);const at=g=>g.pick>0?g.pick:1e9;
+  return fresh.map((g,i)=>[g,i]).sort((a,b)=>at(a[0])-at(b[0])||a[1]-b[1]).map(x=>x[0]).concat(GAMES.filter(g=>state.prefs[g.id]==="later"))}
 function renderDisc(){
   const q=queue(), g=q[0], no=GAMES.filter(x=>state.prefs[x.id]==="no"), yes=GAMES.filter(x=>state.prefs[x.id]==="yes"&&!x.lib);
   const card=g?`<article class="feat" id="dcard" data-id="${g.id}">

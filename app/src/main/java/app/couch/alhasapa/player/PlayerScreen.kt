@@ -84,6 +84,10 @@ import org.json.JSONObject
 import app.couch.alhasapa.ui.theme.Palette
 import kotlinx.coroutines.delay
 
+/** The first look at a page's sound, and how often after that. */
+private const val SOUND_FIRST_LOOK_MS = 10_000L
+private const val SOUND_LOOK_MS = 20_000L
+
 private val ALL_ITEMS = BarItem.entries
 private val TOP_OF_BOTH = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM, BarItem.MODE, BarItem.UI)
 private val BOTTOM_OF_BOTH = listOf(BarItem.PROGRESS, BarItem.POINTS, BarItem.PIECES, BarItem.RESULT, BarItem.PLAYED)
@@ -187,6 +191,39 @@ fun PlayerScreen(
     // On a phone the bars show the clock. On a TV the dock's clock ticks by itself, so this screen (and the game's frame around the
     // WebView) is not composed again every second on a slow box.
     LaunchedEffect(tv) { if (tv == null) while (true) { delay(1_000); now = System.currentTimeMillis() } }
+
+    // On a TV: what the page's sound was given and whether it had gaps, to the report every so often and when the game closes.
+    // A site where gaps were counted gets the longest buffer from the next time it opens.
+    val soundHost = remember { android.net.Uri.parse(session.url).host.orEmpty() }
+    if (tv != null && !session.loginMode) {
+        val view = webView
+        val watch = remember(view) { SoundProbe.Watch(soundHost) }
+        val busy = remember(view) { PageBusy.Watch(soundHost) }
+        LaunchedEffect(view) {
+            if (view == null) return@LaunchedEffect
+            delay(SOUND_FIRST_LOOK_MS)
+            while (true) {
+                runCatching {
+                    view.evaluateJavascript(SoundScript.TAKE) { raw ->
+                        val step = SoundProbe.parse(raw)?.let { watch.onReading(it, android.os.SystemClock.uptimeMillis()) } ?: return@evaluateJavascript
+                        step.lines.forEach { app.couch.alhasapa.diag.Flight.log(it) }
+                        if (step.useLong) SoundPolicy.useLong(context, soundHost)
+                    }
+                    // And how hard the page works the box (see PageBusy).
+                    view.evaluateJavascript(PageBusy.TAKE) { raw ->
+                        PageBusy.parse(raw)?.let { busy.onSample(it) }?.let { app.couch.alhasapa.diag.Flight.log(it) }
+                    }
+                }
+                delay(SOUND_LOOK_MS)
+            }
+        }
+        DisposableEffect(view) {
+            onDispose {
+                watch.closing()?.let { app.couch.alhasapa.diag.Flight.log(it) }
+                busy.closing()?.let { app.couch.alhasapa.diag.Flight.log(it) }
+            }
+        }
+    }
 
     // The zoom buttons are for quick use while playing, so they keep what they set for this site without a second step.
     val keep: (DisplayProfile) -> Unit = { next ->
@@ -292,6 +329,10 @@ fun PlayerScreen(
                                         }
                                         inj.apply(profile)                          // before the first load, so the first page is already right
                                         injector = inj
+                                        // On a TV a page that makes its own sound gets a longer buffer (see SoundScript), and its sound is counted.
+                                        val sound = if (tv != null && !session.loginMode) SoundPolicy.mode(ctx, soundHost) else null
+                                        val soundAtStart = sound != null && SoundInjector.install(this, sound)
+                                        if (sound == SoundScript.Mode.LONG) app.couch.alhasapa.diag.Flight.log("player: $soundHost had gaps in its sound before: the longest buffer this time")
                                         if (result != null) CaptureInjector.install(this, session, gate) { c -> onCaptured(c) }
                                         webViewClient = PlayerWebViewClient(
                                             session = session,
@@ -322,7 +363,10 @@ fun PlayerScreen(
                                                 if (pageDeaths.size >= 2) loadError = ctx.getString(R.string.player_page_died) else generation++
                                             },
                                             onUrl = { currentUrl = it },
-                                            onPageBegan = { inj.onPageStarted() },
+                                            onPageBegan = {
+                                                inj.onPageStarted()
+                                                if (sound != null && !soundAtStart) { evaluateJavascript(SoundScript.build(sound), null); evaluateJavascript(PageBusy.INSTALL, null) }
+                                            },
                                         )
                                         loadUrl(session.url)
                                         webView = this

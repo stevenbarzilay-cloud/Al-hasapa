@@ -26,15 +26,18 @@ class KeyServerClientTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val typed = CopyOnWriteArrayList<Msg>()
     private val received = CopyOnWriteArrayList<String>()
+    private val linked = CopyOnWriteArrayList<Boolean>()
     private val server = KeyServer(
         context, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = "MiBOX4",
         onLogins = { payload -> received += payload; "NYT Games" to 3 },
+        appCode = 28, appVer = "1.9.4", onLinked = { on -> if (linked.lastOrNull() != on) linked += on },
     )
     private val clients = ArrayList<KeyClient>()
 
     @After fun close() { clients.forEach { it.stop() }; server.stop() }
 
-    private fun client(): KeyClient = KeyClient(context, phoneName = "Pixel 8", find = { "127.0.0.1:${server.port}" }).also { clients += it }
+    private fun client(appCode: Int = 28, appVer: String = "1.9.4"): KeyClient =
+        KeyClient(context, phoneName = "Pixel 8", find = { "127.0.0.1:${server.port}" }, appCode = appCode, appVer = appVer).also { clients += it }
 
     /** Waits (letting the main thread run, where the server hands over what was typed) until [ok], or fails with [what]. */
     private fun waitFor(what: String, ok: () -> Boolean) {
@@ -118,6 +121,46 @@ class KeyServerClientTest {
         assertEquals("the TV hung up", -1, runCatching { s.getInputStream().read() }.getOrDefault(-1))
         s.close()
     }
+    @Test
+    fun eachSideSaysWhenTheOtherOneWasLeftOnAnOldVersion() {
+        // The same version on both: nothing to say. And the TV's Wi-Fi is asked to stay awake exactly while a phone is connected.
+        val same = pairedPhone()
+        assertNull(server.ui.value.older); assertNull(server.ui.value.newer); assertNull(same.versions.value)
+        assertEquals(listOf(false, true), linked.toList().takeLast(2))
+        same.stop()
+        waitFor("the TV saw it leave") { server.ui.value.phones.isEmpty() }
+        assertEquals(false, linked.last())
+
+        // A phone that stayed on 1.9.0 while the TV moved on: the TV names it, and the phone is told there is a newer one.
+        val old = client(appCode = 24, appVer = "1.9.0")
+        old.start()
+        waitFor("the old phone is connected") { old.state.value is KeyClient.State.Connected }
+        assertEquals("1.9.0", server.ui.value.older); assertNull(server.ui.value.newer)
+        assertEquals(KeyClient.Versions.TvNewer("1.9.4"), old.versions.value)
+        old.stop()
+        waitFor("it left") { server.ui.value.phones.isEmpty() }
+        assertNull("gone with the phone", server.ui.value.older)
+
+        // And the other way round: the phone was updated, the TV was not.
+        val new = client(appCode = 29, appVer = "1.9.5")
+        new.start()
+        waitFor("the newer phone is connected") { new.state.value is KeyClient.State.Connected }
+        assertEquals("1.9.5", server.ui.value.newer); assertNull(server.ui.value.older)
+        assertEquals(KeyClient.Versions.TvOlder, new.versions.value)
+    }
+
+    @Test
+    fun aStrokeOfTheTouchpadIsWrittenDownInNumbersWhenTheFingerRests() {
+        val phone = pairedPhone()
+        phone.send(Msg.Pointer(true))
+        for (i in 0 until 12) { phone.send(Msg.Move(4f, 0f, 1_000L + 16L * i)); Thread.sleep(5) }
+        waitFor("the moves reached the TV") { typed.count { it is Msg.Move } == 12 }
+        shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(KeyServer.PAD_REST_MS + 100))
+        val line = app.couch.alhasapa.diag.Flight.tail(20).lines().lastOrNull { it.contains("touchpad: ") }
+        assertNotNull("the stroke is in the report", line)
+        assertTrue(line, line!!.contains("touchpad: 12 moves") && line.contains("held up on the way") && line.contains("then waited for the TV"))
+    }
+
     private fun pairedPhone(): KeyClient {
         RemoteStore(context).forgetPhones()
         server.start()

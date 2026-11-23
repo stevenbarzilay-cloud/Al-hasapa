@@ -21,6 +21,13 @@ object RemoteKeys {
         val phones: List<String> = emptyList(),
         val code: String? = null,
         val codeFor: String? = null,
+        /**
+         * A connected phone runs an older app than this TV: its version's name ("" when it is too old to say, before 1.9.4). In
+         * November 2026 the TV was updated three times while the phone stayed on 1.9.0, which crashed on every game; nothing said so.
+         */
+        val older: String? = null,
+        /** A connected phone runs a newer app than this TV: its version's name. */
+        val newer: String? = null,
     )
 
     val ui = MutableStateFlow(Ui())

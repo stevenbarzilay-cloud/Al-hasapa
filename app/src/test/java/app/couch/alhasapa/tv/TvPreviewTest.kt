@@ -53,6 +53,30 @@ class TvPreviewTest {
         org.junit.Assert.assertTrue(File(dir, "tv-keyboard.png").length() > 5_000)
     }
 
+    /** The TV's sign-in screen: the phone's way first, in three steps, then the accounts themselves. */
+    @Test
+    fun drawTheAccountsScreen() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        rule.setContent {
+            AlHasapaTheme {
+                TvLayer(c) {
+                    app.couch.alhasapa.accounts.AccountsScreen(
+                        sites = catalog.sites.values.filter { it.account }, nameA = "סטיב", nameB = "רוני",
+                        pieceA = pieces.styleFor(null, "a"), pieceB = pieces.styleFor(null, "b"),
+                        onLogin = { _, _, _ -> }, onChrome = {}, onBack = {},
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "tv-accounts.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        org.junit.Assert.assertTrue(File(dir, "tv-accounts.png").length() > 5_000)
+    }
+
     @Test
     fun drawTheDockWithThePawOn() {
         val c = TvController(true, 2f)

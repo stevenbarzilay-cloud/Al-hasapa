@@ -1,5 +1,7 @@
 package app.couch.alhasapa.home
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -72,9 +74,40 @@ class TvHomeTest {
         rule.onNode(hasContentDescription(first.title)).performClick()
         assertEquals(listOf(first.id), played)
         rule.onNodeWithText("הגדרות ועוד").performClick()
-        rule.onNodeWithText("החשבונות").performClick()
+        rule.onNodeWithText("התחברות לאתרים").performClick()
         rule.onNodeWithText("מידע לתיקון תקלות").performClick()
         assertEquals(1, more); assertEquals(1, accounts); assertEquals(1, info)
+    }
+
+    @Test
+    fun theSecondRowBeginsWithTheSuggestionsWePickedInTheirOrder() {
+        val m = HomeModel.from(CouchState.empty(), catalog, pieces, date)
+        assertEquals(
+            listOf("albumdle", "actorle", "timeguessr", "thrice", "beatlesdaily", "flickle", "cinematrix", "spotle", "chronotrivia", "magweigh"),
+            m.more.take(10).map { it.id },
+        )
+        assertEquals("the permanent games of the list are on the shelf", emptyList<String>(),
+            listOf("songless", "framed", "catfishing", "originle", "dozen", "disorderly", "magsize", "bandle") - m.tonight.map { it.id }.toSet())
+    }
+
+    @Test
+    fun aPhoneLeftOnAnOldVersionIsSaidInWordsAtTheFootOfTheHome() {
+        // The TV was updated three times in November 2026 while the phone stayed on 1.9.0 (which crashed on every game), and nothing said so.
+        val m = HomeModel.from(CouchState.empty(), catalog, pieces, date)
+        var older: String? by androidx.compose.runtime.mutableStateOf("1.9.0")
+        var newer: String? by androidx.compose.runtime.mutableStateOf(null)
+        rule.setContent {
+            AlHasapaTheme {
+                TvHome(m, phoneConnected = true, nav = HomeNav(), phoneOlder = older, phoneNewer = newer, onPlay = {}, onAccounts = {}, onMore = {}, onInfo = {})
+            }
+        }
+        rule.onNodeWithText("האפליקציה שבו ישנה (1.9.0)", substring = true).assertIsDisplayed()
+        older = ""                                                     // an app from before 1.9.4 does not say which version it is
+        rule.onNodeWithText("האפליקציה שבו ישנה מזו שכאן", substring = true).assertIsDisplayed()
+        older = null; newer = "1.9.5"
+        rule.onNodeWithText("בטלפון מותקנת גרסה חדשה יותר (1.9.5)", substring = true).assertIsDisplayed()
+        newer = null
+        rule.onNodeWithText("הטלפון מחובר: מקלידים ממנו").assertIsDisplayed()
     }
 
     @Test

@@ -93,6 +93,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.R
 import app.couch.alhasapa.remote.KeyClient
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import app.couch.alhasapa.remote.KeyLink
 import app.couch.alhasapa.tv.PawIcon
 import app.couch.alhasapa.tv.drawPaw
@@ -120,6 +122,9 @@ interface KeySink {
 
     /** Hands the phone's login to [site] to the TV (see KeyClient.sendLogins). */
     fun sendLogin(site: String) {}
+
+    /** Opens [site]'s sign-in page here on the phone (the list is read again when the person comes back). */
+    fun signIn(site: String) {}
 }
 
 /**
@@ -128,17 +133,41 @@ interface KeySink {
  * the touchpad (a couch cushion) comes out with it, and the keyboard makes room.
  */
 @Composable
-fun KeyboardModeScreen(state: KeyClient.State, sink: KeySink, onGame: () -> Unit, handoff: KeyClient.Handoff? = null) {
-    var loginsOpen by remember { mutableStateOf(false) }
+fun KeyboardModeScreen(
+    state: KeyClient.State,
+    sink: KeySink,
+    onGame: () -> Unit,
+    handoff: KeyClient.Handoff? = null,
+    /** The TV's app and this one are different versions (one of the two was not updated). */
+    versions: KeyClient.Versions? = null,
+    /** Opened from the accounts screen's "send to the TV": the sign-in list opens by itself as soon as the TV is connected. */
+    openLogins: Boolean = false,
+) {
+    var loginsOpen by rememberSaveable { mutableStateOf(openLogins) }
     if (loginsOpen && state is KeyClient.State.Connected) {
-        val items = remember { sink.logins() }
-        LoginsDialog(items, handoff, onSend = sink::sendLogin, onClose = { loginsOpen = false })
+        // Read again whenever the phone comes back to this screen: the person may just have signed in.
+        var back by remember { mutableIntStateOf(0) }
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { back++ }
+        val items = remember(back) { sink.logins() }
+        LoginsDialog(items, handoff, onSend = sink::sendLogin, onSignIn = sink::signIn, onClose = { loginsOpen = false })
     }
     Column(
         Modifier.fillMaxSize().background(Palette.Cream).windowInsetsPadding(WindowInsets.displayCutout).padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         TopStrip(state, onGame, onLogins = { loginsOpen = true })
+        if (state is KeyClient.State.Connected && versions != null) {
+            val note = when (versions) {
+                is KeyClient.Versions.TvNewer -> stringResource(R.string.kb_tv_newer, versions.ver)
+                KeyClient.Versions.TvOlder -> stringResource(R.string.kb_tv_older)
+            }
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                Text(
+                    note, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Palette.Red, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().padding(end = 12.dp),
+                )
+            }
+        }
         Box(Modifier.fillMaxWidth().weight(1f).padding(end = if (state is KeyClient.State.Connected) 0.dp else 12.dp)) {
             when (state) {
                 is KeyClient.State.Connected -> Connected(sink)
@@ -178,7 +207,13 @@ private fun TopStrip(state: KeyClient.State, onGame: () -> Unit, onLogins: () ->
  * a button for each, and how the last one went. Encrypted for the paired TV only (see KeyClient.sendLogins).
  */
 @Composable
-private fun LoginsDialog(items: List<app.couch.alhasapa.remote.LoginHandoff.Item>, handoff: KeyClient.Handoff?, onSend: (String) -> Unit, onClose: () -> Unit) {
+private fun LoginsDialog(
+    items: List<app.couch.alhasapa.remote.LoginHandoff.Item>,
+    handoff: KeyClient.Handoff?,
+    onSend: (String) -> Unit,
+    onSignIn: (String) -> Unit,
+    onClose: () -> Unit,
+) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
             // The phone lies on its side here, so the screen is low: the way out is at the top, and the rest scrolls if it has to.
@@ -199,6 +234,8 @@ private fun LoginsDialog(items: List<app.couch.alhasapa.remote.LoginHandoff.Item
                             val status = when (it.signedIn) { true -> R.string.logins_signed_in; false -> R.string.logins_signed_out; null -> R.string.logins_signed_unknown }
                             Text(stringResource(status), fontSize = 13.sp, color = Palette.Ink2)
                         }
+                        // Everything in one place: sign in here on the phone (once), then send. Signed in already: only send.
+                        if (it.signedIn != true) Pill(stringResource(R.string.logins_sign_in), dark = it.signedIn == false) { onSignIn(it.id) }
                         if (it.signedIn != false) {
                             val busy = handoff is KeyClient.Handoff.Sending && handoff.site == it.id
                             Pill(stringResource(if (busy) R.string.logins_sending else R.string.logins_send), dark = true) { if (!busy) onSend(it.id) }
@@ -407,7 +444,7 @@ private fun Cushion(sink: KeySink, dragging: Boolean, onDragging: (Boolean) -> U
                                 val mx = dx / density; val my = dy / density
                                 val speed = hypot(mx, my) / (now - sentAt).coerceAtLeast(1L)          // dp per ms
                                 val gain = 1f + ((speed - 0.25f) * 2.2f).coerceIn(0f, 2.5f)
-                                sink.pointer(KeyLink.Msg.Move(mx * gain, my * gain))
+                                sink.pointer(KeyLink.Msg.Move(mx * gain, my * gain, now))
                                 dx = 0f; dy = 0f
                             }
                             if (scroll != 0f) { sink.pointer(KeyLink.Msg.Scroll(scroll / density)); scroll = 0f }

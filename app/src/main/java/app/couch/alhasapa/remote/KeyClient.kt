@@ -27,6 +27,9 @@ class KeyClient(
     private val store: RemoteStore = RemoteStore(context),
     private val phoneName: String = Build.MODEL.orEmpty().ifBlank { "טלפון" },
     private val find: (timeoutMs: Long) -> String? = { NsdFinder(context).find(it) },
+    /** This app's version, told to the TV and compared with the TV's (see [Versions]). */
+    private val appCode: Int = app.couch.alhasapa.BuildConfig.VERSION_CODE,
+    private val appVer: String = app.couch.alhasapa.BuildConfig.VERSION_NAME,
 ) {
     sealed interface State {
         /** Looking for the TV on the home network. */
@@ -55,6 +58,20 @@ class KeyClient(
 
     private val _handoff = MutableStateFlow<Handoff?>(null)
     val handoff: StateFlow<Handoff?> get() = _handoff
+
+    /**
+     * How the TV's app compares with this phone's, once the TV has said hello: one of the two was left behind on an old version. (The
+     * two are always built together; in November 2026 the TV was updated three times while the phone stayed on a version that crashed.)
+     */
+    sealed interface Versions {
+        /** The TV has a newer app ([ver]): this phone should be updated. */
+        data class TvNewer(val ver: String) : Versions
+        /** The TV's app is older than this phone's (an app from before 1.9.4 does not say which). */
+        data object TvOlder : Versions
+    }
+
+    private val _versions = MutableStateFlow<Versions?>(null)
+    val versions: StateFlow<Versions?> get() = _versions
 
     private class Pending(val site: String, val payload: String, val pair: java.security.KeyPair, val key: String)
     @Volatile private var pending: Pending? = null
@@ -190,12 +207,13 @@ class KeyClient(
                 when (m) {
                     is Msg.Hi -> {
                         tvId = m.tv; tvName = m.name
+                        _versions.value = when { m.app > appCode -> Versions.TvNewer(m.ver); m.app < appCode -> Versions.TvOlder; else -> null }
                         val token = store.tokenFor(m.tv)
                         // From 1.9 the TV sends a nonce, and the phone proves it holds the token without sending it. An older TV
                         // gets the token as before.
                         val hello = if (m.nonce.isNotEmpty() && token.isNotEmpty()) {
-                            Msg.Hello(store.phoneId, phoneName, "", LoginCrypto.proof(token, m.nonce, store.phoneId))
-                        } else Msg.Hello(store.phoneId, phoneName, token)
+                            Msg.Hello(store.phoneId, phoneName, "", LoginCrypto.proof(token, m.nonce, store.phoneId), appCode, appVer)
+                        } else Msg.Hello(store.phoneId, phoneName, token, "", appCode, appVer)
                         write(hello)
                     }
                     is Msg.LoginsReady -> finishLogins(m)

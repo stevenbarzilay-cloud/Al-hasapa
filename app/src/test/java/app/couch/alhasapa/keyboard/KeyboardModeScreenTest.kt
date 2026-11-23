@@ -51,13 +51,18 @@ class KeyboardModeScreenTest {
             app.couch.alhasapa.remote.LoginHandoff.Item("my", "אתר שלא ברור", signedIn = null),
         )
         override fun sendLogin(site: String) { sent += "login:$site" }
+        override fun signIn(site: String) { sent += "signin:$site" }
     }
+    private var versions by mutableStateOf<KeyClient.Versions?>(null)
+    private var openLogins = false
     private var handoff by mutableStateOf<KeyClient.Handoff?>(null)
     private var state by mutableStateOf<KeyClient.State>(KeyClient.State.Looking)
     private var game = 0
     private val tab = hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")
 
-    private fun show() = rule.setContent { AlHasapaTheme { KeyboardModeScreen(state, sink, onGame = { game++ }, handoff = handoff) } }
+    private fun show() = rule.setContent {
+        AlHasapaTheme { KeyboardModeScreen(state, sink, onGame = { game++ }, handoff = handoff, versions = versions, openLogins = openLogins) }
+    }
     private fun key(d: String) = rule.onNode(hasContentDescription(d))
 
     @Test
@@ -190,6 +195,32 @@ class KeyboardModeScreenTest {
         assertEquals(null, PhoneKeys.message(PKey.Shift, false))
     }
     @Test
+    fun askedForFromTheAccountsScreenTheSignInListOpensAsSoonAsTheTvIsConnected() {
+        openLogins = true
+        show()
+        rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertDoesNotExist()        // not before there is a TV to send to
+        state = KeyClient.State.Connected("MiTV", "עמוד הבית")
+        rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertIsDisplayed()
+        rule.onNodeWithText("סגירה").performClick()
+        rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertDoesNotExist()
+        key("q").assertIsDisplayed()                                                 // and under it, the keyboard as always
+    }
+
+    @Test
+    fun itSaysWhenTheTvAndThePhoneAreNotTheSameVersion() {
+        versions = KeyClient.Versions.TvNewer("1.9.4")
+        show()
+        rule.onNodeWithText("גרסה חדשה יותר", substring = true).assertDoesNotExist() // nothing to compare with yet
+        state = KeyClient.State.Connected("MiTV", "עמוד הבית")
+        rule.onNodeWithText("בטלוויזיה מותקנת גרסה חדשה יותר (1.9.4). כדאי לעדכן גם את הטלפון.").assertIsDisplayed()
+        key("q").assertIsDisplayed()
+        versions = KeyClient.Versions.TvOlder
+        rule.onNodeWithText("בטלוויזיה מותקנת גרסה ישנה יותר של האפליקציה. כדאי לעדכן אותה.").assertIsDisplayed()
+        versions = null
+        rule.onNodeWithText("כדאי לעדכן", substring = true).assertDoesNotExist()
+    }
+
+    @Test
     fun aLoginGoesToTheTvFromTheTopStripAndSaysHowItWent() {
         show()
         rule.onNodeWithText("התחברות לטלוויזיה").assertDoesNotExist()              // only while connected
@@ -201,6 +232,11 @@ class KeyboardModeScreenTest {
         rule.onNodeWithText("לא ברור אם מחובר בטלפון", substring = true).assertIsDisplayed()
         // A button where the phone is signed in (NYT) and where that cannot be told; none where it is not (Haaretz here).
         rule.onAllNodesWithText("לשלוח").assertCountEquals(2)
+        // Signing in is right here too, wherever the phone is not signed in for sure: the whole way to the TV is in this one list.
+        rule.onAllNodesWithText("להתחבר כאן").assertCountEquals(2)
+        rule.onAllNodesWithText("להתחבר כאן")[0].performClick()
+        assertEquals(listOf("signin:hz"), sent)
+        sent.clear()
         rule.onAllNodesWithText("לשלוח")[0].performClick()
         assertEquals(listOf("login:nyt"), sent)
         handoff = KeyClient.Handoff.Sending("nyt")

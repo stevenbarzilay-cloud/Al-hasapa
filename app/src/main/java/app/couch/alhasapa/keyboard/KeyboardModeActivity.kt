@@ -65,12 +65,21 @@ class KeyboardModeActivity : ComponentActivity() {
                 Flight.log("logins: sending ${s.name} to the TV (${cookies.size} cookies)")
                 client.sendLogins(site, LoginHandoff.payload(site, cookies))
             }
+
+            // The site's own sign-in page, here on the phone, in the same browser the login is then read from.
+            override fun signIn(site: String) {
+                val s = (application as CouchApp).catalog.sites[site] ?: return
+                Flight.log("logins: signing in to ${s.name} on the phone")
+                startActivity(app.couch.alhasapa.player.PlayerActivity.loginIntent(this@KeyboardModeActivity, s.id, s.label, app.couch.alhasapa.player.ProfileNames.GAMES))
+            }
         }
+        val openLogins = intent.getBooleanExtra(EXTRA_LOGINS, false)
         setContent {
             AlHasapaTheme {
                 val state by client.state.collectAsState()
                 val handoff by client.handoff.collectAsState()
-                KeyboardModeScreen(state, sink, onGame = { finish() }, handoff = handoff)
+                val versions by client.versions.collectAsState()
+                KeyboardModeScreen(state, sink, onGame = { finish() }, handoff = handoff, versions = versions, openLogins = openLogins)
             }
         }
         Flight.log("keyboard mode opened")
@@ -105,5 +114,11 @@ class KeyboardModeActivity : ComponentActivity() {
 
     companion object {
         const val LOCAL_NETWORK = "android.permission.ACCESS_LOCAL_NETWORK"
+
+        /** Open with the sign-in list showing (from the accounts screen's "send to the TV"). */
+        const val EXTRA_LOGINS = "logins"
+
+        fun loginsIntent(context: android.content.Context): android.content.Intent =
+            android.content.Intent(context, KeyboardModeActivity::class.java).putExtra(EXTRA_LOGINS, true)
     }
 }

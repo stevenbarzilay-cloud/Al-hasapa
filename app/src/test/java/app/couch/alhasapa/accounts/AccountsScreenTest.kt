@@ -27,14 +27,55 @@ class AccountsScreenTest {
     private val logins = mutableListOf<Triple<String, String, String>>()
     private val chrome = mutableListOf<String>()
 
-    private fun show() = rule.setContent {
+    private var toTv = 0
+
+    /** As on the phone ([phone]: a login can go on to the TV), as on the TV ([tv]), or plain. */
+    private fun show(phone: Boolean = false, tv: Boolean = false) = rule.setContent {
         AlHasapaTheme {
-            AccountsScreen(
-                sites = catalog.sites.values.filter { it.account }, nameA = "סטיב", nameB = "רוני",
-                pieceA = pieces.styleFor(null, "a"), pieceB = pieces.styleFor(null, "b"),
-                onLogin = { s, t, p -> logins += Triple(s.id, t, p) }, onChrome = { chrome += it }, onBack = {},
-            )
+            androidx.compose.runtime.CompositionLocalProvider(
+                app.couch.alhasapa.tv.LocalTv provides if (tv) app.couch.alhasapa.tv.TvController(true, 2f) else null,
+            ) {
+                AccountsScreen(
+                    sites = catalog.sites.values.filter { it.account }, nameA = "סטיב", nameB = "רוני",
+                    pieceA = pieces.styleFor(null, "a"), pieceB = pieces.styleFor(null, "b"),
+                    onLogin = { s, t, p -> logins += Triple(s.id, t, p) }, onChrome = { chrome += it }, onBack = {},
+                    onSendToTv = if (phone) ({ toTv++ }) else null,
+                )
+            }
         }
+    }
+
+    @org.junit.After fun noCookiesLeft() { android.webkit.CookieManager.getInstance().removeAllCookies(null) }
+
+    @Test
+    fun onTheTvItSaysFirstThatTheEasyWayIsThePhoneAndHow() {
+        show(tv = true)
+        rule.onNodeWithText("הכי קל: מתחברים בטלפון ושולחים לכאן").assertIsDisplayed()
+        rule.onNodeWithText("״מקלדת לטלוויזיה״", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("״התחברות לטלוויזיה״", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("3. ״לשלוח״, וההתחברות מגיעה לכאן מיד.").assertIsDisplayed()
+        // Signing in on the TV itself is still there, and nothing here offers to send a login to the TV (this is the TV).
+        assertEquals(4, rule.onAllNodesWithText("להתחבר").fetchSemanticsNodes().size)
+        rule.onNodeWithText("לשלוח את ההתחברות לטלוויזיה").assertDoesNotExist()
+    }
+
+    @Test
+    fun onThePhoneALoginMadeHereCanGoOnToTheTv() {
+        // Signed in to NYT in this app's browser (the cookie the site keeps for a signed-in reader).
+        android.webkit.CookieManager.getInstance().setCookie("https://www.nytimes.com", "NYT-S=0^abc; Domain=.nytimes.com; Path=/; Secure")
+        show(phone = true)
+        rule.onNodeWithText("גם בטלוויזיה", substring = true).assertIsDisplayed()
+        // Only where there is a login to send, and only for the sites whose login can go (not the two LinkedIn accounts).
+        assertEquals(1, rule.onAllNodesWithText("לשלוח את ההתחברות לטלוויזיה").fetchSemanticsNodes().size)
+        rule.onNodeWithText("לשלוח את ההתחברות לטלוויזיה").performScrollTo().performClick()
+        assertEquals(1, toTv)
+        rule.onNodeWithText("הכי קל: מתחברים בטלפון ושולחים לכאן").assertDoesNotExist()
+    }
+
+    @Test
+    fun withNothingSignedInThereIsNothingToSendYet() {
+        show(phone = true)
+        rule.onNodeWithText("לשלוח את ההתחברות לטלוויזיה").assertDoesNotExist()
     }
 
     @Test

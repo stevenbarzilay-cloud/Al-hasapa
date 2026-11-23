@@ -53,8 +53,10 @@ $prefs  var CSS=${quote(css)}, LIGHT=${!profile.dark};
   var obs=new MutationObserver(apply);
   window.__couchDisplayObs=obs;
   obs.observe(document,{childList:true,subtree:true});
-  // The page is allowed to settle; after that the observer is no longer needed.
-  window.addEventListener('load',function(){setTimeout(function(){obs.disconnect()},3000)},{once:true});
+  // The page is allowed to settle; after that the observer is no longer needed. (Run on a page that has already loaded, there is no
+  // "load" left to wait for: until 1.9.3 the observer then stayed for as long as the page did, called for every change in it.)
+  var done=function(){setTimeout(function(){obs.disconnect()},3000)};
+  if(document.readyState==='complete') done(); else window.addEventListener('load',done,{once:true});
 })();
 """.trimIndent()
     }

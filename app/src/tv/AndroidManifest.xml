@@ -6,6 +6,10 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!-- While a phone is the TV's keyboard and touchpad, the TV's Wi-Fi is asked not to doze between packets (see WifiLatency):
+         Android files the Wi-Fi lock under this permission. Nothing is kept awake when the app is not in front. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <application android:banner="@drawable/tv_banner">
         <!-- The Android TV launcher shows apps that declare LEANBACK_LAUNCHER. -->
         <activity android:name=".MainActivity" android:exported="true" tools:node="merge">

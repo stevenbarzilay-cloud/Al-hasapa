@@ -39,7 +39,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
@@ -122,7 +121,7 @@ data class HomeModel(
                 nameA = a, nameB = b,
                 pieceA = pieces.styleFor(state, "a"), pieceB = pieces.styleFor(state, "b"),
                 tonight = shelf.filter { !it.played } + shelf.filter { it.played },
-                more = rest.map(::card),
+                more = Catalog.offered(rest).map(::card),
             )
         }
 
@@ -168,6 +167,9 @@ fun TvHome(
     model: HomeModel,
     phoneConnected: Boolean,
     nav: HomeNav,
+    /** A connected phone runs another version of the app (see RemoteKeys.Ui): the older one's name ("" unknown), or the newer one's. */
+    phoneOlder: String? = null,
+    phoneNewer: String? = null,
     onPlay: (String) -> Unit,
     onAccounts: () -> Unit,
     onMore: () -> Unit,
@@ -246,10 +248,19 @@ fun TvHome(
                 Pill(ACCOUNTS_ID, stringResource(R.string.home_accounts), onAccounts)
                 Pill(MORE_ID, stringResource(R.string.home_more_settings), onMore)
                 Pill(INFO_ID, stringResource(R.string.tv_info_title), onInfo)
-                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.width(4.dp))
+                // The phone's app and this one are built together: when one of them was left behind, say which (it is easy to miss).
+                val line = when {
+                    phoneConnected && phoneOlder != null ->
+                        if (phoneOlder.isEmpty()) stringResource(R.string.home_phone_old) else stringResource(R.string.home_phone_old_named, phoneOlder)
+                    phoneConnected && phoneNewer != null -> stringResource(R.string.home_phone_newer, phoneNewer)
+                    phoneConnected -> stringResource(R.string.home_phone_on)
+                    else -> stringResource(R.string.home_phone_off)
+                }
                 Text(
-                    stringResource(if (phoneConnected) R.string.home_phone_on else R.string.home_phone_off),
-                    fontSize = 15.sp, color = if (phoneConnected) Palette.Red else Palette.Ink2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    line, fontSize = 15.sp, color = if (phoneConnected) Palette.Red else Palette.Ink2, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    fontWeight = if (phoneConnected && (phoneOlder != null || phoneNewer != null)) FontWeight.Bold else FontWeight.Normal,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.End, modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -318,9 +329,8 @@ private fun GameCard(card: HomeCard, onClick: () -> Unit) {
     Column(
         Modifier
             .width(CardWidth).height(CardHeight)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .shadow(if (focused) 10.dp else 0.dp, shape)
-            .clip(shape)
+            // One layer a card (its size, its shadow and its round corners together): a third of what the box had to compose before.
+            .graphicsLayer { scaleX = scale; scaleY = scale; shadowElevation = if (focused) 10.dp.toPx() else 0f; this.shape = shape; clip = true }
             .tvTarget(id, card.title, bring = false, onClick = onClick)        // the row moves to the card itself (see Cards)
             .background(Palette.Card)
             .border(if (focused) BorderStroke(4.dp, Palette.Red) else BorderStroke(1.dp, Palette.Line2), shape)

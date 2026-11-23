@@ -39,6 +39,14 @@ server.listen(0, '127.0.0.1', async () => {
   ok(await page.evaluate(() => document.documentElement.classList.contains('tv') && document.documentElement.classList.contains('reduce-motion')), 'tv=1 puts the hub in its light mode (no recolouring layers, no animations)');
   ok(await page.evaluate(() => getComputedStyle(document.querySelector('.art .tint') || document.body).display === 'none' || !document.querySelector('.art .tint')), 'the illustration tint layers are not drawn on a TV');
 
+  // Under the cushions: the suggestions we picked by hand come first, in their order, one at a time; "later" sends one to the back.
+  const want = JSON.parse(catalog).games.filter(g => g.pick).sort((a, b) => a.pick - b.pick).map(g => g.id);
+  const queued = await page.evaluate(() => queue().map(g => g.id));
+  ok(want.length === 10 && JSON.stringify(queued.slice(0, 10)) === JSON.stringify(want), `the ten suggestions are offered first, in the order given (${queued.slice(0, 10).join(', ')})`);
+  ok(queued.length === JSON.parse(catalog).games.filter(g => !g.lib).length && new Set(queued).size === queued.length, 'and every other suggestion follows, each once');
+  await page.click('.tab[data-view="disc"]'); await page.waitForTimeout(200);
+  ok(await page.evaluate(() => document.querySelector('#dcard').dataset.id === 'albumdle' && document.querySelector('#dcard').textContent.includes('מנחשים את האמן, האלבום ושנת היציאה לפי העטיפה.')), 'the first card under the cushions is Albumdle, with its sentence');
+
   await page.click('.tab[data-view="settings"]'); await page.waitForTimeout(200);
   const rows = await page.evaluate(() => document.querySelectorAll('#ul .urlrow').length);
   ok(rows === total, `the settings tab lists every game's link (${rows} of ${total})`);

@@ -57,6 +57,13 @@ fun CrashScreen(report: String, stopped: Boolean = false, onContinue: () -> Unit
         Column(Modifier.widthIn(max = 900.dp), verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text(stringResource(if (stopped) R.string.stopped_title else R.string.crash_title), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center)
             Text(stringResource(if (stopped) R.string.stopped_body else R.string.crash_body), fontSize = 20.sp, color = Palette.Ink2, textAlign = TextAlign.Center)
+            // Which version it was and what happened, above the text that scrolls: whatever part of the report is photographed, these are in it.
+            val headline = app.couch.alhasapa.diag.CrashReport.headline(report)
+            if (headline.isNotEmpty()) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
+                    Text(headline, fontSize = 15.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center, maxLines = 3)
+                }
+            }
             Text(
                 report.take(4_000), fontSize = 13.sp, fontFamily = FontFamily.Monospace, color = Palette.Ink,
                 modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp).clip(RoundedCornerShape(12.dp)).background(Palette.Card)

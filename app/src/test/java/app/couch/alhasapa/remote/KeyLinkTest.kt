@@ -26,12 +26,26 @@ class KeyLinkTest {
             Msg.Hi("tv1", "MiBOX4", "0f".repeat(16)), Msg.Hello("ph1", "Pixel 8", "", "ab".repeat(32)),
             Msg.LoginsKey("MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE"), Msg.LoginsReady("MFkw", "cd".repeat(32)),
             Msg.Logins("AAECAwQFBgcICQoL", "x".repeat(20_000)), Msg.LoginsDone("NYT Games", 3), Msg.LoginsNo("update-tv"),
+            // From 1.9.4: each side says which version of the app it is, and a move says when the finger moved.
+            Msg.Hi("tv1", "MiBOX4", "0f".repeat(16), 28, "1.9.4"), Msg.Hello("ph1", "Pixel 8", "", "ab".repeat(32), 28, "1.9.4"),
+            Msg.Move(1f, 2f, 86_400_123L),
         )
         for (m in all) {
             val line = KeyLink.encode(m)
             assertFalse("one line each: $line", line.contains('\n'))
             assertEquals(m, KeyLink.decode(line))
         }
+    }
+
+    @Test
+    fun anAppFromBeforeTheVersionsWereSaidIsVersionNothing() {
+        assertEquals(Msg.Hello("p", "Pixel", "tok"), KeyLink.decode("{\"t\":\"hello\",\"v\":2,\"phone\":\"p\",\"name\":\"Pixel\",\"token\":\"tok\",\"proof\":\"\"}"))
+        assertEquals(0, (KeyLink.decode("{\"t\":\"hi\",\"tv\":\"t\",\"name\":\"TV\"}") as Msg.Hi).app)
+        assertEquals("a version number is never negative", 0, (KeyLink.decode("{\"t\":\"hi\",\"tv\":\"t\",\"name\":\"TV\",\"app\":-5}") as Msg.Hi).app)
+        // A move from an older phone has no time; "t" stays the message's kind, the time travels as "at".
+        assertEquals(Msg.Move(3f, 4f), KeyLink.decode("{\"t\":\"move\",\"dx\":3,\"dy\":4}"))
+        assertTrue(KeyLink.encode(Msg.Move(3f, 4f, 99L)).contains("\"at\":99"))
+        assertFalse(KeyLink.encode(Msg.Move(3f, 4f)).contains("\"at\""))
     }
 
     @Test

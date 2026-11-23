@@ -37,6 +37,11 @@ data class Game(
     val metric: String,
     /** The link is a Google search standing in for a direct one. */
     val placeholder: Boolean,
+    /**
+     * Its place among the suggestions (1 is offered first), for the ones the two of us picked by hand; null for the rest, which come
+     * after them in the catalogue's own order.
+     */
+    val pick: Int? = null,
 ) {
     /** Head to head: each person plays alone and pastes their own result (the LinkedIn games). */
     val isDuel: Boolean get() = s == "li"
@@ -83,7 +88,10 @@ class Catalog(val sites: Map<String, Site>, val games: List<Game>) {
             g.put(
                 JSONObject().put("id", game.id).put("n", game.n).put("s", game.s).put("k", game.k).put("m", game.m)
                     .put("u", urlFor(game, state)).put("u0", game.u).put("d", game.d).put("metric", game.metric)
-                    .apply { if (game.lib) put("lib", 1); if (game.why != null) put("why", game.why); if (game.placeholder) put("placeholder", true) },
+                    .apply {
+                        if (game.lib) put("lib", 1); if (game.why != null) put("why", game.why); if (game.placeholder) put("placeholder", true)
+                        if (game.pick != null) put("pick", game.pick)
+                    },
             )
         }
         val s = JSONObject()
@@ -116,7 +124,11 @@ class Catalog(val sites: Map<String, Site>, val games: List<Game>) {
             k = o.optString("k"), m = o.optString("m"), u = o.getString("u"), d = o.optString("d"),
             lib = o.optInt("lib", 0) == 1, why = o.optString("why").takeIf { it.isNotBlank() },
             metric = o.optString("metric", "none"), placeholder = o.optBoolean("placeholder", false),
+            pick = o.optInt("pick", 0).takeIf { it > 0 },
         )
+
+        /** The suggestions in the order they are offered: the hand-picked ones by their [Game.pick], then the rest as the catalogue has them. */
+        fun offered(games: List<Game>): List<Game> = games.sortedBy { it.pick ?: Int.MAX_VALUE }
 
         fun parse(json: String): Catalog {
             val root = JSONObject(json)

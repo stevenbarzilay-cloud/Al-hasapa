@@ -39,6 +39,11 @@ class KeyServer(
     private val tvName: String = Build.MODEL.orEmpty().ifBlank { "TV" },
     /** A site's login from the phone (decrypted), on the main thread: the site's name and how many cookies were set, or null. */
     private val onLogins: (String) -> Pair<String, Int>? = { payload -> LoginReceiver.receive(context, payload) },
+    /** This app's version, told to the phone and compared with the phone's (see [RemoteKeys.Ui.older]). */
+    private val appCode: Int = app.couch.alhasapa.BuildConfig.VERSION_CODE,
+    private val appVer: String = app.couch.alhasapa.BuildConfig.VERSION_NAME.removeSuffix("-tv"),
+    /** A phone is connected, or the last one left: the TV's Wi-Fi stays awake meanwhile (see [WifiLatency]). */
+    private val onLinked: (Boolean) -> Unit = { on -> WifiLatency.hold(context, on) },
 ) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -107,14 +112,22 @@ class KeyServer(
 
     private fun publish() {
         val (c, f) = synchronized(lock) { code to codeFor }
+        val ready = peers.filter { it.ready }
         state.value = RemoteKeys.Ui(
             listening = server != null,
             address = if (server != null) addresses().firstOrNull()?.let { "$it:$port" }.orEmpty() else "",
-            phones = peers.filter { it.ready }.map { it.name },
+            phones = ready.map { it.name },
             code = c, codeFor = f,
+            older = ready.firstOrNull { it.app < appCode }?.ver,
+            newer = ready.firstOrNull { it.app > appCode }?.ver,
         )
         RemoteKeys.ui.value = state.value
+        runCatching { onLinked(ready.isNotEmpty()) }
     }
+
+    /** How the touchpad's moves arrive (see [PadTiming]), written down when the finger rests. */
+    private val pad = PadTiming()
+    private val padRested = Runnable { pad.summary()?.let { Flight.log(it) } }
 
     /** How long typed keys waited for the TV's main thread (main thread only), summed up when the typing pauses. */
     private val delays = ArrayList<Long>()
@@ -135,6 +148,9 @@ class KeyServer(
     private inner class Peer(private val socket: Socket) {
         @Volatile var ready = false
         @Volatile var name = "טלפון"
+        /** The phone's app version (0 and empty: before 1.9.4, which did not say). */
+        @Volatile var app = 0
+        @Volatile var ver = ""
         /** New for each connection: the phone proves with it that it holds its pairing token, without sending the token. */
         private val nonce = RemoteStore.randomHex(16)
         /** The pairing token of this phone, once known; [plain] when it was sent as is (a phone app from before 1.9). */
@@ -157,7 +173,7 @@ class KeyServer(
                 socket.tcpNoDelay = true
                 socket.soTimeout = 30_000                     // the phone says something at least every few seconds
                 val input = socket.getInputStream().bufferedReader(Charsets.UTF_8)
-                send(Msg.Hi(store.tvId, tvName, nonce))
+                send(Msg.Hi(store.tvId, tvName, nonce, appCode, appVer))
                 while (true) {
                     val line = readLine(input) ?: break
                     val m = KeyLink.decode(line) ?: continue
@@ -172,6 +188,7 @@ class KeyServer(
         private fun handle(m: Msg): Boolean = when (m) {
             is Msg.Hello -> {
                 name = m.name.ifBlank { "טלפון" }.take(40)
+                app = m.app; ver = m.ver
                 val proved = store.tokenProvedBy(m.proof, nonce, m.phone)
                 when {
                     proved != null -> { token = proved; plain = false; welcome(); true }
@@ -186,8 +203,13 @@ class KeyServer(
             is Msg.Text, is Msg.Press, is Msg.Pointer, is Msg.Move, Msg.Click, is Msg.Drag, is Msg.Scroll -> {
                 if (ready && atHumanPace()) {
                     val at = SystemClock.uptimeMillis()
+                    if (m is Msg.Move) pad.arrived(at, m.t)
                     main.post {
                         if (m is Msg.Text || m is Msg.Press) noteDelay(SystemClock.uptimeMillis() - at)
+                        if (m is Msg.Move) {
+                            pad.waited(SystemClock.uptimeMillis() - at)
+                            main.removeCallbacks(padRested); main.postDelayed(padRested, PAD_REST_MS)
+                        }
                         onInput(m)
                     }
                 }
@@ -201,7 +223,10 @@ class KeyServer(
         private fun welcome() {
             ready = true
             send(Msg.Ok(screen))
-            Flight.log("phone keyboard: $name connected")
+            Flight.log(
+                "phone keyboard: $name connected" +
+                    if (app != appCode) " (its app is ${if (app < appCode) "older" else "newer"}: ${ver.ifEmpty { "before 1.9.4" }}; this TV has $appVer)" else "",
+            )
             publish()
         }
 
@@ -314,6 +339,9 @@ class KeyServer(
     companion object {
         /** How long a pairing code stays the same. */
         const val CODE_LIFE_MS = 3 * 60_000L
+
+        /** The finger has been off the touchpad this long: the stroke's numbers go to the report. */
+        const val PAD_REST_MS = 3_000L
 
         /** The TV's addresses on the home network (shown in the information panel, typed on the phone if it cannot find the TV). */
         fun addresses(): List<String> = runCatching {

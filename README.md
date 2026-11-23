@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.3.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.4.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -234,6 +234,45 @@ want to play on, starting with Krillion and NYT:
   links; a link saved in the hub's settings still wins). Whether that is all Dialed needs on the box is not known: nothing in its
   pages turns a browser away or sends it to another site, so if it still does not come up, the report (ⓘ) now says what happened to
   the page.
+- **1.9.4: sound that can be heard on the TV, a paw that keeps up, signing in where one looks for it, and fourteen new games.**
+  What came back from the box on 1.9.3: Krillion fair, Dialed's colour game not bad, Dialed's sound game choppy to the point of
+  not being playable, the paw slow on the home, "where do I sign in?", and the phone app crashing on an NYT game.
+  - *Sound.* Dialed makes its sound itself (Web Audio: a handful of plain tones, nothing heavy) and asks the browser for an audio
+    context with no wishes, which means the setting for the shortest delay: small pieces of sound made at the last moment and handed
+    to the box's low-delay output. Its page also keeps the main thread busy without a pause (measured at a sixth of a desktop's speed:
+    7 frames a second, the thread never idle; the page's "reduced motion" does not change that). A piece that comes late is a gap.
+    A page's `<audio>` and `<video>` do not go that way: the browser plays them through its music output, with a longer buffer. So on
+    a TV a page that asks for no buffer of its own now gets the browser's music buffer (`latencyHint: "playback"`), set before the
+    page's first script runs (`SoundScript`; a page that asks for a longer buffer keeps its wish, and to the page an audio context
+    is what it always was: `tools/sound_check.cjs` checks all of that in Chromium). The script also counts, and the report (ⓘ) says
+    for each game what its sound was given, how long it ran and how many gaps the browser counted; for `<audio>` and `<video>`, how
+    often they stopped to wait and how many video frames were dropped; and for any page how much of the time its main thread was busy
+    (`PageBusy`: while it is, the page answers no press, which is what "the mouse is slow" on Dialed's first screen was). A site where
+    four or more gaps are counted gets the longest buffer the browser gives (about a fifth of a second) from the next time it opens,
+    by itself (`SoundPolicy`). The cost is a delay of a fraction of a second between a press and its sound. **Not heard on the box:**
+    that the low-delay output is what broke up the sound there is the likely reading of how the browser is built, not something
+    measured; the next report says whether gaps are still counted.
+  - *The paw.* It was drawn on a canvas as large as the screen, so every move had the whole home painted again; it is now a small
+    picture of its own that is only moved (and a card of the home is one layer instead of three). And the TV asks its Wi-Fi not to
+    doze while a phone is connected (`WifiLatency`, Android's low-latency Wi-Fi lock): a device that is only listening collects its
+    packets a few times a second, which a touchpad shows as a paw that moves in jumps, most of all on the home, where nothing else
+    keeps the radio awake. Each stroke of the touchpad is now in the report in numbers (`PadTiming`): how far apart the moves
+    arrived, how long they were held up on the way (the phone stamps each move), how long they waited for the TV.
+  - *Signing in.* The handoff from 1.9 was behind a button in keyboard mode and said nowhere else. Now the TV's own screen
+    ("התחברות לאתרים" on the home) opens with the three steps; in the phone's keyboard mode the list ("התחברות לטלוויזיה") signs in
+    and sends in one place ("להתחבר כאן", then "לשלוח"); and the phone's accounts screen offers "לשלוח את ההתחברות לטלוויזיה" for a
+    login made there.
+  - *The crash was 1.9.0 again.* The report's build id is the 1.9.0 phone build's: the TV was updated three times, the phone not
+    once. The two now tell each other their version when they connect, and the one that is behind is named on the TV's home and
+    in the phone's keyboard mode. A crash report says the app's version and the error above the text that scrolls, and a stack that
+    goes round in circles is said once (the nine screenshots of that crash showed the same two lines and neither fact).
+  - *The catalogue.* Eight games are on the shelf from the start (Songless, Framed, Catfishing, Originle, The Dozen, Disorderly,
+    Magnitudle: Size It Up, and Bandle, which was there) and ten are offered first under the cushions, in the order they were given
+    (`pick` in `games.json`; TimeGuessr and Cinematrix were there and got their direct links, Framed moved from the suggestions to
+    the shelf; where one of these three had been skipped or put off on a device, that is forgotten once, `CatalogUpdate`, so they
+    show where they were asked for). `games.json` is the app's own catalogue from here on (the prototype in `couch-artifact/` keeps
+    its 54).
+    Only Originle, The Dozen and the two Magnitudle games could be opened from the build environment; the other links are as given.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24
@@ -453,7 +492,7 @@ marks them "קישור זמני"; replace them under "הקישורים שלנו"
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |
 | `app/src/main/assets/display_profiles.json` | How each site is shown on the TV (mode, zoom, banner CSS) |
-| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (catalogue from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring), `display_check.cjs`, `capture_check.cjs`, `tvnav_check.cjs` and `hub_settings_check.cjs` (the injected scripts and the hub's settings page, run in real Chromium) |
+| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (the catalogue as it first came from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring), `display_check.cjs`, `sound_check.cjs`, `capture_check.cjs`, `tvnav_check.cjs` and `hub_settings_check.cjs` (the injected scripts and the hub's settings page, run in real Chromium) |
 | `THIRD_PARTY/` | Font license (SIL OFL 1.1) |
 | `couch-artifact/` | The original prototype and the Haaretz layout bug screenshots, kept verbatim |
 

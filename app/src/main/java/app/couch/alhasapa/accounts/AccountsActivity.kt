@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -56,6 +57,7 @@ import app.couch.alhasapa.R
 import app.couch.alhasapa.tv.tvTarget
 import app.couch.alhasapa.catalog.Site
 import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.keyboard.KeyboardModeActivity
 import app.couch.alhasapa.data.PieceStyle
 import app.couch.alhasapa.data.PiecesConfig
 import app.couch.alhasapa.player.ChromeTab
@@ -93,6 +95,8 @@ class AccountsActivity : ComponentActivity() {
                     onLogin = { site, title, profile -> startActivity(PlayerActivity.loginIntent(this, site.id, title, profile)) },
                     onChrome = { url -> ChromeTab.open(this, url) },
                     onBack = { finish() },
+                    // On the phone a login can go on to the TV: keyboard mode opens on its sign-in list.
+                    onSendToTv = if (tv.enabled) null else ({ startActivity(KeyboardModeActivity.loginsIntent(this)) }),
                 )
               }
             }
@@ -113,9 +117,14 @@ fun AccountsScreen(
     onLogin: (Site, String, String) -> Unit,
     onChrome: (String) -> Unit,
     onBack: () -> Unit,
+    /** On the phone: hand a login on to the TV (null on the TV itself, and where there is no TV to send to). */
+    onSendToTv: (() -> Unit)? = null,
 ) {
     var refresh by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { refresh++ }   // back from a login: show the new status
+    // On the TV: a login that arrives from the phone while this screen is open shows at once.
+    val arrivals by app.couch.alhasapa.remote.LoginReceiver.arrivals.collectAsState()
+    val onTv = app.couch.alhasapa.tv.LocalTv.current != null
 
     val accounts = sites.flatMap { s ->
         if (s.profile == "player") listOf(
@@ -131,6 +140,9 @@ fun AccountsScreen(
         ) {
             TextButton(stringResource(R.string.player_back), onBack)
             Text(stringResource(R.string.accounts_title), fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.semantics { heading() })
+            // Where to sign in, said first: on a TV the easy way is the phone (typing a password with a remote is no way to live, and
+            // NYT's sign-in page stayed white on the TV box); on the phone, that a login made here can go on to the TV.
+            if (onTv) FromThePhone() else if (onSendToTv != null) Note(stringResource(R.string.accounts_tv_hint))
             Text(stringResource(R.string.accounts_intro), fontSize = 17.sp, color = Palette.Ink2)
             Note(stringResource(R.string.accounts_google))
             val stuck = WebProfiles.offBecause
@@ -141,14 +153,29 @@ fun AccountsScreen(
                 Note(stringResource(if (retried) R.string.accounts_profiles_retry_done else R.string.accounts_profiles_stuck), warning = true)
                 if (!retried) TextButton(stringResource(R.string.accounts_profiles_retry)) { WebProfiles.retry(context); retried = true }
             } else if (!WebProfiles.supported()) Note(stringResource(R.string.accounts_no_profiles), warning = true)
-            for (a in accounts) AccountCard(a, refresh, onLogin, onChrome)
+            for (a in accounts) AccountCard(a, refresh + arrivals, onLogin, onChrome, onSendToTv)
             Spacer(Modifier.height(24.dp))
         }
     }
 }
 
+/** On the TV: the three steps of signing in on the phone and sending the login here. */
 @Composable
-private fun AccountCard(a: Account, refresh: Int, onLogin: (Site, String, String) -> Unit, onChrome: (String) -> Unit) {
+private fun FromThePhone() {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Palette.Tint).border(BorderStroke(2.dp, Palette.Ink), RoundedCornerShape(16.dp)).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(stringResource(R.string.accounts_phone_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+        Text(stringResource(R.string.accounts_phone_1), fontSize = 18.sp, color = Palette.Ink)
+        Text(stringResource(R.string.accounts_phone_2), fontSize = 18.sp, color = Palette.Ink)
+        Text(stringResource(R.string.accounts_phone_3), fontSize = 18.sp, color = Palette.Ink)
+        Text(stringResource(R.string.accounts_phone_else), fontSize = 15.sp, color = Palette.Ink2)
+    }
+}
+
+@Composable
+private fun AccountCard(a: Account, refresh: Int, onLogin: (Site, String, String) -> Unit, onChrome: (String) -> Unit, onSendToTv: (() -> Unit)? = null) {
     // BEST EFFORT (see LoginDetector): the cookie jar of this profile, names only.
     val header = remember(refresh, a.profile) {
         runCatching { WebProfiles.cookies(if (WebProfiles.supported()) a.profile else WebProfiles.DEFAULT).getCookie("https://www.${a.site.domains.first()}") }.getOrNull()
@@ -178,6 +205,10 @@ private fun AccountCard(a: Account, refresh: Int, onLogin: (Site, String, String
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PrimaryButton(stringResource(R.string.accounts_login)) { onLogin(a.site, a.title, a.profile) }
             SecondaryButton(stringResource(R.string.player_open_chrome)) { onChrome(a.site.loginUrl ?: "https://${a.site.domains.first()}") }
+        }
+        // A login made here goes on to the TV (the sites that share one browser there; see LoginHandoff). Not while signed out.
+        if (onSendToTv != null && app.couch.alhasapa.remote.LoginHandoff.canHand(a.site) && status != LoginDetector.Status.LOGGED_OUT) {
+            SecondaryButton(stringResource(R.string.accounts_send_tv), onSendToTv)
         }
         TextButton(stringResource(if (showCookies) R.string.accounts_hide_cookies else R.string.accounts_show_cookies)) { showCookies = !showCookies }
         if (showCookies) {

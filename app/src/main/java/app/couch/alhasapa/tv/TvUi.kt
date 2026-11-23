@@ -335,16 +335,31 @@ private fun HintPill(c: TvController, modifier: Modifier) {
     }
 }
 
-/** The remote's free finger in paw mode: a paw print, red while it is dragging. Its centre is where a tap lands. */
+/**
+ * The remote's free finger in paw mode: a paw print, red while it is dragging. Its centre is where a tap lands.
+ *
+ * A small picture of its own that is only moved (a layer's position): a move of the paw paints nothing again. Until 1.9.3 the paw was
+ * drawn on a canvas as large as the screen, so every move had the whole screen painted again, sixty times a second while a finger was
+ * on the phone's touchpad; on the TV box that was felt as a slow paw.
+ */
 @Composable
 private fun CursorOverlay(c: TvController) {
     if (c.mode != InputMode.PAW || !c.cursorVisible || c.keyboardOpen) return
-    Canvas(Modifier.fillMaxSize()) {
-        drawPaw(Offset(c.cursorX, c.cursorY + 8f * density), density * 0.9f, if (c.dragging) Palette.Red else Palette.Ink, Palette.Cream)
-        drawCircle(Palette.Red, radius = 3f * density, center = Offset(c.cursorX, c.cursorY))
-        drawCircle(Palette.Cream, radius = 1.4f * density, center = Offset(c.cursorX, c.cursorY))
+    Canvas(
+        Modifier.size(PawBox).graphicsLayer {
+            translationX = c.cursorX - size.width / 2f
+            translationY = c.cursorY - size.height / 2f
+        },
+    ) {
+        val at = Offset(size.width / 2f, size.height / 2f)
+        drawPaw(Offset(at.x, at.y + 8f * density), density * 0.9f, if (c.dragging) Palette.Red else Palette.Ink, Palette.Cream)
+        drawCircle(Palette.Red, radius = 3f * density, center = at)
+        drawCircle(Palette.Cream, radius = 1.4f * density, center = at)
     }
 }
+
+/** The paw's own picture: the print (some 37 dp across, 37 dp tall, mostly below its centre) with room to spare. */
+private val PawBox = 72.dp
 
 /**
  * The keyboard, kept small: a slim header (what has been typed, and a close button) over four rows of soft, rounded keys. The

@@ -8,15 +8,19 @@ import org.json.JSONObject
 /**
  * The phone-as-keyboard link: what the phone and the TV say to each other over the home network, one small JSON object per line.
  *
- *     TV    → phone  hi {tv, name, nonce}               first thing on a new connection; nonce: new each time (from 1.9)
- *     phone → TV     hello {phone, name, token, proof}   proof = HMAC(token, nonce): the token itself is not sent (from 1.9;
- *                                                          before, the token was sent as is, still accepted for typing only)
+ *     TV    → phone  hi {tv, name, nonce, app, ver}     first thing on a new connection; nonce: new each time (from 1.9)
+ *     phone → TV     hello {phone, name, token, proof, app, ver}
+ *                                                         proof = HMAC(token, nonce): the token itself is not sent (from 1.9;
+ *                                                         before, the token was sent as is, still accepted for typing only)
+ *                                                         app, ver: each side's app version (from 1.9.4), so each can say when
+ *                                                         the other one was left behind on an old version
  *     TV    → phone  code                                 not paired yet: the TV shows four digits
  *     phone → TV     pair {code}
  *     TV    → phone  wrong {left} | paired {token}
  *     TV    → phone  ok {screen}, then screen {screen}    ready; what the TV is showing (for the phone's status line)
  *     phone → TV     text {s} | key {k, a} | ping
- *     phone → TV     pointer {on} | move {dx, dy} | click | drag {on} | scroll {dy}     the touchpad (dp of the phone's pad)
+ *     phone → TV     pointer {on} | move {dx, dy, at} | click | drag {on} | scroll {dy} the touchpad (dp of the phone's pad;
+ *                                                         at: when the finger moved, by the phone's clock, from 1.9.4)
  *     TV    → phone  pong | bye {why}
  *
  *     the sign-in handoff (from 1.9, see LoginHandoff and LoginCrypto):
@@ -58,8 +62,9 @@ object KeyLink {
     enum class Action { TAP, DOWN, UP }
 
     sealed interface Msg {
-        data class Hi(val tv: String, val name: String, val nonce: String = "") : Msg
-        data class Hello(val phone: String, val name: String, val token: String, val proof: String = "") : Msg
+        /** [app], [ver]: the sender's app version (its number and its name); 0 and empty from an app before 1.9.4. */
+        data class Hi(val tv: String, val name: String, val nonce: String = "", val app: Int = 0, val ver: String = "") : Msg
+        data class Hello(val phone: String, val name: String, val token: String, val proof: String = "", val app: Int = 0, val ver: String = "") : Msg
         data object NeedCode : Msg
         data class Pair(val code: String) : Msg
         data class Wrong(val left: Int) : Msg
@@ -71,8 +76,8 @@ object KeyLink {
 
         /** The touchpad came out ([on]) or went back: the TV's paw shows, or goes away. */
         data class Pointer(val on: Boolean) : Msg
-        /** Move the paw by this much (in dp of the phone's touchpad). */
-        data class Move(val dx: Float, val dy: Float) : Msg
+        /** Move the paw by this much (in dp of the phone's touchpad). [t]: when the finger moved, in ms of the phone's own clock (0: not said). */
+        data class Move(val dx: Float, val dy: Float, val t: Long = 0) : Msg
         /** A tap where the paw is. */
         data object Click : Msg
         /** The finger down where the paw is ([on]: moves are then a drag), or up again. */
@@ -93,8 +98,9 @@ object KeyLink {
 
     fun encode(m: Msg): String = when (m) {
         is Msg.Hi -> JSONObject().put("t", "hi").put("v", VERSION).put("tv", m.tv).put("name", m.name).put("nonce", m.nonce)
+            .put("app", m.app).put("ver", m.ver)
         is Msg.Hello -> JSONObject().put("t", "hello").put("v", VERSION).put("phone", m.phone).put("name", m.name).put("token", m.token)
-            .put("proof", m.proof)
+            .put("proof", m.proof).put("app", m.app).put("ver", m.ver)
         Msg.NeedCode -> JSONObject().put("t", "code")
         is Msg.Pair -> JSONObject().put("t", "pair").put("code", m.code)
         is Msg.Wrong -> JSONObject().put("t", "wrong").put("left", m.left)
@@ -104,7 +110,7 @@ object KeyLink {
         is Msg.Text -> JSONObject().put("t", "text").put("s", m.s)
         is Msg.Press -> JSONObject().put("t", "key").put("k", m.key.name).put("a", m.action.name.lowercase())
         is Msg.Pointer -> JSONObject().put("t", "pointer").put("on", m.on)
-        is Msg.Move -> JSONObject().put("t", "move").put("dx", round2(m.dx)).put("dy", round2(m.dy))
+        is Msg.Move -> JSONObject().put("t", "move").put("dx", round2(m.dx)).put("dy", round2(m.dy)).apply { if (m.t > 0) put("at", m.t) }
         Msg.Click -> JSONObject().put("t", "click")
         is Msg.Drag -> JSONObject().put("t", "drag").put("on", m.on)
         is Msg.Scroll -> JSONObject().put("t", "scroll").put("dy", round2(m.dy))
@@ -124,8 +130,8 @@ object KeyLink {
         val o = runCatching { JSONObject(line) }.getOrNull() ?: return null
         fun s(k: String) = o.optString(k, "").take(512)
         return when (o.optString("t")) {
-            "hi" -> Msg.Hi(s("tv"), s("name"), s("nonce"))
-            "hello" -> Msg.Hello(s("phone"), s("name"), s("token"), s("proof"))
+            "hi" -> Msg.Hi(s("tv"), s("name"), s("nonce"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24))
+            "hello" -> Msg.Hello(s("phone"), s("name"), s("token"), s("proof"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24))
             "code" -> Msg.NeedCode
             "pair" -> Msg.Pair(s("code"))
             "wrong" -> Msg.Wrong(o.optInt("left", 0))
@@ -139,7 +145,7 @@ object KeyLink {
                 Msg.Press(key, action)
             }
             "pointer" -> Msg.Pointer(o.optBoolean("on"))
-            "move" -> Msg.Move(limit(o.optDouble("dx", 0.0)), limit(o.optDouble("dy", 0.0)))
+            "move" -> Msg.Move(limit(o.optDouble("dx", 0.0)), limit(o.optDouble("dy", 0.0)), o.optLong("at", 0L).coerceAtLeast(0L))
             "click" -> Msg.Click
             "drag" -> Msg.Drag(o.optBoolean("on"))
             "scroll" -> Msg.Scroll(limit(o.optDouble("dy", 0.0)))

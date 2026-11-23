@@ -99,11 +99,11 @@ class TvHomeRemoteTest {
         rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertDoesNotExist()
         rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
         rule.onNodeWithText("עוד משחקים").assertIsDisplayed()
-        rule.onNodeWithText("החשבונות").assertIsDisplayed()
+        rule.onNodeWithText("התחברות לאתרים").assertIsDisplayed()
         rule.onNodeWithText("הגדרות ועוד").assertIsDisplayed()
         rule.onNodeWithText("מידע לתיקון תקלות").assertIsDisplayed()
         // Nothing needs scrolling down for: the buttons at the foot end above the bottom of a TV screen, with a margin for TVs that crop.
-        val foot = rule.onNodeWithText("החשבונות").fetchSemanticsNode().boundsInWindow
+        val foot = rule.onNodeWithText("התחברות לאתרים").fetchSemanticsNode().boundsInWindow
         assertTrue("the foot of the home is on the screen with a margin: $foot", foot.bottom <= 1080f - 20f)
     }
 
