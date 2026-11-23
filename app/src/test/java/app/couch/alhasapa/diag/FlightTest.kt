@@ -35,6 +35,7 @@ class FlightTest {
         val report = Diagnostics.unexpectedEnd(context)!!
         assertTrue(report.contains("stopped while in use")); assertTrue(report.contains("PlayerActivity"))
         assertTrue("newest first", report.indexOf("MAIN THREAD STUCK") < report.indexOf("page loaded"))
+        Flight.drainForTests()                                      // written on the recorder's own thread
         assertTrue("the previous run's log is kept for the information panel", file("flight-previous.txt").readText().contains("STUCK"))
         Flight.acknowledgePrevious()
         assertNull("seen once, not again", Diagnostics.unexpectedEnd(context))
@@ -63,9 +64,13 @@ class FlightTest {
     @Test
     fun theStartItselfCountsAsNotInFrontUntilAScreenShows() {
         Flight.start(context)
+        Flight.drainForTests()
         assertTrue(file("session.txt").readText().startsWith("back"))
         Flight.session(true, "MainActivity")
-        assertTrue(file("session.txt").readText().startsWith("front"))
+        Flight.drainForTests()
+        assertTrue("written on the recorder's thread, not the main thread", file("session.txt").readText().startsWith("front"))
+        Flight.session(false, "crash", sync = true)
+        assertTrue("a crash writes at once", file("session.txt").readText().startsWith("back"))
     }
 
     @Test
@@ -151,6 +156,7 @@ class FlightTest {
         assertTrue(Watchdog.drawing(at))
         assertFalse(Watchdog.drawing(Thread.currentThread().stackTrace))
         Watchdog.reportStall(2_998, at)
+        Flight.drainForTests()
         val log = file("flight.txt").readText()
         assertTrue(log, log.contains("MAIN THREAD STUCK for 2998 ms (waiting for the screen to take a frame)"))
     }
@@ -172,6 +178,7 @@ class FlightTest {
     fun aFreezeIsWrittenToTheFileAtOnce() {
         Flight.start(context)
         Watchdog.reportStall(4_000, Thread.currentThread().stackTrace)
+        Flight.drainForTests()                                      // at once, on the recorder's own thread
         assertTrue(file("flight.txt").readText().contains("MAIN THREAD STUCK for 4000 ms"))
     }
 

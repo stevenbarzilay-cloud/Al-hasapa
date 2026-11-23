@@ -72,7 +72,7 @@ class Watchdog(
             val frames = at.take(14).joinToString("\n") { "    at $it" }
             val what = if (drawing(at)) " (waiting for the screen to take a frame)" else ""
             Flight.log("$STUCK for $ms ms$what, at:\n$frames")
-            Flight.flushNow()           // the system may close the app any second now
+            Flight.flush()              // at once, on the recorder's thread: this one keeps watching even if the disk is slow
         }
 
         /** The main thread is waiting for the drawing thread (and so for the graphics) to take the next frame. */

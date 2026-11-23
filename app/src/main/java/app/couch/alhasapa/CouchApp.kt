@@ -16,7 +16,6 @@ import app.couch.alhasapa.diag.Standby
 import app.couch.alhasapa.diag.Startup
 import app.couch.alhasapa.diag.Watchdog
 import app.couch.alhasapa.remote.RemoteKeys
-import app.couch.alhasapa.player.LightDrawing
 import app.couch.alhasapa.player.PlayerActivity
 import app.couch.alhasapa.tv.TvMode
 import java.io.File
@@ -37,8 +36,8 @@ class CouchApp : Application() {
         val tv = TvMode.isTelevision(this)
         // On a TV: the box going to standby closes the game and puts the app behind the home screen (see Standby).
         if (tv) Standby.install(this, screens::alive) { it is MainActivity }
-        // On a TV: a game that held the picture stuck before (the flight recorder says so) opens the light way.
-        if (tv) LightDrawing.fromEarlierFreezes(this)
+        // 1.8.1's "light drawing" (a software layer) made games crawl on the TV box's processor: it is gone, and so are its marks.
+        if (tv) Flight.background { deleteSharedPreferences("drawing") }
         // Not under the unit tests: their main looper is paused on purpose, which a watchdog would take for a frozen app.
         if (Build.FINGERPRINT != "robolectric") {
             val guard = if (tv) drawGuard(screens) else null
@@ -60,8 +59,6 @@ class CouchApp : Application() {
     private fun drawGuard(screens: Visibility) = DrawGuard(
         front = { screens.front },
         isGame = { it is PlayerActivity },
-        onLight = { host -> LightDrawing.set(this, host, true) },
-        host = { LightDrawing.front },
         afterClose = {
             android.os.Handler(mainLooper).post {
                 android.widget.Toast.makeText(this, R.string.draw_closed, android.widget.Toast.LENGTH_LONG).show()
@@ -86,7 +83,7 @@ class CouchApp : Application() {
     override fun onLowMemory() {
         super.onLowMemory()
         Flight.log("LOW MEMORY; ${Diagnostics.memory(this)}")
-        Flight.flushNow()
+        Flight.flush()
     }
 
     /**

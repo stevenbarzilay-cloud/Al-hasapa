@@ -62,25 +62,38 @@ object Flight {
         val log = read(File(d, FILE))
         older = read(File(d, PREVIOUS)).orEmpty()
         previousStart = read(File(d, RUN))?.trim()?.toLongOrNull()
-        runCatching { File(d, RUN).writeText(System.currentTimeMillis().toString()) }
-        if (log != null) runCatching { File(d, PREVIOUS).writeText(log) }
         previous = Previous(
             endedInFront = session?.startsWith("front") == true,
             lastSeen = session?.substringAfter(' ', "")?.trim().orEmpty(),
-            log = log ?: read(File(d, PREVIOUS)).orEmpty(),
+            log = log ?: older,
         )
+        // Read now (the logic needs it), written on the recorder's own thread (after the reads, in order).
+        val startedAt = System.currentTimeMillis()
+        writer.execute {
+            runCatching { File(d, RUN).writeText(startedAt.toString()) }
+            if (log != null) runCatching { File(d, PREVIOUS).writeText(log) }
+        }
         synchronized(lines) { lines.clear() }
         session(false, "start")
         log("process started")
-        flushNow()
     }
 
-    /** The app's screens came to the front ([front]) or all left it. Written at once: this is what tells a crash from a normal end. */
-    fun session(front: Boolean, what: String) {
+    /**
+     * The app's screens came to the front ([front]) or all left it: this is what tells a crash from a normal end. Written on the
+     * recorder's own thread, at once and in order; on the main thread a file write once took over 2.5 seconds on the TV box (the
+     * 23 November report), which froze the screen. [sync] writes on this thread (a crash, when the process is about to end).
+     */
+    fun session(front: Boolean, what: String, sync: Boolean = false) {
         val d = dir ?: return
         val line = (if (front) "front " else "back ") + stamp() + " " + what
-        runCatching { File(d, SESSION).writeText(line) }
+        if (sync) runCatching { File(d, SESSION).writeText(line) } else writer.execute { runCatching { File(d, SESSION).writeText(line) } }
     }
+
+    /** Write soon, on the recorder's own thread: what the main thread uses (it must never wait for the disk). */
+    fun flush() { if (dir != null) writer.execute { write() } }
+
+    /** Runs [block] on the recorder's own thread: small writes of the app's that must not hold the main thread. */
+    fun background(block: () -> Unit) { writer.execute { runCatching(block) } }
 
     fun log(message: String) {
         val line = stamp() + " " + message
@@ -94,7 +107,7 @@ object Flight {
         }
     }
 
-    /** Write now, on this thread: for the moments when the process may not live long (a frozen main thread, a dying renderer). */
+    /** Write now, on this thread: for the moments when the process may not live long (the watchdog, a crash). Never the main thread. */
     fun flushNow() = write()
 
     /** The last [n] lines of this run. */
@@ -124,26 +137,6 @@ object Flight {
 
     fun froze(frame: String): Boolean = freezes(frame).isNotEmpty()
 
-    /**
-     * The game pages that held the picture stuck in the last two runs: a freeze of the main thread waiting for the screen that lasted
-     * at least [minMs] (or never ended) while a game page was open, with that page's host (the last "page loaded" before it, the game
-     * not closed in between). Each as (a fingerprint of the freeze, the host).
-     */
-    fun drawFreezes(minMs: Long = 4_000): List<Pair<String, String>> = listOf(previous?.log.orEmpty(), older).flatMap { log ->
-        val list = entries(log)
-        list.indices.filter { i -> list[i].contains(Watchdog.STUCK) && list[i].contains("yncAndDrawFrame") }.mapNotNull { i ->
-            val free = list.drop(i + 1).firstOrNull { it.contains(Watchdog.FREE) }
-            val ms = free?.let { FREE_MS.find(it)?.groupValues?.get(1)?.toLongOrNull() }
-            if (free != null && (ms ?: 0) < minMs) return@mapNotNull null
-            val loaded = (i - 1 downTo 0).firstOrNull { list[it].contains(LOADED) } ?: return@mapNotNull null
-            if ((loaded + 1 until i).any { list[it].contains("PlayerActivity closed") || list[it].contains("PlayerActivity paused") }) return@mapNotNull null
-            val host = list[loaded].substringAfter(LOADED).substringBefore(')').trim().takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            list[i].hashCode().toString() to host
-        }
-    }
-
-    private const val LOADED = "player: page loaded ("
-    private val FREE_MS = Regex("after (\\d+) ms")
 
     private val STAMP = Regex("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}")
 

@@ -31,27 +31,27 @@ class DrawGuardTest {
     }
 
     @Test
-    fun aGameStuckDrawingIsClosedOnceItsSiteGoesLightAndTheAppEndsOnlyIfStillStuck() {
+    fun aGameStuckDrawingIsClosedOnceAndTheAppEndsOnlyIfStillStuck() {
         val game = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
-        var light: String? = null; var told = 0; var ended = 0
-        val g = DrawGuard(front = { game }, isGame = { true }, onLight = { light = it }, host = { "krillion.io" }, afterClose = { told++ }, end = { ended++ })
+        var told = 0; var ended = 0
+        val g = DrawGuard(front = { game }, isGame = { true }, afterClose = { told++ }, end = { ended++ })
         g.onStuck(3_500, drawing)
         assertFalse(game.isFinishing)
         g.onStuck(4_000, drawing)
         assertTrue("closed from the watchdog's thread", game.isFinishing)
-        assertEquals("krillion.io", light); assertEquals(1, told)
+        assertEquals(1, told)
         g.onStuck(4_500, drawing); g.onStuck(9_500, drawing)
         assertEquals("closed once", 1, told); assertEquals(0, ended)
         g.onStuck(10_000, idle)
         assertEquals("still stuck ten seconds in: the app ends itself", 1, ended)
-        assertTrue(Flight.tail(5).contains("drawing stuck for 4000 ms in a game (krillion.io)"))
+        assertTrue(Flight.tail(5).contains("drawing stuck for 4000 ms in a game: closed it"))
     }
 
     @Test
     fun aFreeThreadStartsOver() {
         var closes = 0
         val first = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
-        val g = DrawGuard(front = { first }, isGame = { true }, onLight = {}, host = { null }, afterClose = { closes++ }, end = {})
+        val g = DrawGuard(front = { first }, isGame = { true }, afterClose = { closes++ }, end = {})
         g.onStuck(4_000, drawing); g.onRecover()
         g.onStuck(4_000, drawing)
         assertEquals("a new freeze is judged afresh", 2, closes)

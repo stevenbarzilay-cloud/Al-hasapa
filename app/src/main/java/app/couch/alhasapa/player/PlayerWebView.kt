@@ -8,6 +8,7 @@ import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -174,6 +175,8 @@ class PlayerWebViewClient(
             return true
         }
         Diag.log("player: refused ${request.url.host ?: request.url.scheme} (${decision::class.simpleName})")
+        // In the report too: a game whose page moves to another site stays white otherwise, with only a passing message.
+        app.couch.alhasapa.diag.Flight.log("player: refused to leave for ${request.url.host ?: request.url.scheme}")
         onBlocked(decision)
         return true
     }
@@ -207,14 +210,27 @@ class PlayerWebViewClient(
         if (error.errorCode == -3) return
         Log.e("AlHasapaPlayer", "load error ${error.errorCode} ${error.description} for ${request.url}")
         Diag.log("player: load error ${error.errorCode} ${error.description}")
+        app.couch.alhasapa.diag.Flight.log("player: the page did not load (${request.url.host}): ${error.errorCode} ${error.description}")
         onLoadError("${error.errorCode} ${error.description}")
+    }
+
+    override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: WebResourceResponse) {
+        if (request.isForMainFrame && errorResponse.statusCode >= 400) {
+            app.couch.alhasapa.diag.Flight.log("player: ${request.url.host} answered ${errorResponse.statusCode}")
+        }
+    }
+
+    /** Never proceeds past a bad certificate; only says so in the report (a white page otherwise). */
+    override fun onReceivedSslError(view: WebView, handler: android.webkit.SslErrorHandler, error: android.net.http.SslError) {
+        app.couch.alhasapa.diag.Flight.log("player: certificate problem at ${error.url?.toUri()?.host} (${error.primaryError}): refused")
+        handler.cancel()
     }
 
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
         // Returning true keeps the app alive (false would take it down with the page); the screen builds a new WebView.
         Diag.log("player: render process gone")
         app.couch.alhasapa.diag.Flight.log("player: the page's process ended (crashed=${detail.didCrash()}, priority ${detail.rendererPriorityAtExit()}); reloading")
-        app.couch.alhasapa.diag.Flight.flushNow()
+        app.couch.alhasapa.diag.Flight.flush()
         onRenderGone()
         return true
     }

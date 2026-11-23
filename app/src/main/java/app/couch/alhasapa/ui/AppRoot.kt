@@ -41,7 +41,7 @@ fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, brid
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
         HubScreen(onExit = onExit, reduceMotion = reduceMotion, bridge = bridge, onReady = {
-            if (!hubReady) { Startup.mark("hub ready"); Startup.save(context); app.couch.alhasapa.diag.Flight.log("start: " + Startup.summary().replace("\n", "; ")) }
+            if (!hubReady) { Startup.mark("hub ready"); app.couch.alhasapa.diag.Flight.background { Startup.save(context) }; app.couch.alhasapa.diag.Flight.log("start: " + Startup.summary().replace("\n", "; ")) }
             hubReady = true
         })
         if (!splashDone) {

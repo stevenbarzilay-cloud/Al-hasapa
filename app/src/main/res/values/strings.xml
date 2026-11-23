@@ -27,12 +27,7 @@
     <string name="accounts_intro">כאן מתחברים פעם אחת לאתרים שיש לנו מנוי בהם. ההתחברות נשמרת רק באפליקציה הזאת, לא בכרום, ונשארת גם אחרי שסוגרים אותה.</string>
     <string name="accounts_google">גוגל לא מאפשרת להתחבר עם "המשך עם Google" בתוך אפליקציה, ואנחנו לא עוקפים את זה. מתחברים עם מייל וסיסמה. אם באתר אין דרך אחרת, אפשר "לפתוח בכרום".</string>
     <string name="accounts_profiles_stuck">במכשיר הזה ה-WebView נתקע כשיצר פרופיל נפרד לכניסות, ולכן המשחקים לא נפתחו. מאז כל האתרים חולקים כניסה אחת (מי שהתחבר קודם צריך להתחבר שוב, פעם אחת), ושני חשבונות לינקדאין נפרדים לא אפשריים כאן. כשה-WebView יתעדכן זה ינסה שוב לבד.</string>
-    <string name="draw_closed">המשחק תקע את התמונה בטלוויזיה, אז סגרנו אותו. מעכשיו הוא ייפתח בציור קל (אפשר להחליף בתפריט ☰).</string>
-    <string name="tv_hint_light">המשחק הזה מצויר בציור קל, כי פעם הוא תקע את התמונה. אפשר להחליף בתפריט ☰</string>
-    <string name="display_drawing">ציור</string>
-    <string name="display_drawing_normal">מלא</string>
-    <string name="display_drawing_light">קל</string>
-    <string name="display_drawing_hint">קל: הדף מצויר בלי המעבד הגרפי של הטלוויזיה. איטי יותר, ובלי וידאו ו-WebGL, אבל לא יכול לתקוע את התמונה.</string>
+    <string name="draw_closed">המשחק תקע את התמונה בטלוויזיה, אז סגרנו אותו כדי שהטלוויזיה תמשיך לעבוד.</string>
     <string name="accounts_profiles_retry">לנסות שוב כניסות נפרדות</string>
     <string name="accounts_profiles_retry_done">ננסה שוב בפעם הבאה שייפתח משחק. אם הוא שוב ייתקע, זה ייכבה שוב לבד.</string>
     <string name="accounts_no_profiles">הגרסה של Android System WebView בטלפון ישנה מדי לשמירת שני חשבונות לינקדאין נפרדים. עדכנו אותה ב-Google Play. עד אז כל האתרים חולקים התחברות אחת.</string>

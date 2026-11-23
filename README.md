@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.8.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.8.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -284,20 +284,24 @@ problem cannot be seen from inside it. 1.8.1 takes the app out of it as far as a
   box's home screen (so the box wakes to its own home screen, not to a page) and stops listening for the phone at once. Screen off,
   screen on, the screensaver, shutdown and every change of the display's state or mode are written to the flight recorder.
 - **A game that holds the picture** (`diag/DrawGuard.kt`): after 4 seconds of the main thread waiting for a frame inside a game, the
-  watchdog's own thread closes the game (in the report, the window going away is what let go), and that site is drawn the light way from
-  then on; if the app is still stuck 10 seconds in, it ends itself, so the box is never left holding a frozen picture. A message says
-  so once the app is free.
-- **Light drawing** (`player/LightDrawing.kt`): the game's WebView gets a software layer, so the page is painted by the processor and
-  the box's graphics only show the finished picture. Slower, with no video or WebGL, but it cannot hold the drawing stuck. Per site, on
-  the TV only, kept on the device (not in the backup). The game menu (☰) has "ציור: מלא / קל" to switch it either way, and a site that
-  opens light says so for a moment. A game that held the picture stuck in the last two runs (the flight recorder says so: at least 4
-  seconds waiting for a frame after its page loaded) opens light from the first start of 1.8.1, so Krillion does not have to freeze
-  again first; each such freeze is acted on once, so switching back to "מלא" is kept.
+  watchdog's own thread closes the game (in the report, the window going away is what let go); if the app is still stuck 10 seconds
+  in, it ends itself, so the box is never left holding a frozen picture. A message says so once the app is free.
 - **The report**: Android's records of how the app ended are matched to the run they belong to (the 23 November report showed an older
   run's freeze as the previous run's end); a run with no record says the box was restarted or unplugged with the app still there; a line
   with the screen's mode; "typing began" when the phone starts typing; and, a few seconds after a game loads, how many videos (and how
   many playing), canvases and frames the page has (counts only, nothing else is read). The watchdog no longer reports a freeze when it
   was itself kept from running (the 2.5-second "freeze" of an idle main thread at start-up in that report).
+
+**1.8.2: no more "light drawing", and no file writes on the main thread.** 1.8.1 also drew a game that had frozen the picture
+"the light way" (a software layer: the page painted by the processor instead of the graphics chip), and marked Krillion so from the
+freeze already in the report. On the box's processor that painting runs on the app's main thread and took seconds per frame: Krillion
+took typing but answered so slowly it could not be played, and even the game menu took three to four seconds to appear (the next
+report). 1.8.2 removes it and clears its marks. The same report showed the main thread stuck for 2.5 seconds opening a small file
+(the flight recorder's note of which screen is in front), so the box's storage can be very slow at times: every write of the flight
+recorder and of the start-up timings now happens on the recorder's own thread (only a crash still writes at once). The report also
+gains what a white page needs: the player writes down when it refused to follow a page to another site, when a page did not load or
+answered with an HTTP error, and certificate problems; and the page probe adds how many elements the page has and how tall it is (a
+page that stays white shows a handful of elements and no height).
 
 ## Settings and your own games (1.4)
 

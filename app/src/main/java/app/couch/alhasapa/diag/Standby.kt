@@ -35,12 +35,12 @@ class Standby(
             Intent.ACTION_SCREEN_OFF -> {
                 Flight.log("screen off (standby): the app closes its game and steps back")
                 stepAside()
-                Flight.flushNow()
+                Flight.flush()
             }
-            Intent.ACTION_SCREEN_ON -> { Flight.log("screen on (the box woke up)"); Flight.flushNow() }
+            Intent.ACTION_SCREEN_ON -> { Flight.log("screen on (the box woke up)"); Flight.flush() }
             Intent.ACTION_DREAMING_STARTED -> Flight.log("screensaver on")
             Intent.ACTION_DREAMING_STOPPED -> Flight.log("screensaver off")
-            Intent.ACTION_SHUTDOWN -> { Flight.log("the box is shutting down"); Flight.flushNow() }
+            Intent.ACTION_SHUTDOWN -> { Flight.log("the box is shutting down"); Flight.flush() }
         }
     }
 

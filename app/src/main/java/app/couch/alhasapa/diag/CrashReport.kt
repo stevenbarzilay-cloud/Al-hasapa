@@ -20,7 +20,7 @@ object CrashReport {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             runCatching { File(app.filesDir, FILE).writeText(report(app, thread, error)) }
-            runCatching { Flight.log("CRASH on ${thread.name}: $error"); Flight.session(false, "crash"); Flight.flushNow() }
+            runCatching { Flight.log("CRASH on ${thread.name}: $error"); Flight.session(false, "crash", sync = true); Flight.flushNow() }
             previous?.uncaughtException(thread, error)
         }
     }

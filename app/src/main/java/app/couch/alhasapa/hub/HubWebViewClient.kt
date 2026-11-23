@@ -98,7 +98,7 @@ class HubWebViewClient(
         // Returning true keeps the app alive; the host recreates the WebView.
         val why = "the page's process ended (crashed=${detail.didCrash()}, priority ${detail.rendererPriorityAtExit()})"
         Log.e(TAG, why)
-        app.couch.alhasapa.diag.Flight.flushNow()
+        app.couch.alhasapa.diag.Flight.flush()
         onRenderProcessGone(why)
         return true
     }
