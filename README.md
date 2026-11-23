@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.8.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -181,6 +181,33 @@ install again.
 The same code, built as a second app (`app.couch.alhasapa.tv`, shown in the TV launcher with its own banner). It runs the games
 on the TV itself, so there is no casting and no lag. It needs Android 8.0 or newer (API 26); a Mi Box S runs 8.1 or 9. It keeps
 its own history and logins (it is a different app); until accounts and sync exist, bring over history with the hub's backup.
+
+**1.9: a TV app of its own.** Three changes after the evening of 23 November 2026, when the people asked for a TV app they would
+want to play on, starting with Krillion and NYT:
+
+- **The TV's own home** (`home/TvHome.kt`). The TV no longer opens the phone's web hub (four to six seconds to be ready on the box): it
+  opens a native home at once. At the top the day, the evening so far ("שיחקנו 1 מתוך 25 · 2 נקודות ספה"), the two of us and whether the
+  phone is connected; then "המדף של הערב", the shelf as a row of big cards (what is left to play first, the played ones after with ✓),
+  and "עוד משחקים", the rest. The remote's arrows move between the cards (the card in focus grows and wears a red ring, and its
+  description shows under the rows), OK opens the game. "החשבונות" opens the accounts, and "הגדרות ועוד" the full web hub as before (the
+  links, adding a game, the backup); Back from it returns to the home.
+- **Sign in on the phone, the TV gets it** (`remote/LoginHandoff.kt`, `remote/LoginCrypto.kt`). Typing a password with a remote is
+  miserable, and NYT's sign-in page stayed white on the box. In keyboard mode on the phone, "התחברות לטלוויזיה" lists the sites whose
+  login can go (NYT and Haaretz: the sites of the accounts screen that share the TV's one browser), says whether the phone is signed in
+  to each, and sends it. What goes is what the phone's browser holds for the site (its cookies, each set on the TV for the site's own
+  domain, https only, for about two months; anti-bot cookies stay behind, they belong to the phone), and only to the paired TV: for
+  each handoff both sides make a fresh P-256 key and agree on a secret (ECDH), the TV signs its key with the pairing token (HMAC), the
+  key that encrypts the login comes from the secret and the token (HKDF), and AES-256-GCM refuses anything changed on the way. Values
+  are never written to a log, only how many. The TV says "ההתחברות ל-NYT הגיעה מהטלפון". The per-person LinkedIn logins do not go (the
+  TV keeps one browser profile).
+- **The pairing token no longer crosses the network after pairing.** The TV's greeting carries a new nonce each time and the phone
+  answers with a proof (HMAC of the nonce under the token) instead of the token. A phone app from before 1.9 still types (it sends the
+  token as before) but cannot hand over a login.
+- **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
+  on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
+  keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24
+  keys: half on the screen within 48 ms, 9 in 10 within 180 ms, the slowest 300 ms". That is how the games that play well on the TV will
+  be told from the ones better played from the phone.
 
 **Install** (once): on the Mi Box, Settings, Device Preferences, About, press Build seven times; then Developer options, turn on
 USB debugging (and network debugging). From a computer on the same network:

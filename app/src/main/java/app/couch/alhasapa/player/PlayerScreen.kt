@@ -129,6 +129,9 @@ fun PlayerScreen(
 
     // The page being shown decides how it is shown; a navigation to another game of the same site can change it.
     var currentUrl by remember { mutableStateOf(session.url) }
+    // How long the game took to be ready after it was chosen (once, to the flight recorder): the per-game check of 1.9.
+    val openedAt = remember { android.os.SystemClock.uptimeMillis() }
+    val loadTold = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     val resolved = remember(currentUrl, overrides?.toString()) { profiles.resolve(currentUrl, overrides) }
     var draft by remember(resolved.key) { mutableStateOf<DisplayProfile?>(null) }
     var justSaved by remember { mutableStateOf(false) }
@@ -297,7 +300,15 @@ fun PlayerScreen(
                                                 Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
                                             },
                                             onStarted = { loadError = null },
-                                            onFinished = { if (tv != null) PageProbe.later(this) },
+                                            onFinished = { url ->
+                                                if (tv != null) PageProbe.later(this)
+                                                if (loadTold.compareAndSet(false, true)) {
+                                                    val s = (android.os.SystemClock.uptimeMillis() - openedAt) / 1000.0
+                                                    app.couch.alhasapa.diag.Flight.log(
+                                                        "player: ${android.net.Uri.parse(url).host} ready " + String.format(java.util.Locale.US, "%.1f", s) + " s after it was chosen",
+                                                    )
+                                                }
+                                            },
                                             onLoadError = { loadError = it },
                                             onRenderGone = {
                                                 // A new WebView, the same game. Twice within two minutes is likely the box running out of memory:

@@ -23,6 +23,9 @@ class KeyLinkTest {
             Msg.Ok("Krillion"), Msg.Screen("עמוד הבית"), Msg.Text("octopus"), Msg.Text("שלום 😀"), Msg.Press(KeyLink.Key.ENTER, KeyLink.Action.TAP),
             Msg.Press(KeyLink.Key.LEFT, KeyLink.Action.DOWN), Msg.Press(KeyLink.Key.LEFT, KeyLink.Action.UP), Msg.Ping, Msg.Pong, Msg.Bye("code"),
             Msg.Pointer(true), Msg.Pointer(false), Msg.Move(12.5f, -3.25f), Msg.Click, Msg.Drag(true), Msg.Drag(false), Msg.Scroll(-40f),
+            Msg.Hi("tv1", "MiBOX4", "0f".repeat(16)), Msg.Hello("ph1", "Pixel 8", "", "ab".repeat(32)),
+            Msg.LoginsKey("MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE"), Msg.LoginsReady("MFkw", "cd".repeat(32)),
+            Msg.Logins("AAECAwQFBgcICQoL", "x".repeat(20_000)), Msg.LoginsDone("NYT Games", 3), Msg.LoginsNo("update-tv"),
         )
         for (m in all) {
             val line = KeyLink.encode(m)

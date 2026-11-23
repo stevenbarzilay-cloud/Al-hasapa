@@ -18,6 +18,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import app.couch.alhasapa.diag.Flight
 import app.couch.alhasapa.remote.KeyClient
 import app.couch.alhasapa.remote.KeyLink
+import app.couch.alhasapa.remote.LoginHandoff
+import app.couch.alhasapa.remote.LoginReceiver
+import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 
 /**
@@ -50,11 +53,24 @@ class KeyboardModeActivity : ComponentActivity() {
             override fun address(a: String) = client.useAddress(a)
             override fun permission() = askLocalNetwork.launch(LOCAL_NETWORK)
             override fun pointer(m: KeyLink.Msg) = client.send(m)
+
+            // The sign-in handoff: what the phone's own browser holds (the shared "games" profile), read on the main thread.
+            override fun logins(): List<LoginHandoff.Item> = (application as CouchApp).catalog.sites.values.filter(LoginHandoff::canHand)
+                .map { LoginHandoff.Item(it.id, it.name, LoginHandoff.signedIn(it, LoginReceiver.jar(it.profile))) }
+
+            override fun sendLogin(site: String) {
+                val s = (application as CouchApp).catalog.sites[site] ?: return
+                val cookies = LoginHandoff.collect(s, LoginReceiver.jar(s.profile))
+                if (cookies.isEmpty() || !LoginHandoff.signedIn(s, LoginReceiver.jar(s.profile))) { client.loginsFailed(site, "no-login"); return }
+                Flight.log("logins: sending ${s.name} to the TV (${cookies.size} cookies)")
+                client.sendLogins(site, LoginHandoff.payload(site, cookies))
+            }
         }
         setContent {
             AlHasapaTheme {
                 val state by client.state.collectAsState()
-                KeyboardModeScreen(state, sink, onGame = { finish() })
+                val handoff by client.handoff.collectAsState()
+                KeyboardModeScreen(state, sink, onGame = { finish() }, handoff = handoff)
             }
         }
         Flight.log("keyboard mode opened")

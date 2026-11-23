@@ -44,6 +44,22 @@ class KeyClient(
     private val _state = MutableStateFlow<State>(State.Looking)
     val state: StateFlow<State> get() = _state
 
+    /** A site's login on its way to the TV (see [sendLogins]). */
+    sealed interface Handoff {
+        val site: String
+        data class Sending(override val site: String) : Handoff
+        data class Done(override val site: String, val n: Int) : Handoff
+        /** [why]: "update-tv" (the TV app is too old to answer), "update-phone", "signature", "not-connected", or the TV's own reason. */
+        data class Failed(override val site: String, val why: String) : Handoff
+    }
+
+    private val _handoff = MutableStateFlow<Handoff?>(null)
+    val handoff: StateFlow<Handoff?> get() = _handoff
+
+    private class Pending(val site: String, val payload: String, val pair: java.security.KeyPair, val key: String)
+    @Volatile private var pending: Pending? = null
+    private val timer = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "keys-timer").apply { isDaemon = true } }
+
     private val running = AtomicBoolean(false)
     private val wake = LinkedBlockingQueue<Unit>()
     private val writer = Executors.newSingleThreadExecutor { r -> Thread(r, "keys-out").apply { isDaemon = true } }
@@ -77,6 +93,41 @@ class KeyClient(
     fun noPermission() { _state.value = State.NotFound(NO_PERMISSION) }
 
     fun sendCode(code: String) = write(Msg.Pair(code))
+
+    /**
+     * Hands a site's login ([payload], from [LoginHandoff.payload]) to the TV: a fresh key, the TV's signed answer, then the login
+     * encrypted for that TV only. [handoff] tells how it went; a TV that does not answer within a few seconds has an app too old for it.
+     */
+    fun sendLogins(site: String, payload: String) {
+        if (_state.value !is State.Connected) { _handoff.value = Handoff.Failed(site, "not-connected"); return }
+        val pair = LoginCrypto.newKeyPair()
+        val p = Pending(site, payload, pair, LoginCrypto.encode(pair.public))
+        pending = p
+        _handoff.value = Handoff.Sending(site)
+        write(Msg.LoginsKey(p.key))
+        timer.schedule({
+            if (pending === p) { pending = null; _handoff.value = Handoff.Failed(site, "update-tv") }
+        }, 8, TimeUnit.SECONDS)
+    }
+
+    /** A handoff that could not even start (the phone is not signed in to the site): said like any other outcome. */
+    fun loginsFailed(site: String, why: String) { _handoff.value = Handoff.Failed(site, why) }
+
+    /** The TV's answer to [sendLogins]: its key, signed with the pairing token. Checked, then the login goes, encrypted. */
+    private fun finishLogins(m: Msg.LoginsReady) {
+        val p = pending ?: return
+        val token = store.tokenFor(tvId)
+        val tvPub = LoginCrypto.decode(m.key)
+        if (token.isEmpty() || tvPub == null || !LoginCrypto.same(LoginCrypto.tvSignature(token, p.key, m.key), m.sig)) {
+            pending = null
+            _handoff.value = Handoff.Failed(p.site, "signature")
+            Flight.log("logins: the TV's answer was not signed with our pairing; nothing was sent")
+            return
+        }
+        val key = LoginCrypto.sessionKey(p.pair.private, tvPub, token, p.key, m.key)
+        val (iv, data) = LoginCrypto.seal(key, p.payload.toByteArray(Charsets.UTF_8))
+        write(Msg.Logins(iv, data))
+    }
 
     /** Text or a key, sent at once; dropped while not connected. */
     fun send(m: Msg) { if (_state.value is State.Connected) write(m) }
@@ -137,7 +188,19 @@ class KeyClient(
                 val m = KeyLink.decode(line) ?: continue
                 answered = true
                 when (m) {
-                    is Msg.Hi -> { tvId = m.tv; tvName = m.name; write(Msg.Hello(store.phoneId, phoneName, store.tokenFor(m.tv))) }
+                    is Msg.Hi -> {
+                        tvId = m.tv; tvName = m.name
+                        val token = store.tokenFor(m.tv)
+                        // From 1.9 the TV sends a nonce, and the phone proves it holds the token without sending it. An older TV
+                        // gets the token as before.
+                        val hello = if (m.nonce.isNotEmpty() && token.isNotEmpty()) {
+                            Msg.Hello(store.phoneId, phoneName, "", LoginCrypto.proof(token, m.nonce, store.phoneId))
+                        } else Msg.Hello(store.phoneId, phoneName, token)
+                        write(hello)
+                    }
+                    is Msg.LoginsReady -> finishLogins(m)
+                    is Msg.LoginsDone -> { pending = null; _handoff.value = Handoff.Done(m.site, m.n) }
+                    is Msg.LoginsNo -> { val p = pending; pending = null; _handoff.value = Handoff.Failed(p?.site.orEmpty(), m.why) }
                     Msg.NeedCode -> _state.value = State.NeedCode(tvName)
                     is Msg.Wrong -> _state.value = State.NeedCode(tvName, m.left)
                     is Msg.Paired -> store.saveToken(tvId, m.token)

@@ -8,8 +8,9 @@ import org.json.JSONObject
 /**
  * The phone-as-keyboard link: what the phone and the TV say to each other over the home network, one small JSON object per line.
  *
- *     TV    → phone  hi {tv, name}                      first thing on a new connection
- *     phone → TV     hello {phone, name, token}          token: from an earlier pairing, or empty
+ *     TV    → phone  hi {tv, name, nonce}               first thing on a new connection; nonce: new each time (from 1.9)
+ *     phone → TV     hello {phone, name, token, proof}   proof = HMAC(token, nonce): the token itself is not sent (from 1.9;
+ *                                                          before, the token was sent as is, still accepted for typing only)
  *     TV    → phone  code                                 not paired yet: the TV shows four digits
  *     phone → TV     pair {code}
  *     TV    → phone  wrong {left} | paired {token}
@@ -18,7 +19,14 @@ import org.json.JSONObject
  *     phone → TV     pointer {on} | move {dx, dy} | click | drag {on} | scroll {dy}     the touchpad (dp of the phone's pad)
  *     TV    → phone  pong | bye {why}
  *
- * Only keys go to the TV and only the screen's name comes back: nothing a page shows or holds ever leaves the TV.
+ *     the sign-in handoff (from 1.9, see LoginHandoff and LoginCrypto):
+ *     phone → TV     logins-key {key}                     a fresh public key
+ *     TV    → phone  logins-ready {key, sig} | logins-no {why}
+ *     phone → TV     logins {iv, data}                    the site's cookies, AES-GCM under the agreed key
+ *     TV    → phone  logins-done {site, n} | logins-no {why}
+ *
+ * Only keys (and, when the people ask for it, a site's login) go to the TV, and only the screen's name comes back: nothing a page shows
+ * or holds ever leaves the TV.
  */
 object KeyLink {
     /** Advertised on the home network (DNS-SD), so the phone finds the TV by itself. */
@@ -27,10 +35,10 @@ object KeyLink {
     /** The port the TV listens on when it is free (another one is advertised if not). */
     const val PORT = 47123
 
-    const val VERSION = 1
+    const val VERSION = 2
 
-    /** A line longer than this is not one of ours. */
-    const val MAX_LINE = 4_096
+    /** A line longer than this is not one of ours (a site's cookies, encrypted, fit well within it). */
+    const val MAX_LINE = 65_536
 
     /** The keys the phone sends besides text. */
     enum class Key(val code: Int) {
@@ -50,8 +58,8 @@ object KeyLink {
     enum class Action { TAP, DOWN, UP }
 
     sealed interface Msg {
-        data class Hi(val tv: String, val name: String) : Msg
-        data class Hello(val phone: String, val name: String, val token: String) : Msg
+        data class Hi(val tv: String, val name: String, val nonce: String = "") : Msg
+        data class Hello(val phone: String, val name: String, val token: String, val proof: String = "") : Msg
         data object NeedCode : Msg
         data class Pair(val code: String) : Msg
         data class Wrong(val left: Int) : Msg
@@ -74,11 +82,19 @@ object KeyLink {
         data object Ping : Msg
         data object Pong : Msg
         data class Bye(val why: String) : Msg
+
+        /** The sign-in handoff: the phone's fresh public key; the TV's, signed with the pairing token; the logins; the answer. */
+        data class LoginsKey(val key: String) : Msg
+        data class LoginsReady(val key: String, val sig: String) : Msg
+        data class Logins(val iv: String, val data: String) : Msg
+        data class LoginsDone(val site: String, val n: Int) : Msg
+        data class LoginsNo(val why: String) : Msg
     }
 
     fun encode(m: Msg): String = when (m) {
-        is Msg.Hi -> JSONObject().put("t", "hi").put("v", VERSION).put("tv", m.tv).put("name", m.name)
+        is Msg.Hi -> JSONObject().put("t", "hi").put("v", VERSION).put("tv", m.tv).put("name", m.name).put("nonce", m.nonce)
         is Msg.Hello -> JSONObject().put("t", "hello").put("v", VERSION).put("phone", m.phone).put("name", m.name).put("token", m.token)
+            .put("proof", m.proof)
         Msg.NeedCode -> JSONObject().put("t", "code")
         is Msg.Pair -> JSONObject().put("t", "pair").put("code", m.code)
         is Msg.Wrong -> JSONObject().put("t", "wrong").put("left", m.left)
@@ -95,6 +111,11 @@ object KeyLink {
         Msg.Ping -> JSONObject().put("t", "ping")
         Msg.Pong -> JSONObject().put("t", "pong")
         is Msg.Bye -> JSONObject().put("t", "bye").put("why", m.why)
+        is Msg.LoginsKey -> JSONObject().put("t", "logins-key").put("key", m.key)
+        is Msg.LoginsReady -> JSONObject().put("t", "logins-ready").put("key", m.key).put("sig", m.sig)
+        is Msg.Logins -> JSONObject().put("t", "logins").put("iv", m.iv).put("data", m.data)
+        is Msg.LoginsDone -> JSONObject().put("t", "logins-done").put("site", m.site).put("n", m.n)
+        is Msg.LoginsNo -> JSONObject().put("t", "logins-no").put("why", m.why)
     }.toString()
 
     /** Null for anything that is not one of the messages above (garbage, too long, an unknown key). */
@@ -103,8 +124,8 @@ object KeyLink {
         val o = runCatching { JSONObject(line) }.getOrNull() ?: return null
         fun s(k: String) = o.optString(k, "").take(512)
         return when (o.optString("t")) {
-            "hi" -> Msg.Hi(s("tv"), s("name"))
-            "hello" -> Msg.Hello(s("phone"), s("name"), s("token"))
+            "hi" -> Msg.Hi(s("tv"), s("name"), s("nonce"))
+            "hello" -> Msg.Hello(s("phone"), s("name"), s("token"), s("proof"))
             "code" -> Msg.NeedCode
             "pair" -> Msg.Pair(s("code"))
             "wrong" -> Msg.Wrong(o.optInt("left", 0))
@@ -125,6 +146,11 @@ object KeyLink {
             "ping" -> Msg.Ping
             "pong" -> Msg.Pong
             "bye" -> Msg.Bye(s("why"))
+            "logins-key" -> Msg.LoginsKey(s("key"))
+            "logins-ready" -> Msg.LoginsReady(s("key"), s("sig"))
+            "logins" -> o.optString("data", "").takeIf { it.isNotEmpty() }?.let { Msg.Logins(s("iv"), it) }
+            "logins-done" -> Msg.LoginsDone(s("site"), o.optInt("n", 0))
+            "logins-no" -> Msg.LoginsNo(s("why"))
             else -> null
         }
     }

@@ -9,6 +9,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +20,7 @@ import java.io.File
 import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -26,7 +28,7 @@ import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
 /**
- * The screen a TV opens first: the hub, with the dock. Nothing here was covered before 1.5, so a mistake on this path (the TV theme, the
+ * The screen a TV opens first: its own native home (1.9), with the dock; the web hub one step away. Nothing here was covered before 1.5, so a mistake on this path (the TV theme, the
  * starting window, the dock without a game, the reports of the previous run) could have passed every other test.
  */
 @RunWith(AndroidJUnit4::class)
@@ -47,12 +49,17 @@ class MainActivityTvTest {
     }
 
     @Test
-    fun theHubStartsWithTheDockAndNoKeyboard() {
+    fun theTvOpensOnItsOwnHomeWithTheDockAndNoKeyboardAndTheWebHubIsOneStepAway() {
         launch()
         rule.onNode(hasContentDescription("להפעיל כפה (עכבר)")).assertIsDisplayed()
         rule.onNode(hasContentDescription("פתיחת מקלדת")).assertIsDisplayed()
         rule.onNode(hasContentDescription("מידע לתיקון תקלות")).assertIsDisplayed()
+        rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
         rule.onNode(hasContentDescription("q")).assertDoesNotExist()
+        scenario!!.onActivity { a -> assertNull("no web page behind the home: it is native", webOf(a.window.decorView)) }
+        // The full hub (links, adding a game, the backup) is one button away, and it is the web hub as before.
+        rule.onNodeWithText("הגדרות ועוד").performScrollTo().performClick()
+        rule.waitForIdle()
         scenario!!.onActivity { a ->
             val web = webOf(a.window.decorView)
             assertNotNull("the hub's WebView is there", web)

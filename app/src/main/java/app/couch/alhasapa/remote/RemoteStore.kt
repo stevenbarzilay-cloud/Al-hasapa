@@ -36,6 +36,14 @@ class RemoteStore(context: Context) {
         return null
     }
 
+    /** The token of the paired phone whose [proof] answers [nonce] (see [LoginCrypto.proof]), or null. */
+    fun tokenProvedBy(proof: String, nonce: String, phone: String): String? {
+        if (proof.isEmpty() || nonce.isEmpty()) return null
+        val all = phones()
+        for (k in all.keys()) if (LoginCrypto.same(LoginCrypto.proof(k, nonce, phone), proof)) return k
+        return null
+    }
+
     fun addPhone(token: String, name: String) {
         val all = phones().put(token, name.take(60))
         prefs.edit { putString("phones", all.toString()) }

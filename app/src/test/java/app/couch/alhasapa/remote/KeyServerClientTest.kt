@@ -25,7 +25,11 @@ import org.robolectric.annotation.Config
 class KeyServerClientTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val typed = CopyOnWriteArrayList<Msg>()
-    private val server = KeyServer(context, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = "MiBOX4")
+    private val received = CopyOnWriteArrayList<String>()
+    private val server = KeyServer(
+        context, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = "MiBOX4",
+        onLogins = { payload -> received += payload; "NYT Games" to 3 },
+    )
     private val clients = ArrayList<KeyClient>()
 
     @After fun close() { clients.forEach { it.stop() }; server.stop() }
@@ -112,6 +116,69 @@ class KeyServerClientTest {
         s.getOutputStream().flush()
         s.soTimeout = 3_000
         assertEquals("the TV hung up", -1, runCatching { s.getInputStream().read() }.getOrDefault(-1))
+        s.close()
+    }
+    private fun pairedPhone(): KeyClient {
+        RemoteStore(context).forgetPhones()
+        server.start()
+        val phone = client()
+        phone.start()
+        waitFor("the TV asks for a code") { phone.state.value is KeyClient.State.NeedCode }
+        phone.sendCode(server.ui.value.code!!)
+        waitFor("connected") { phone.state.value is KeyClient.State.Connected }
+        return phone
+    }
+
+    @Test
+    fun aLoginGoesEncryptedToThePairedTvAndArrivesWhole() {
+        val phone = pairedPhone()
+        val payload = """{"site":"nyt","cookies":[{"u":"https://nytimes.com/","c":"NYT-S=0^abc; Domain=.nytimes.com; Path=/; Secure"}]}"""
+        phone.sendLogins("nyt", payload)
+        waitFor("the TV took it") { phone.handoff.value is KeyClient.Handoff.Done }
+        assertEquals(listOf(payload), received.toList())
+        assertEquals(KeyClient.Handoff.Done("NYT Games", 3), phone.handoff.value)
+        // And again on the next connection, which is proved without the token going over the network.
+        phone.stop()
+        waitFor("the TV saw it leave") { server.ui.value.phones.isEmpty() }
+        val again = client()
+        again.start()
+        waitFor("connected again by proof") { again.state.value is KeyClient.State.Connected }
+        again.sendLogins("nyt", payload)
+        waitFor("a second login went") { again.handoff.value is KeyClient.Handoff.Done }
+        assertEquals(2, received.size)
+    }
+
+    @Test
+    fun aPhoneThatSendsItsTokenAsIsMayTypeButNotHandOverALogin() {
+        pairedPhone().stop()
+        waitFor("gone") { server.ui.value.phones.isEmpty() }
+        val token = RemoteStore(context).let { store -> store.tokenFor(store.tvId) }
+        assertTrue("the phone kept its token", token.length == 64)
+        val s = Socket("127.0.0.1", server.port)
+        val out = s.getOutputStream().bufferedWriter()
+        val input = s.getInputStream().bufferedReader()
+        val hi = KeyLink.decode(input.readLine()) as Msg.Hi
+        assertTrue("the TV sends a nonce", hi.nonce.length == 32)
+        fun say(m: Msg) { out.write(KeyLink.encode(m)); out.write("\n"); out.flush() }
+        say(Msg.Hello("old", "old phone", token))                          // as before 1.9
+        assertTrue(KeyLink.decode(input.readLine()) is Msg.Ok)
+        say(Msg.LoginsKey(LoginCrypto.encode(LoginCrypto.newKeyPair().public)))
+        assertEquals(Msg.LoginsNo("update-phone"), KeyLink.decode(input.readLine()))
+        say(Msg.Text("still types"))
+        waitFor("typing still works") { typed.contains(Msg.Text("still types")) }
+        s.close()
+    }
+
+    @Test
+    fun aWrongProofIsAskedForTheCode() {
+        pairedPhone().stop()
+        waitFor("gone") { server.ui.value.phones.isEmpty() }
+        val s = Socket("127.0.0.1", server.port)
+        val out = s.getOutputStream().bufferedWriter()
+        val input = s.getInputStream().bufferedReader()
+        val hi = KeyLink.decode(input.readLine()) as Msg.Hi
+        out.write(KeyLink.encode(Msg.Hello("x", "guess", "", LoginCrypto.proof("d".repeat(64), hi.nonce, "x")))); out.write("\n"); out.flush()
+        assertEquals(Msg.NeedCode, KeyLink.decode(input.readLine()))
         s.close()
     }
 }

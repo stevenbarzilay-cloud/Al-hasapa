@@ -77,6 +77,28 @@ class TvPreviewTest {
         org.junit.Assert.assertTrue(File(dir, "tv-dock-paw.png").length() > 5_000)
     }
 
+    @Test
+    fun drawTheHome() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val date = java.time.LocalDate.of(2026, 11, 23)
+        val state = app.couch.alhasapa.data.CouchState.empty().also {
+            app.couch.alhasapa.data.CouchState.setEntry(it, app.couch.alhasapa.data.CouchState.dayKey(date), "krillion", org.json.JSONObject().put("w", "").put("t", 1L))
+        }
+        val model = app.couch.alhasapa.home.HomeModel.from(state, catalog, pieces, date)
+        rule.setContent {
+            AlHasapaTheme {
+                TvLayer(c) { app.couch.alhasapa.home.TvHome(model, phoneConnected = true, onPlay = {}, onAccounts = {}, onMore = {}) }
+            }
+        }
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "tv-home.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        org.junit.Assert.assertTrue(File(dir, "tv-home.png").length() > 5_000)
+    }
+
     private fun save(name: String) {
         rule.waitForIdle()
         val dir = File("build/previews").apply { mkdirs() }

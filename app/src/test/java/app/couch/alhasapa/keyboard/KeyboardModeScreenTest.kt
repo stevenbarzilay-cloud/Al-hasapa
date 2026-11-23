@@ -43,12 +43,18 @@ class KeyboardModeScreenTest {
             is KeyLink.Msg.Scroll -> "scroll:" + (if (m.dy > 0) "down" else "up")
             else -> "?"
         } }
+        override fun logins() = listOf(
+            app.couch.alhasapa.remote.LoginHandoff.Item("nyt", "NYT Games", signedIn = true),
+            app.couch.alhasapa.remote.LoginHandoff.Item("hz", "הארץ משחקים", signedIn = false),
+        )
+        override fun sendLogin(site: String) { sent += "login:$site" }
     }
+    private var handoff by mutableStateOf<KeyClient.Handoff?>(null)
     private var state by mutableStateOf<KeyClient.State>(KeyClient.State.Looking)
     private var game = 0
     private val tab = hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")
 
-    private fun show() = rule.setContent { AlHasapaTheme { KeyboardModeScreen(state, sink, onGame = { game++ }) } }
+    private fun show() = rule.setContent { AlHasapaTheme { KeyboardModeScreen(state, sink, onGame = { game++ }, handoff = handoff) } }
     private fun key(d: String) = rule.onNode(hasContentDescription(d))
 
     @Test
@@ -179,5 +185,25 @@ class KeyboardModeScreenTest {
         assertEquals(KeyLink.Msg.Text("ש"), PhoneKeys.message(PKey.Ch("ש"), shift = true))
         assertEquals(KeyLink.Msg.Press(KeyLink.Key.ESCAPE, KeyLink.Action.TAP), PhoneKeys.message(PKey.Esc, false))
         assertEquals(null, PhoneKeys.message(PKey.Shift, false))
+    }
+    @Test
+    fun aLoginGoesToTheTvFromTheTopStripAndSaysHowItWent() {
+        show()
+        rule.onNodeWithText("התחברות לטלוויזיה").assertDoesNotExist()              // only while connected
+        state = KeyClient.State.Connected("MiTV", "עמוד הבית")
+        rule.onNodeWithText("התחברות לטלוויזיה").performClick()
+        rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertIsDisplayed()
+        rule.onNodeWithText("מחובר בטלפון").assertIsDisplayed()
+        rule.onNodeWithText("לא מחובר בטלפון", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("לשלוח").performClick()                                // only NYT has the button: the phone is signed in there
+        assertEquals(listOf("login:nyt"), sent)
+        handoff = KeyClient.Handoff.Sending("nyt")
+        rule.onNodeWithText("שולח…").assertIsDisplayed()
+        handoff = KeyClient.Handoff.Done("nyt", 3)
+        rule.onNodeWithText("✓ ההתחברות ל-NYT Games עברה לטלוויזיה").assertIsDisplayed()
+        handoff = KeyClient.Handoff.Failed("nyt", "update-tv")
+        rule.onNodeWithText("הטלוויזיה לא ענתה: צריך לעדכן בה את האפליקציה").assertIsDisplayed()
+        rule.onNodeWithText("סגירה").performClick()
+        rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertDoesNotExist()
     }
 }

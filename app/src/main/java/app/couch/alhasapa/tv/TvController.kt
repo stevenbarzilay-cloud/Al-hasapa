@@ -141,9 +141,24 @@ class TvController(val enabled: Boolean, density: Float) {
         if (now - lastRemoteInput > 3_000) {
             runCatching { pageNav.field { _, _ -> } }
             app.couch.alhasapa.diag.Flight.log("phone keyboard: typing began")
+            // How fast the page shows each key (times only): measured in the page, summed up when the typing pauses.
+            web?.let { w -> runCatching { w.evaluateJavascript(TypingProbe.INSTALL, null) } }
         }
         lastRemoteInput = now
+        handler.removeCallbacks(typingPaused)
+        handler.postDelayed(typingPaused, 3_000)
         for (d in list) typer(d)
+    }
+
+    /** The typing paused: how fast the page showed the keys, to the flight recorder. */
+    private val typingPaused = Runnable {
+        val w = web ?: return@Runnable
+        val host = runCatching { android.net.Uri.parse(w.url).host }.getOrNull() ?: "the page"
+        runCatching {
+            w.evaluateJavascript(TypingProbe.TAKE) { raw ->
+                TypingProbe.summary(TypingProbe.times(raw))?.let { app.couch.alhasapa.diag.Flight.log("typing on $host: $it") }
+            }
+        }
     }
 
     private var lastRemoteInput = Long.MIN_VALUE / 2

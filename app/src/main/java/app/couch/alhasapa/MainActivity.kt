@@ -12,9 +12,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.LifecycleEventObserver
 import android.content.Intent
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import app.couch.alhasapa.home.HomeModel
+import app.couch.alhasapa.home.TvHome
+import app.couch.alhasapa.remote.RemoteKeys
+import java.time.LocalDate
 import app.couch.alhasapa.accounts.AccountsActivity
 import app.couch.alhasapa.keyboard.KeyboardModeActivity
 import app.couch.alhasapa.bridge.HubBridge
@@ -41,6 +48,15 @@ class MainActivity : ComponentActivity() {
     /** The head-to-head game waiting for "who plays?" to be answered. */
     private var whoPlaysFor by mutableStateOf<String?>(null)
 
+    /** On a TV: the full web hub, opened from the native home ("הגדרות ועוד"); Back from it returns to the home. */
+    private var webHub by mutableStateOf(false)
+
+    /** A game from the hub or the TV's home: head to head asks whose turn it is first. */
+    private fun play(gameId: String) {
+        val game = (application as CouchApp).catalog.game(gameId) ?: return
+        if (game.isDuel) whoPlaysFor = gameId else startActivity(PlayerActivity.gameIntent(this, gameId, null))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Must come before super.onCreate. The system splash is the first instants of a cold start;
         // the animated in-app splash continues from it.
@@ -65,13 +81,8 @@ class MainActivity : ComponentActivity() {
         val app = application as CouchApp
         val pieces = PiecesConfig.load(this)
         val bridge = HubBridge(this, app.repo, { app.catalog }, object : HubBridge.Actions {
-            override fun play(gameId: String) {
-                runOnUiThread {
-                    val game = app.catalog.game(gameId) ?: return@runOnUiThread
-                    // Head to head (LinkedIn): each person plays alone, in their own account, so ask whose turn it is.
-                    if (game.isDuel) whoPlaysFor = gameId else startActivity(PlayerActivity.gameIntent(this@MainActivity, gameId, null))
-                }
-            }
+            // Head to head (LinkedIn): each person plays alone, in their own account, so ask whose turn it is.
+            override fun play(gameId: String) { runOnUiThread { play(gameId) } }
 
             override fun openAccounts() {
                 runOnUiThread { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) }
@@ -100,7 +111,30 @@ class MainActivity : ComponentActivity() {
                     }
                     return@Layer
                 }
-                AppRoot(playSplash = playSplash, reduceMotion = reduceMotion, onExit = { finish() }, bridge = bridge)
+                if (tv.enabled && !webHub) {
+                    // The TV opens on its own native home: there at once, and the remote moves between real buttons.
+                    val revision by app.repo.revision.collectAsState()
+                    val model = remember(revision) { HomeModel.from(app.repo.snapshot(), app.catalog, pieces, LocalDate.now()) }
+                    val remote by RemoteKeys.ui.collectAsState()
+                    LaunchedEffect(Unit) {
+                        Startup.mark("home ready")
+                        Flight.background { Startup.save(this@MainActivity) }
+                        Flight.log("start: " + Startup.summary().replace("\n", "; "))
+                    }
+                    TvHome(
+                        model = model,
+                        phoneConnected = remote.phones.isNotEmpty(),
+                        onPlay = ::play,
+                        onAccounts = { startActivity(Intent(this@MainActivity, AccountsActivity::class.java)) },
+                        onMore = { Flight.log("home: the full hub"); webHub = true },
+                    )
+                } else {
+                    // On a TV the web hub is a step away from the home, and Back from it goes back there.
+                    AppRoot(
+                        playSplash = playSplash && !tv.enabled, reduceMotion = reduceMotion,
+                        onExit = { if (tv.enabled) webHub = false else finish() }, bridge = bridge,
+                    )
+                }
                 whoPlaysFor?.let { id ->
                     val game = app.catalog.game(id)
                     if (game != null) {

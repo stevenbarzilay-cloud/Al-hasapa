@@ -37,6 +37,8 @@ class KeyServer(
     private val preferredPort: Int = KeyLink.PORT,
     private val advertise: Boolean = true,
     private val tvName: String = Build.MODEL.orEmpty().ifBlank { "TV" },
+    /** A site's login from the phone (decrypted), on the main thread: the site's name and how many cookies were set, or null. */
+    private val onLogins: (String) -> Pair<String, Int>? = { payload -> LoginReceiver.receive(context, payload) },
 ) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -114,9 +116,32 @@ class KeyServer(
         RemoteKeys.ui.value = state.value
     }
 
+    /** How long typed keys waited for the TV's main thread (main thread only), summed up when the typing pauses. */
+    private val delays = ArrayList<Long>()
+    private val typingPaused = Runnable {
+        if (delays.isEmpty()) return@Runnable
+        val s = delays.sorted()
+        Flight.log("phone keyboard: ${s.size} keys reached the page within ${s[(s.size - 1) / 2]} ms (half), " +
+            "${s[((s.size - 1) * 0.9).toInt()]} ms (9 in 10), the slowest ${s.last()} ms")
+        delays.clear()
+    }
+
+    private fun noteDelay(ms: Long) {
+        if (delays.size < 400) delays += ms
+        main.removeCallbacks(typingPaused)
+        main.postDelayed(typingPaused, 3_000)
+    }
+
     private inner class Peer(private val socket: Socket) {
         @Volatile var ready = false
         @Volatile var name = "טלפון"
+        /** New for each connection: the phone proves with it that it holds its pairing token, without sending the token. */
+        private val nonce = RemoteStore.randomHex(16)
+        /** The pairing token of this phone, once known; [plain] when it was sent as is (a phone app from before 1.9). */
+        private var token: String? = null
+        private var plain = false
+        /** The key of the sign-in handoff under way (one use). */
+        private var handoffKey: ByteArray? = null
         private var tries = 3
         private var second = 0L
         private var inSecond = 0
@@ -132,7 +157,7 @@ class KeyServer(
                 socket.tcpNoDelay = true
                 socket.soTimeout = 30_000                     // the phone says something at least every few seconds
                 val input = socket.getInputStream().bufferedReader(Charsets.UTF_8)
-                send(Msg.Hi(store.tvId, tvName))
+                send(Msg.Hi(store.tvId, tvName, nonce))
                 while (true) {
                     val line = readLine(input) ?: break
                     val m = KeyLink.decode(line) ?: continue
@@ -147,11 +172,25 @@ class KeyServer(
         private fun handle(m: Msg): Boolean = when (m) {
             is Msg.Hello -> {
                 name = m.name.ifBlank { "טלפון" }.take(40)
-                if (store.phoneFor(m.token) != null) { welcome(); true } else askForCode()
+                val proved = store.tokenProvedBy(m.proof, nonce, m.phone)
+                when {
+                    proved != null -> { token = proved; plain = false; welcome(); true }
+                    // A phone app from before 1.9 sends the token itself: it may still type, but not hand over a login.
+                    store.phoneFor(m.token) != null -> { token = m.token; plain = true; welcome(); true }
+                    else -> askForCode()
+                }
             }
+            is Msg.LoginsKey -> { offerKey(m.key); true }
+            is Msg.Logins -> { receiveLogins(m); true }
             is Msg.Pair -> checkCode(m.code)
             is Msg.Text, is Msg.Press, is Msg.Pointer, is Msg.Move, Msg.Click, is Msg.Drag, is Msg.Scroll -> {
-                if (ready && atHumanPace()) main.post { onInput(m) }
+                if (ready && atHumanPace()) {
+                    val at = SystemClock.uptimeMillis()
+                    main.post {
+                        if (m is Msg.Text || m is Msg.Press) noteDelay(SystemClock.uptimeMillis() - at)
+                        onInput(m)
+                    }
+                }
                 true
             }
             Msg.Ping -> { send(Msg.Pong); true }
@@ -184,6 +223,7 @@ class KeyServer(
             if (right) {
                 val token = RemoteStore.randomHex(32)
                 store.addPhone(token, name)
+                this.token = token; plain = false
                 synchronized(lock) { code = null; codeFor = null; failures = 0 }
                 send(Msg.Paired(token))
                 Flight.log("phone keyboard: $name paired")
@@ -199,6 +239,31 @@ class KeyServer(
             publish()
             if (tries <= 0) { send(Msg.Bye("code")); return false }
             return true
+        }
+
+        /** The phone wants to hand over a login: the TV's own fresh key, signed with the pairing token, and the agreed key kept for one use. */
+        private fun offerKey(phoneKey: String) {
+            val t = token
+            if (!ready || t == null || plain) { send(Msg.LoginsNo(if (plain) "update-phone" else "pair")); return }
+            val phonePub = LoginCrypto.decode(phoneKey) ?: run { send(Msg.LoginsNo("bad")); return }
+            val pair = LoginCrypto.newKeyPair()
+            val tvKey = LoginCrypto.encode(pair.public)
+            handoffKey = LoginCrypto.sessionKey(pair.private, phonePub, t, phoneKey, tvKey)
+            send(Msg.LoginsReady(tvKey, LoginCrypto.tvSignature(t, phoneKey, tvKey)))
+        }
+
+        /** The login itself: opened with the agreed key (anything changed on the way is refused), then put in the browser on the main thread. */
+        private fun receiveLogins(m: Msg.Logins) {
+            val key = handoffKey ?: run { send(Msg.LoginsNo("order")); return }
+            handoffKey = null
+            val plainText = LoginCrypto.open(key, m.iv, m.data) ?: run {
+                Flight.log("logins: a handoff from $name could not be opened; refused")
+                send(Msg.LoginsNo("bad")); return
+            }
+            main.post {
+                val got = runCatching { onLogins(String(plainText, Charsets.UTF_8)) }.getOrNull()
+                send(if (got != null) Msg.LoginsDone(got.first, got.second) else Msg.LoginsNo("site"))
+            }
         }
 
         /** A person types at most a few dozen keys a second and the touchpad sends at most sixty moves; anything faster is dropped. */

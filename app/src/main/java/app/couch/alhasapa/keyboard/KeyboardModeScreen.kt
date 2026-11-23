@@ -112,6 +112,12 @@ interface KeySink {
 
     /** The touchpad: [KeyLink.Msg.Pointer], [KeyLink.Msg.Move], [KeyLink.Msg.Click], [KeyLink.Msg.Drag], [KeyLink.Msg.Scroll]. */
     fun pointer(m: KeyLink.Msg) {}
+
+    /** The sites whose login can go to the TV, and whether the phone is signed in to each (read when the list opens). */
+    fun logins(): List<app.couch.alhasapa.remote.LoginHandoff.Item> = emptyList()
+
+    /** Hands the phone's login to [site] to the TV (see KeyClient.sendLogins). */
+    fun sendLogin(site: String) {}
 }
 
 /**
@@ -120,12 +126,17 @@ interface KeySink {
  * the touchpad (a couch cushion) comes out with it, and the keyboard makes room.
  */
 @Composable
-fun KeyboardModeScreen(state: KeyClient.State, sink: KeySink, onGame: () -> Unit) {
+fun KeyboardModeScreen(state: KeyClient.State, sink: KeySink, onGame: () -> Unit, handoff: KeyClient.Handoff? = null) {
+    var loginsOpen by remember { mutableStateOf(false) }
+    if (loginsOpen && state is KeyClient.State.Connected) {
+        val items = remember { sink.logins() }
+        LoginsDialog(items, handoff, onSend = sink::sendLogin, onClose = { loginsOpen = false })
+    }
     Column(
         Modifier.fillMaxSize().background(Palette.Cream).windowInsetsPadding(WindowInsets.displayCutout).padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        TopStrip(state, onGame)
+        TopStrip(state, onGame, onLogins = { loginsOpen = true })
         Box(Modifier.fillMaxWidth().weight(1f).padding(end = if (state is KeyClient.State.Connected) 0.dp else 12.dp)) {
             when (state) {
                 is KeyClient.State.Connected -> Connected(sink)
@@ -140,7 +151,7 @@ fun KeyboardModeScreen(state: KeyClient.State, sink: KeySink, onGame: () -> Unit
 }
 
 @Composable
-private fun TopStrip(state: KeyClient.State, onGame: () -> Unit) {
+private fun TopStrip(state: KeyClient.State, onGame: () -> Unit, onLogins: () -> Unit) {
     Row(Modifier.fillMaxWidth().height(42.dp).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         ModeSwitch(keys = true, onGame = onGame, modifier = Modifier.width(280.dp).height(40.dp))
         val (text, bold, live) = when (state) {
@@ -148,7 +159,66 @@ private fun TopStrip(state: KeyClient.State, onGame: () -> Unit) {
             is KeyClient.State.NeedCode -> Triple(stringResource(R.string.kb_code_title), null, false)
             else -> Triple("", null, false)
         }
-        if (text.isNotEmpty()) StatusLine(text, bold, live, Modifier.weight(1f))
+        if (text.isNotEmpty()) StatusLine(text, bold, live, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
+        if (state is KeyClient.State.Connected) {
+            val label = stringResource(R.string.logins_open)
+            Box(
+                Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(Palette.Ink).clickable(onClick = onLogins)
+                    .padding(horizontal = 16.dp).semantics { role = Role.Button; contentDescription = label },
+                contentAlignment = Alignment.Center,
+            ) { Text(label, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Palette.Cream, maxLines = 1) }
+        }
+    }
+}
+
+/**
+ * Signing in on the phone and handing the login to the TV: the sites that can go (NYT, Haaretz), whether the phone is signed in to each,
+ * a button for each, and how the last one went. Encrypted for the paired TV only (see KeyClient.sendLogins).
+ */
+@Composable
+private fun LoginsDialog(items: List<app.couch.alhasapa.remote.LoginHandoff.Item>, handoff: KeyClient.Handoff?, onSend: (String) -> Unit, onClose: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+            Column(
+                Modifier.widthIn(max = 560.dp).clip(RoundedCornerShape(24.dp)).background(Palette.Cream)
+                    .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(24.dp)).padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(stringResource(R.string.logins_title), fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+                Text(stringResource(R.string.logins_body), fontSize = 14.sp, color = Palette.Ink2)
+                for (it in items) {
+                    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(Modifier.weight(1f)) {
+                            Text(it.name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
+                            Text(stringResource(if (it.signedIn) R.string.logins_signed_in else R.string.logins_signed_out), fontSize = 13.sp, color = Palette.Ink2)
+                        }
+                        if (it.signedIn) {
+                            val busy = handoff is KeyClient.Handoff.Sending && handoff.site == it.id
+                            Pill(stringResource(if (busy) R.string.logins_sending else R.string.logins_send), dark = true) { if (!busy) onSend(it.id) }
+                        }
+                    }
+                }
+                handoff?.let { h ->
+                    val name = items.firstOrNull { it.id == h.site }?.name.orEmpty()
+                    val line = when (h) {
+                        is KeyClient.Handoff.Sending -> null
+                        is KeyClient.Handoff.Done -> stringResource(R.string.logins_done, name)
+                        is KeyClient.Handoff.Failed -> stringResource(
+                            when (h.why) {
+                                "update-tv" -> R.string.logins_fail_update_tv
+                                "signature" -> R.string.logins_fail_signature
+                                "no-login" -> R.string.logins_fail_no_login
+                                "not-connected" -> R.string.logins_fail_connection
+                                "pair", "update-phone" -> R.string.logins_fail_pair
+                                else -> R.string.logins_fail_other
+                            },
+                        )
+                    }
+                    if (line != null) Text(line, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = if (h is KeyClient.Handoff.Done) Palette.Ink else Palette.Red)
+                }
+                Pill(stringResource(R.string.logins_close), dark = false, onClick = onClose)
+            }
+        }
     }
 }
 
