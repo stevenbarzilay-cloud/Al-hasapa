@@ -196,6 +196,9 @@ fun TuningSheet(
     played: Boolean = false,
     showPlayed: Boolean = false,
     onTogglePlayed: () -> Unit = {},
+    /** On a TV: whether this site is drawn without the graphics chip (see LightDrawing); null hides the choice. */
+    light: Boolean? = null,
+    onLight: (Boolean) -> Unit = {},
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Column(
@@ -267,6 +270,14 @@ fun TuningSheet(
                 }
             }
             if (pageSees != null) Text(stringResource(R.string.display_page_sees, pageSees), fontSize = PanelText, color = Palette.Ink2)
+            if (light != null) {
+                Text(stringResource(R.string.display_drawing), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ModeChip(stringResource(R.string.display_drawing_normal), !light, Modifier.weight(1f)) { if (light) onLight(false) }
+                    ModeChip(stringResource(R.string.display_drawing_light), light, Modifier.weight(1f)) { if (!light) onLight(true) }
+                }
+                Text(stringResource(R.string.display_drawing_hint), fontSize = PanelText, color = Palette.Ink2)
+            }
           }
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

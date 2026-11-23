@@ -2,9 +2,12 @@ package app.couch.alhasapa.diag
 
 import android.app.ActivityManager
 import android.content.Context
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Debug
+import android.view.Display
 import java.util.Date
+import kotlin.math.roundToInt
 
 /**
  * Everything worth knowing when something goes wrong, as plain text that can be photographed: the versions, the memory, the last start,
@@ -24,9 +27,19 @@ object Diagnostics {
             (if (mi.lowMemory) " (LOW)" else "") + ", class ${am?.memoryClass ?: 0} MB"
     }
 
+    /** One line about the screen: the mode the box sends to the TV, and what the app draws at. */
+    fun screen(context: Context): String = runCatching {
+        val dm = context.resources.displayMetrics
+        val d = (context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager).getDisplay(Display.DEFAULT_DISPLAY)
+        val m = d?.mode
+        "screen: ${m?.physicalWidth ?: 0}x${m?.physicalHeight ?: 0} at ${m?.refreshRate?.roundToInt() ?: 0} Hz; " +
+            "the app draws ${dm.widthPixels}x${dm.heightPixels} px, density ${dm.density}"
+    }.getOrDefault("screen: unknown")
+
     fun text(context: Context): String = buildString {
         appendLine(Startup.environment(context))
         appendLine(memory(context))
+        appendLine(screen(context))
         val keys = app.couch.alhasapa.remote.RemoteKeys.ui.value
         if (keys.listening) appendLine("phone keyboard: address ${keys.address.ifBlank { "unknown" }}, phones connected: ${keys.phones.joinToString().ifBlank { "none" }}")
         app.couch.alhasapa.player.WebProfiles.offBecause?.let { appendLine("separate logins: off on this device (the WebView got stuck in: $it)") }
@@ -36,7 +49,7 @@ object Diagnostics {
         if (p != null && p.log.isNotBlank()) {
             appendLine()
             appendLine("--- the previous run, newest first (${if (p.endedInFront) "ended while in use" else "ended normally"}; last seen ${p.lastSeen}) ---")
-            exitReasons(context)?.let { appendLine(it) }
+            exitReasons(context, Flight.previousStart)?.let { appendLine(it) }
             appendLine(newestFirst(p.log, 40))
         }
         appendLine()
@@ -54,7 +67,7 @@ object Diagnostics {
         return buildString {
             appendLine("stopped while in use; last seen ${p.lastSeen}")
             appendLine(Startup.environment(context))
-            exitReasons(context)?.let { appendLine(it) }
+            exitReasons(context, Flight.previousStart)?.let { appendLine(it) }
             appendLine("--- what happened just before (newest first) ---")
             append(newestFirst(p.log, 30))
         }
@@ -66,13 +79,19 @@ object Diagnostics {
     /**
      * Android 11 and later say why the last processes ended. The app's own process is the one that matters (the WebView's page processes
      * end too, "isolated not needed", and are only mentioned); when it froze, Android kept the main thread's stack, which is shown.
+     * Only records from the previous run count ([since], its start): until 1.8.1 an older run's freeze was shown as the previous run's.
+     * A run with no record at all ended with the box: Android keeps nothing for a process that was still there when the power went.
      */
-    private fun exitReasons(context: Context): String? {
+    private fun exitReasons(context: Context, since: Long?): String? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
         return runCatching {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val all = am.getHistoricalProcessExitReasons(context.packageName, 0, 8)
+            val all = am.getHistoricalProcessExitReasons(context.packageName, 0, 8).filter { since == null || it.timestamp >= since }
             val app = all.firstOrNull { it.processName == context.packageName }
+            if (app == null && since != null) {
+                return@runCatching "android has no record of the app ending: it was still running (in the background) when the box was " +
+                    "restarted or unplugged, or the record went with the power"
+            }
             buildString {
                 if (app != null) {
                     append("android says the app ended: ${why(app.reason)} at ${Date(app.timestamp)}")

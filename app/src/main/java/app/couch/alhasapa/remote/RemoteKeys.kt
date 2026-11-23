@@ -61,6 +61,12 @@ object RemoteKeys {
         }
     }
 
+    /** The box is going to standby: stop listening now, without the grace of [foreground]. */
+    fun stopNow() {
+        main.removeCallbacks(stopLater)
+        control.execute { server?.stop() }
+    }
+
     /** What a paired phone typed, on the main thread: into the page of the screen in front. */
     fun deliver(m: KeyLink.Msg) {
         val c = front

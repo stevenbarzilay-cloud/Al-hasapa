@@ -22,7 +22,7 @@ enum class InputMode { NAV, PAW }
 enum class Zone { PAGE, NATIVE }
 
 /** A short message shown on screen when the way of controlling things changes or something is worth knowing. */
-enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW }
+enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW, LIGHT }
 
 /** A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up). */
 enum class TvPanel { INFO }
@@ -138,7 +138,10 @@ class TvController(val enabled: Boolean, density: Float) {
         web?.let { w -> if (!w.hasFocus()) w.requestFocus() }
         // Typing begins (after a pause): if no field has the cursor, the one the highlight is on gets it, so the words land there.
         val now = SystemClock.uptimeMillis()
-        if (now - lastRemoteInput > 3_000) runCatching { pageNav.field { _, _ -> } }
+        if (now - lastRemoteInput > 3_000) {
+            runCatching { pageNav.field { _, _ -> } }
+            app.couch.alhasapa.diag.Flight.log("phone keyboard: typing began")
+        }
         lastRemoteInput = now
         for (d in list) typer(d)
     }

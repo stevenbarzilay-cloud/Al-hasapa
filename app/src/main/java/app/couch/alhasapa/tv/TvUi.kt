@@ -314,6 +314,7 @@ private fun HintPill(c: TvController, modifier: Modifier) {
         TvHint.TYPE -> stringResource(R.string.tv_hint_type)
         TvHint.PHONE -> stringResource(R.string.tv_hint_phone)
         TvHint.PHONE_PAW -> stringResource(R.string.tv_hint_phone_paw)
+        TvHint.LIGHT -> stringResource(R.string.tv_hint_light)
         null -> null
     }
     AnimatedVisibility(visible = text != null, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {

@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.8.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.8.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -272,6 +272,30 @@ call into the same profile code could hold it while the next game asked for its 
   screen, which also says why they are off (each freeze is acted on once, so the same old freeze does not turn them off again);
 - shows the app's own exit (not the page process's "isolated not needed") in the report, with the frozen main thread's stack from
   Android's own record, newest entries first and each stack in its own order.
+
+**Standby, and a game that holds the picture (1.8.1).** The next report (23 November 2026) showed the 1.8 fix working (separate
+logins switched themselves off, Krillion's page loaded) and a different freeze: about 2.5 seconds after the page loaded, the app's main
+thread waited 20 seconds for the screen to take a frame (`HardwareRenderer.nSyncAndDrawFrame`), and it let go only when the box was
+being turned off. The box then did not wake from standby without unplugging, as it has done since the TV app was installed. Android kept
+no record of the app ending, so the app was idle in the background when the power was cut; whether it has anything to do with the wake
+problem cannot be seen from inside it. 1.8.1 takes the app out of it as far as an app can:
+
+- **Standby** (`diag/Standby.kt`): when the screen goes off, the app closes the game (and any sign-in page), sends itself behind the
+  box's home screen (so the box wakes to its own home screen, not to a page) and stops listening for the phone at once. Screen off,
+  screen on, the screensaver, shutdown and every change of the display's state or mode are written to the flight recorder.
+- **A game that holds the picture** (`diag/DrawGuard.kt`): after 4 seconds of the main thread waiting for a frame inside a game, the
+  watchdog's own thread closes the game (in the report, the window going away is what let go), and that site is drawn the light way from
+  then on; if the app is still stuck 10 seconds in, it ends itself, so the box is never left holding a frozen picture. A message says
+  so once the app is free.
+- **Light drawing** (`player/LightDrawing.kt`): the game's WebView gets a software layer, so the page is painted by the processor and
+  the box's graphics only show the finished picture. Slower, with no video or WebGL, but it cannot hold the drawing stuck. Per site, on
+  the TV only, kept on the device (not in the backup). The game menu (☰) has "ציור: מלא / קל" to switch it either way, and a site that
+  opens light says so for a moment.
+- **The report**: Android's records of how the app ended are matched to the run they belong to (the 23 November report showed an older
+  run's freeze as the previous run's end); a run with no record says the box was restarted or unplugged with the app still there; a line
+  with the screen's mode; "typing began" when the phone starts typing; and, a few seconds after a game loads, how many videos (and how
+  many playing), canvases and frames the page has (counts only, nothing else is read). The watchdog no longer reports a freeze when it
+  was itself kept from running (the 2.5-second "freeze" of an idle main thread at start-up in that report).
 
 ## Settings and your own games (1.4)
 

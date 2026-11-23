@@ -129,6 +129,10 @@ fun PlayerScreen(
 
     // The page being shown decides how it is shown; a navigation to another game of the same site can change it.
     var currentUrl by remember { mutableStateOf(session.url) }
+    // On a TV, a site that once held the box's drawing stuck is drawn without the graphics chip (see LightDrawing).
+    val appContext = LocalContext.current.applicationContext
+    var light by remember { mutableStateOf(tv != null && LightDrawing.isOn(appContext, hostOf(session.url))) }
+    LaunchedEffect(Unit) { if (light) { delay(1_500); tv?.notice(app.couch.alhasapa.tv.TvHint.LIGHT) } }
     val resolved = remember(currentUrl, overrides?.toString()) { profiles.resolve(currentUrl, overrides) }
     var draft by remember(resolved.key) { mutableStateOf<DisplayProfile?>(null) }
     var justSaved by remember { mutableStateOf(false) }
@@ -282,6 +286,11 @@ fun PlayerScreen(
                                         tv?.web = this
                                         webChromeClient = video          // a game's full-screen video
                                         usedProfile = PlayerWebView.configure(this, session.profile)
+                                        LightDrawing.front = hostOf(session.url)
+                                        if (light) {
+                                            setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
+                                            app.couch.alhasapa.diag.Flight.log("player: drawn the light way (no graphics chip) for ${hostOf(session.url)}")
+                                        }
                                         Diag.log("player: webview created, profile ${session.profile} -> $usedProfile, display ${profile.mode.id}")
                                         val inj = DisplayInjector(this, DisplayInjector.originRules(session.allowedHosts, session.roaming))
                                         inj.apply(profile)                          // before the first load, so the first page is already right
@@ -297,7 +306,7 @@ fun PlayerScreen(
                                                 Toast.makeText(ctx, msg, Toast.LENGTH_SHORT).show()
                                             },
                                             onStarted = { loadError = null },
-                                            onFinished = { },
+                                            onFinished = { if (tv != null) PageProbe.later(this) },
                                             onLoadError = { loadError = it },
                                             onRenderGone = {
                                                 // A new WebView, the same game. Twice within two minutes is likely the box running out of memory:
@@ -307,7 +316,7 @@ fun PlayerScreen(
                                                 // (The panel's "try again" builds the new WebView; a new one started here would clear the panel.)
                                                 if (pageDeaths.size >= 2) loadError = ctx.getString(R.string.player_page_died) else generation++
                                             },
-                                            onUrl = { currentUrl = it },
+                                            onUrl = { currentUrl = it; LightDrawing.front = hostOf(it) },
                                             onPageBegan = { inj.onPageStarted() },
                                         )
                                         loadUrl(session.url)
@@ -387,6 +396,9 @@ fun PlayerScreen(
                         played = played,
                         showPlayed = !session.loginMode,
                         onTogglePlayed = onTogglePlayed,
+                        // On a TV only: draw this site with or without the graphics chip (a new WebView, the same game).
+                        light = if (tv != null) light else null,
+                        onLight = { on -> LightDrawing.set(appContext, hostOf(currentUrl), on); light = on; generation++ },
                     )
                 }
             }

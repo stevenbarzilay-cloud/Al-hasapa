@@ -111,6 +111,64 @@ class FlightTest {
     }
 
     @Test
+    fun aWatchdogThatWasItselfKeptFromRunningReportsNoFreeze() {
+        var now = 0L
+        var stalled = false
+        val w = Watchdog(Handler(Looper.getMainLooper()), clock = { now }, onStall = { _, _ -> stalled = true })
+        w.check()                                               // asks
+        shadowOf(Looper.getMainLooper()).idle()                 // the idle main thread answers at once
+        now = 9_000; w.check()                                  // the watchdog itself did not run for nine seconds
+        assertFalse("the main thread was free all along (the false 2.5 s freeze of the 23 Nov report)", stalled)
+        now = 9_300; shadowOf(Looper.getMainLooper()).idle(); now = 9_600; w.check()
+        assertFalse(stalled)
+    }
+
+    @Test
+    fun whileStuckTheWatchdogKeepsSayingForHowLongAndWhere() {
+        var now = 0L
+        val stuck = ArrayList<Long>()
+        var recovered = -1L
+        val w = Watchdog(Handler(Looper.getMainLooper()), clock = { now }, onStall = { _, _ -> }, onRecover = { recovered = it },
+            onStuck = { ms, at -> stuck += ms; assertTrue(at.isNotEmpty()) })
+        w.check()
+        now = 3_000; w.check()                                  // the freeze is reported (onStall)
+        now = 3_500; w.check(); now = 4_000; w.check()          // and then followed
+        assertEquals(listOf(3_500L, 4_000L), stuck)
+        shadowOf(Looper.getMainLooper()).idle()                 // answered at 4 000
+        now = 4_100; w.check()
+        assertEquals(4_000L, recovered)
+        now = 4_600; w.check(); assertEquals("nothing more once free", 2, stuck.size)
+    }
+
+    @Test
+    fun aFreezeWaitingForTheScreenIsLabelledSo() {
+        Flight.start(context)
+        val at = arrayOf(
+            StackTraceElement("android.graphics.HardwareRenderer", "nSyncAndDrawFrame", null, -2),
+            StackTraceElement("android.graphics.HardwareRenderer", "syncAndDrawFrame", "HardwareRenderer.java", 433),
+            StackTraceElement("android.view.ThreadedRenderer", "draw", "ThreadedRenderer.java", 658),
+        )
+        assertTrue(Watchdog.drawing(at))
+        assertFalse(Watchdog.drawing(Thread.currentThread().stackTrace))
+        Watchdog.reportStall(2_998, at)
+        val log = file("flight.txt").readText()
+        assertTrue(log, log.contains("MAIN THREAD STUCK for 2998 ms (waiting for the screen to take a frame)"))
+    }
+
+    @Test
+    fun eachRunKnowsWhenThePreviousOneStarted() {
+        Flight.drainForTests()
+        file("run.txt").delete()
+        Flight.start(context)
+        assertNull("not known before 1.8.1", Flight.previousStart)
+        val after = System.currentTimeMillis()
+        Flight.drainForTests()
+        Flight.start(context)
+        val p = Flight.previousStart!!
+        assertTrue("$p", p in (after - 60_000)..after)
+    }
+
+    @Test
     fun aFreezeIsWrittenToTheFileAtOnce() {
         Flight.start(context)
         Watchdog.reportStall(4_000, Thread.currentThread().stackTrace)

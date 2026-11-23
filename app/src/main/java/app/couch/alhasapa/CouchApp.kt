@@ -10,12 +10,17 @@ import app.couch.alhasapa.data.FileStateStore
 import app.couch.alhasapa.data.StateRepository
 import app.couch.alhasapa.diag.CrashReport
 import app.couch.alhasapa.diag.Diagnostics
+import app.couch.alhasapa.diag.DrawGuard
 import app.couch.alhasapa.diag.Flight
+import app.couch.alhasapa.diag.Standby
 import app.couch.alhasapa.diag.Startup
 import app.couch.alhasapa.diag.Watchdog
 import app.couch.alhasapa.remote.RemoteKeys
+import app.couch.alhasapa.player.LightDrawing
+import app.couch.alhasapa.player.PlayerActivity
 import app.couch.alhasapa.tv.TvMode
 import java.io.File
+import java.lang.ref.WeakReference
 
 /** Owns the two things every screen shares: the state and the catalogue. Created lazily, so tests that never touch them pay nothing. */
 class CouchApp : Application() {
@@ -26,13 +31,42 @@ class CouchApp : Application() {
         CrashReport.install(this)
         // Before any WebView: if the WebView got stuck in its profile code last time, profiles stay off on this device (games open).
         app.couch.alhasapa.player.WebProfiles.init(this)
-        registerActivityLifecycleCallbacks(Visibility(this))
+        val screens = Visibility(this)
+        registerActivityLifecycleCallbacks(screens)
+        visibility = screens
+        val tv = TvMode.isTelevision(this)
+        // On a TV: the box going to standby closes the game and puts the app behind the home screen (see Standby).
+        if (tv) Standby.install(this, screens::alive) { it is MainActivity }
         // Not under the unit tests: their main looper is paused on purpose, which a watchdog would take for a frozen app.
         if (Build.FINGERPRINT != "robolectric") {
-            Watchdog(onSample = { Flight.log(Diagnostics.memory(this)) }).start()
+            val guard = if (tv) drawGuard(screens) else null
+            Watchdog(
+                onSample = { Flight.log(Diagnostics.memory(this)) },
+                onRecover = { ms -> Flight.log("${Watchdog.FREE} after $ms ms"); guard?.onRecover() },
+                onStuck = { ms, at -> guard?.onStuck(ms, at) },
+            ).start()
         }
         Flight.log(Diagnostics.memory(this))
+        if (tv) Flight.log(Diagnostics.screen(this))
     }
+
+    /** The app's screens, for the standby and the draw guard (null before onCreate, and in tests that build no app). */
+    var visibility: Visibility? = null
+        private set
+
+    /** On a TV, a game that holds the drawing stuck is closed (see DrawGuard). */
+    private fun drawGuard(screens: Visibility) = DrawGuard(
+        front = { screens.front },
+        isGame = { it is PlayerActivity },
+        onLight = { host -> LightDrawing.set(this, host, true) },
+        host = { LightDrawing.front },
+        afterClose = {
+            android.os.Handler(mainLooper).post {
+                android.widget.Toast.makeText(this, R.string.draw_closed, android.widget.Toast.LENGTH_LONG).show()
+            }
+        },
+        end = { android.os.Process.killProcess(android.os.Process.myPid()) },
+    )
 
     // Deprecated from Android 14 (it no longer sends these while in front); Android 9, which the Mi Box runs, still does.
     @Suppress("DEPRECATION")
@@ -57,18 +91,32 @@ class CouchApp : Application() {
      * Which of the app's screens are showing: the flight recorder's "was it in front when it ended", and on a TV the phone-as-keyboard
      * link, which listens only while the app is in front.
      */
-    private class Visibility(private val app: CouchApp) : ActivityLifecycleCallbacks {
+    class Visibility(private val app: CouchApp) : ActivityLifecycleCallbacks {
         private var started = 0
         private val tv = TvMode.isTelevision(app)
+        private val live = ArrayList<WeakReference<Activity>>()
 
-        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) = Flight.log("${activity.javaClass.simpleName} created")
+        /** The screen in front (resumed), read from other threads. */
+        @Volatile var front: Activity? = null
+            private set
+
+        /** The screens that exist and are not closing, oldest first. */
+        fun alive(): List<Activity> = synchronized(live) { live.mapNotNull { it.get() } }.filter { !it.isFinishing }
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
+            synchronized(live) { live.removeAll { it.get() == null }; live += WeakReference(activity) }
+            Flight.log("${activity.javaClass.simpleName} created")
+        }
         override fun onActivityStarted(activity: Activity) {
             started++
             Flight.session(true, activity.javaClass.simpleName)
             if (tv && started == 1 && Build.FINGERPRINT != "robolectric") RemoteKeys.foreground(app, true)
         }
-        override fun onActivityResumed(activity: Activity) = Flight.log("${activity.javaClass.simpleName} in front")
-        override fun onActivityPaused(activity: Activity) = Flight.log("${activity.javaClass.simpleName} paused")
+        override fun onActivityResumed(activity: Activity) { front = activity; Flight.log("${activity.javaClass.simpleName} in front") }
+        override fun onActivityPaused(activity: Activity) {
+            if (front === activity) front = null
+            Flight.log("${activity.javaClass.simpleName} paused")
+        }
         override fun onActivityStopped(activity: Activity) {
             started = (started - 1).coerceAtLeast(0)
             if (started == 0) {
@@ -77,7 +125,10 @@ class CouchApp : Application() {
             }
         }
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
-        override fun onActivityDestroyed(activity: Activity) = Flight.log("${activity.javaClass.simpleName} closed")
+        override fun onActivityDestroyed(activity: Activity) {
+            synchronized(live) { live.removeAll { it.get() == null || it.get() === activity } }
+            Flight.log("${activity.javaClass.simpleName} closed")
+        }
     }
 
     val repo: StateRepository by lazy { StateRepository(FileStateStore(File(filesDir, "state.json"))) }

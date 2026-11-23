@@ -22,6 +22,7 @@ object Flight {
     private const val FILE = "flight.txt"
     private const val PREVIOUS = "flight-previous.txt"
     private const val SESSION = "session.txt"
+    private const val RUN = "run.txt"
     private const val MAX_LINES = 300
 
     private val lines = ArrayDeque<String>()
@@ -42,6 +43,13 @@ object Flight {
     @Volatile var previous: Previous? = null
         private set
 
+    /**
+     * When the previous run started (the wall clock, ms), or null when not known (before 1.8.1). Android's records of how the app's
+     * processes ended that are older than this belong to earlier runs, not to [previous].
+     */
+    @Volatile var previousStart: Long? = null
+        private set
+
     /** The run before [previous]: kept one start longer, so a freeze that was reported once still counts as evidence. */
     @Volatile var older: String = ""
         private set
@@ -53,6 +61,8 @@ object Flight {
         val session = read(File(d, SESSION))
         val log = read(File(d, FILE))
         older = read(File(d, PREVIOUS)).orEmpty()
+        previousStart = read(File(d, RUN))?.trim()?.toLongOrNull()
+        runCatching { File(d, RUN).writeText(System.currentTimeMillis().toString()) }
         if (log != null) runCatching { File(d, PREVIOUS).writeText(log) }
         previous = Previous(
             endedInFront = session?.startsWith("front") == true,
@@ -148,6 +158,7 @@ object Flight {
     internal fun resetForTests() {
         synchronized(lines) { lines.clear() }
         previous = null
+        previousStart = null
         dir = null
     }
 }
