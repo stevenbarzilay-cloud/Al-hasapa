@@ -3,11 +3,11 @@
 The latest builds, published here at fixed addresses so they can be fetched without a computer: the TV build with the Downloader app on
 the TV, the phone build with the phone's browser.
 
-**TV (1.7.0-tv):**
+**TV (1.8.0-tv):**
 
     https://raw.githubusercontent.com/stevenbarzilay-cloud/Al-hasapa/ccr-e79b67fd-boiaic/dist/al-hasapa-tv.apk
 
-**Phone (1.7.0):**
+**Phone (1.8.0):**
 
     https://raw.githubusercontent.com/stevenbarzilay-cloud/Al-hasapa/ccr-e79b67fd-boiaic/dist/al-hasapa-phone.apk
 
