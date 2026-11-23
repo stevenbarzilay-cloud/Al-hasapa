@@ -62,18 +62,6 @@ class KeyLinkTest {
     }
 
     @Test
-    fun theDifferenceRubsOutOnlyWhatChangedAndNeverHalfACharacter() {
-        assertEquals(TextMirror.Edit(0, "l"), TextMirror.diff("hel", "hell"))
-        assertEquals(TextMirror.Edit(3, "he "), TextMirror.diff("teh ", "the "))
-        assertEquals(TextMirror.Edit(6, "Hello "), TextMirror.diff("hello ", "Hello "))
-        assertEquals(TextMirror.Edit(1, ""), TextMirror.diff("abc", "ab"))
-        assertEquals("an emoji is one character", TextMirror.Edit(1, ""), TextMirror.diff("a😀", "a"))
-        assertEquals(TextMirror.Edit(1, "😃"), TextMirror.diff("a😀", "a😃"))
-        assertEquals(TextMirror.Edit(1, "ם"), TextMirror.diff("שלו", "שלם"))
-        assertTrue(TextMirror.diff("same", "same").isEmpty)
-    }
-
-    @Test
     fun aMoveOrScrollIsNeverHugeOrNotANumber() {
         assertEquals(Msg.Move(400f, -400f), KeyLink.decode("{\"t\":\"move\",\"dx\":99999,\"dy\":-99999}"))
         assertEquals(Msg.Move(0f, 0f), KeyLink.decode("{\"t\":\"move\",\"dx\":\"NaN\",\"dy\":\"x\"}"))

@@ -26,6 +26,9 @@
     <string name="accounts_title">החשבונות שלנו</string>
     <string name="accounts_intro">כאן מתחברים פעם אחת לאתרים שיש לנו מנוי בהם. ההתחברות נשמרת רק באפליקציה הזאת, לא בכרום, ונשארת גם אחרי שסוגרים אותה.</string>
     <string name="accounts_google">גוגל לא מאפשרת להתחבר עם "המשך עם Google" בתוך אפליקציה, ואנחנו לא עוקפים את זה. מתחברים עם מייל וסיסמה. אם באתר אין דרך אחרת, אפשר "לפתוח בכרום".</string>
+    <string name="accounts_profiles_stuck">במכשיר הזה ה-WebView נתקע כשיצר פרופיל נפרד לכניסות, ולכן המשחקים לא נפתחו. מאז כל האתרים חולקים כניסה אחת (מי שהתחבר קודם צריך להתחבר שוב, פעם אחת), ושני חשבונות לינקדאין נפרדים לא אפשריים כאן. כשה-WebView יתעדכן זה ינסה שוב לבד.</string>
+    <string name="accounts_profiles_retry">לנסות שוב כניסות נפרדות</string>
+    <string name="accounts_profiles_retry_done">ננסה שוב בפעם הבאה שייפתח משחק. אם הוא שוב ייתקע, זה ייכבה שוב לבד.</string>
     <string name="accounts_no_profiles">הגרסה של Android System WebView בטלפון ישנה מדי לשמירת שני חשבונות לינקדאין נפרדים. עדכנו אותה ב-Google Play. עד אז כל האתרים חולקים התחברות אחת.</string>
     <string name="accounts_logged_in">מחובר</string>
     <string name="accounts_logged_out">לא מחובר</string>
@@ -131,8 +134,6 @@
     <string name="kb_looking">מחפשים את הטלוויזיה בבית…</string>
     <string name="kb_connecting">מתחברים לטלוויזיה…</string>
     <string name="kb_connected">מחובר לטלוויזיה</string>
-    <string name="kb_line_hint">מה שמקלידים כאן נכתב בטלוויזיה</string>
-    <string name="kb_tap_to_type">לגעת כאן כדי להקליד</string>
     <string name="kb_code_title">בטלוויזיה מופיע קוד של 4 ספרות</string>
     <string name="kb_code_body">מקלידים אותו כאן. רק בפעם הראשונה, מאז הם מכירים.</string>
     <string name="kb_code_wrong">הקוד לא נכון. נשארו %1$d ניסיונות.</string>
@@ -146,8 +147,6 @@
     <string name="kb_permission">כדי למצוא את הטלוויזיה צריך לאשר לאפליקציה גישה למכשירים ברשת הביתית.</string>
     <string name="kb_permission_button">לאשר</string>
     <string name="kb_wait">אחרי כמה קודים שגויים הטלוויזיה עוצרת את הצימוד לכמה דקות. ננסה שוב עוד מעט.</string>
-    <string name="kb_esc">Esc</string>
-    <string name="kb_tab">Tab</string>
     <string name="kb_left">חץ שמאלה</string>
     <string name="kb_right">חץ ימינה</string>
     <string name="kb_up">חץ למעלה</string>

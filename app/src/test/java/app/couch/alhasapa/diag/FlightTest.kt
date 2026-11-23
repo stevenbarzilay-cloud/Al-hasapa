@@ -116,4 +116,17 @@ class FlightTest {
         Watchdog.reportStall(4_000, Thread.currentThread().stackTrace)
         assertTrue(file("flight.txt").readText().contains("MAIN THREAD STUCK for 4000 ms"))
     }
+
+    @Test
+    fun aFrozenThreadsStackStaysWholeUnderItsLineWhenTheLogIsShownNewestFirst() {
+        Flight.drainForTests()
+        file("session.txt").writeText("front 13:36:30.028 PlayerActivity")
+        file("flight.txt").writeText("13:36:20.000 player: page loaded\n13:36:33.100 MAIN THREAD STUCK for 2600 ms, at:\n    at a.b.Inner(x:1)\n    at a.b.Outer(x:2)\n13:36:34.000 later")
+        Flight.start(context)
+        val r = Diagnostics.unexpectedEnd(context)!!
+        val stuck = r.indexOf("MAIN THREAD STUCK"); val inner = r.indexOf("a.b.Inner"); val outer = r.indexOf("a.b.Outer")
+        assertTrue("the newest entry first", r.indexOf("later") < stuck)
+        assertTrue("the stack under its line, innermost first: $r", stuck < inner && inner < outer)
+        assertTrue(r.indexOf("page loaded") > outer)
+    }
 }

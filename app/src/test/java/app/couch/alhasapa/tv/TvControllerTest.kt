@@ -381,4 +381,17 @@ class TvControllerTest {
         c.remotePointer(false)
         assertFalse(c.dragging); assertEquals(listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP), seen)
     }
+
+    @Test
+    fun whenThePhoneStartsTypingTheHighlightedFieldGetsTheCursorFirst() {
+        var asked = 0
+        val page = object : PageNav by FakePage() { override fun field(cb: (editable: Boolean, password: Boolean) -> Unit) { asked++; cb(true, false) } }
+        val c = TvController(true, 1f); c.pageNav = page; val typed = ArrayList<Delivery>(); c.typer = { typed += it }
+        c.remoteInput(listOf(Delivery.Text("a"))); c.remoteInput(listOf(Delivery.Text("b")))
+        assertEquals("once, when typing begins", 1, asked)
+        assertEquals(listOf<Delivery>(Delivery.Text("a"), Delivery.Text("b")), typed)
+        idle(3_100)
+        c.remoteInput(listOf(Delivery.Text("c")))
+        assertEquals("and again after a pause", 2, asked)
+    }
 }

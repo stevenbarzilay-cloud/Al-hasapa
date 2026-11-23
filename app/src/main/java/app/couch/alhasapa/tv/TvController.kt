@@ -136,8 +136,14 @@ class TvController(val enabled: Boolean, density: Float) {
     fun remoteInput(list: List<Delivery>) {
         if (!enabled) return
         web?.let { w -> if (!w.hasFocus()) w.requestFocus() }
+        // Typing begins (after a pause): if no field has the cursor, the one the highlight is on gets it, so the words land there.
+        val now = SystemClock.uptimeMillis()
+        if (now - lastRemoteInput > 3_000) runCatching { pageNav.field { _, _ -> } }
+        lastRemoteInput = now
         for (d in list) typer(d)
     }
+
+    private var lastRemoteInput = Long.MIN_VALUE / 2
 
     // ---- the phone's touchpad drives the same paw ----
 

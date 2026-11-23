@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.7.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.8.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -259,6 +259,20 @@ nothing runs while nothing is pressed (1.3 and 1.4 redrew the focus ring on ever
 - A game whose page process dies is reloaded once; if it dies again within two minutes (most likely the box out of memory) the player
   stops and says so, instead of reloading forever.
 
+**Games that did not open (1.8).** On a Xiaomi TV (Android 11, WebView 158) in November 2026 no game opened: the report showed the main
+thread stuck inside the WebView's `getOrCreateProfile`, called while the player was being built, and Android closed the frozen app. The
+most likely cause was the app itself: 1.5 to 1.7 saved the profile's cookies from a background thread whenever a game was left, and that
+call into the same profile code could hold it while the next game asked for its profile. 1.8:
+
+- saves cookies only after a sign-in (the WebView saves them on its own anyway), and only on the main thread;
+- puts a safety net around every call into the profile code: a mark on disk before, removed after. If the WebView never comes back, the
+  mark is still there at the next start (and the flight recorder holds the frozen stack; a slow call that did come back does not count):
+  separate logins are then turned off on this device, every site uses the app's single default profile (so each site needs one more
+  sign-in), and the games open. They come back by themselves when the WebView is updated, or by hand with "לנסות שוב" in the accounts
+  screen, which also says why they are off (each freeze is acted on once, so the same old freeze does not turn them off again);
+- shows the app's own exit (not the page process's "isolated not needed") in the report, with the frozen main thread's stack from
+  Android's own record, newest entries first and each stack in its own order.
+
 ## Settings and your own games (1.4)
 
 The hub has a **הגדרות** tab (on the phone and the TV):
@@ -274,27 +288,33 @@ The hub has a **הגדרות** tab (on the phone and the TV):
 
 Google sign-in is not offered anywhere, because Google blocks it inside an embedded browser; use email and password.
 
-## The phone as the TV's keyboard (1.6)
+## The phone as the TV's keyboard (1.6; sideways, with a keyboard of its own, since 1.8)
 
 Typing with a remote is slow, and games like Krillion are about typing fast. With both apps installed, the phone becomes the TV
 app's keyboard:
 
 - **On the phone**, the hub's header has a switch: **משחק** (play on the phone, as always) and **מקלדת לטלוויזיה** (keyboard mode).
   A long press on the app's icon has "מקלדת לטלוויזיה" too. "משחק" at the top of keyboard mode goes back.
-- **The first time**, the TV shows a card with four digits ("טלפון רוצה להקליד כאן"); type them on the phone. After that they know
-  each other and connect by themselves whenever keyboard mode opens and the TV app is in front.
-- **Typing**: the phone's own keyboard (Gboard, Hebrew or English) is up, and every letter goes to the TV as it is typed, into whatever
-  the TV shows: the game in front, or a field of the hub (the settings' links are much easier this way). English letters, digits and
-  punctuation arrive as real key presses (a desktop game that listens for keys gets them); Hebrew and emoji are inserted into the field.
-  Suggestions and corrections are fine: only the difference is sent, so the TV's field always matches the phone's line. Under the line:
-  **Esc**, **Tab**, the four **arrows** (held down, the game sees the key held) and **⌫**; and a big **Enter** with a cat's paw that
-  presses it (it comes down on every Enter, the keyboard's own too).
-- **The paw's touchpad (1.7)**, for the few places the remote does not reach (most of the app is easier with the remote): a dark tab
-  with a red paw sticks out of the right edge of keyboard mode. Pull it out (or touch it) and the touchpad slides in below the switch;
-  push it back, or touch the tab or ✕, and the whole screen is the keyboard's again. While it is out the TV shows the paw (the same
-  paw as the remote's, so the dock's paw button lights up): one finger moves it (faster swipes go further), a short touch taps where
-  it is, two fingers scroll the page under it, "לחיצה" taps, "גרירה" holds the finger down so moves drag (touch it again to let go).
-  Putting the pad away hides the paw again, unless the remote had turned it on.
+- **Keyboard mode turns the phone on its side, and the whole screen is the keyboard** (1.8): a keyboard drawn by the app, in the app's
+  own look. There is no line to type into on the phone: what is typed shows up on the TV, in whatever the TV shows (the game in front,
+  or a field of the hub; the settings' links are much easier this way). The phone's own keyboard never opens, and the system bars hide.
+- **The keys**: Esc and the digits; the letters as on a US keyboard, or Hebrew as on an Israeli one, or symbols ("עב", "EN", "123",
+  "ABC" switch between them); Shift (once for one capital, twice to stay on, a third time off); a wide space bar; and on the right
+  **⌫** (hold to keep deleting), a tall **Enter** with the cat's paw that comes down on it at every press, and the four **arrows** (held
+  down, the game sees the key held, so a game that moves while an arrow is held works). A key goes the moment the finger touches it, with
+  a light tick. English letters, digits and punctuation arrive as real key presses (a desktop game that listens for keys gets them);
+  Hebrew is inserted into the field. When typing starts and nothing on the page has the keyboard's focus, the TV gives it to the field
+  the remote's highlight is on (or was on last).
+- **The first time**, the TV shows a card with four digits ("טלפון רוצה להקליד כאן"); type them on the phone's number pad. After that
+  they know each other and connect by themselves whenever keyboard mode opens and the TV app is in front.
+- **The paw's touchpad**, for the few places the remote does not reach (most of the app is easier with the remote): a dark tab with a
+  red paw (it waves now and then) sticks out of the right edge. **Pull it** to the left: a striped cat's arm stretches out behind it,
+  the touchpad (a pink cushion with stitching) comes in after it, and the keyboard gets narrower to make room, as far as it is pulled.
+  Let go past a third of the way (or flick it) and it opens; less, and it springs back. Touching the tab opens or closes it too; push
+  it back, or press ✕, and the whole screen is the keyboard's again. While it is out the TV shows the paw (the same paw as the remote's,
+  so the dock's paw button lights up): one finger moves it (faster swipes go further), a short touch taps where it is (a paw print
+  shows where you touched), two fingers scroll the page under it, "לחיצה" taps, "גרירה" holds the finger down so moves drag (touch it
+  again to let go). Putting the pad away hides the paw again, unless the remote had turned it on.
 - **On the TV**, a small red phone at the top of the dock shows that a phone is connected.
 
 How it works: the TV app listens on the home network while it is in front (port 47123, announced as `_couchkeys._tcp`), and the phone finds
@@ -304,9 +324,10 @@ at a human pace, and the TV sends back nothing but the name of the screen it sho
 the local network". If they cannot see each other (a guest network that keeps devices apart, for one), the phone says so and offers to
 type the TV's address.
 
-Not checked on the devices (nothing here can run them): the connection between the Pixel and the Mi Box, and how instant it feels. The
-link itself is tested end to end over a real socket (pairing with a wrong and a right code, typing, keys held, coming back without a
-code), and so is the way the phone's keyboard edits become keystrokes.
+Not checked on the devices (nothing here can run them): the connection between the Pixel and the Mi Box, how instant it feels, and how
+the keyboard and the pull feel under a thumb. The link itself is tested end to end over a real socket (pairing with a wrong and a right
+code, typing, keys held, coming back without a code); the keyboard is tested on a landscape phone screen in Robolectric (every layout,
+Shift and caps lock, held arrows, the pull that springs back and the one that opens, the touchpad's moves, taps and scrolls).
 
 ## Check on the phone
 

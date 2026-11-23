@@ -17,7 +17,7 @@ class Watchdog(
     private val clock: () -> Long = { SystemClock.uptimeMillis() },
     private val stallMs: Long = 2_500,
     private val onStall: (stuckMs: Long, where: Array<StackTraceElement>) -> Unit = { ms, at -> reportStall(ms, at) },
-    private val onRecover: (stuckMs: Long) -> Unit = { ms -> Flight.log("main thread free again after $ms ms") },
+    private val onRecover: (stuckMs: Long) -> Unit = { ms -> Flight.log("$FREE after $ms ms") },
     private val sampleEveryMs: Long = 60_000,
     private val onSample: () -> Unit = {},
 ) {
@@ -56,9 +56,13 @@ class Watchdog(
     }
 
     companion object {
+        /** How the flight recorder's lines about a freeze begin (read back by [Flight.freezes]; the same since 1.5). */
+        const val STUCK = "MAIN THREAD STUCK"
+        const val FREE = "main thread free again"
+
         fun reportStall(ms: Long, at: Array<StackTraceElement>) {
             val frames = at.take(14).joinToString("\n") { "    at $it" }
-            Flight.log("MAIN THREAD STUCK for $ms ms, at:\n$frames")
+            Flight.log("$STUCK for $ms ms, at:\n$frames")
             Flight.flushNow()           // the system may close the app any second now
         }
     }

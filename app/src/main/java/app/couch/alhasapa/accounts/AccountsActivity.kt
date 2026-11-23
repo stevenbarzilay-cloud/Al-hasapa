@@ -133,7 +133,14 @@ fun AccountsScreen(
             Text(stringResource(R.string.accounts_title), fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.semantics { heading() })
             Text(stringResource(R.string.accounts_intro), fontSize = 17.sp, color = Palette.Ink2)
             Note(stringResource(R.string.accounts_google))
-            if (!WebProfiles.supported()) Note(stringResource(R.string.accounts_no_profiles), warning = true)
+            val stuck = WebProfiles.offBecause
+            if (stuck != null) {
+                // Separate logins were switched off because the WebView got stuck creating one (see WebProfiles): say so, offer to retry.
+                val context = androidx.compose.ui.platform.LocalContext.current
+                var retried by remember { mutableStateOf(false) }
+                Note(stringResource(if (retried) R.string.accounts_profiles_retry_done else R.string.accounts_profiles_stuck), warning = true)
+                if (!retried) TextButton(stringResource(R.string.accounts_profiles_retry)) { WebProfiles.retry(context); retried = true }
+            } else if (!WebProfiles.supported()) Note(stringResource(R.string.accounts_no_profiles), warning = true)
             for (a in accounts) AccountCard(a, refresh, onLogin, onChrome)
             Spacer(Modifier.height(24.dp))
         }

@@ -1,5 +1,6 @@
 package app.couch.alhasapa.keyboard
 
+import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +12,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import app.couch.alhasapa.diag.Flight
 import app.couch.alhasapa.remote.KeyClient
 import app.couch.alhasapa.remote.KeyLink
@@ -34,6 +38,9 @@ class KeyboardModeActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Sideways, and the whole screen: the phone is a keyboard (and a touchpad), and the typing shows on the TV.
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        hideSystemBars()
         client = KeyClient(this)
         val sink = object : KeySink {
             override fun text(s: String) = client.send(KeyLink.Msg.Text(s))
@@ -61,6 +68,19 @@ class KeyboardModeActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         client.stop()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
     }
 
     /** Android 17 asks the person before an app may reach devices on the home network (the TV). Earlier versions do not. */

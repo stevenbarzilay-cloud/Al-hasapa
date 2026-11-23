@@ -42,12 +42,17 @@ object Flight {
     @Volatile var previous: Previous? = null
         private set
 
+    /** The run before [previous]: kept one start longer, so a freeze that was reported once still counts as evidence. */
+    @Volatile var older: String = ""
+        private set
+
     /** Once per process, as early as possible. */
     fun start(context: Context) {
         val d = context.filesDir
         dir = d
         val session = read(File(d, SESSION))
         val log = read(File(d, FILE))
+        older = read(File(d, PREVIOUS)).orEmpty()
         if (log != null) runCatching { File(d, PREVIOUS).writeText(log) }
         previous = Previous(
             endedInFront = session?.startsWith("front") == true,
@@ -84,6 +89,32 @@ object Flight {
 
     /** The last [n] lines of this run. */
     fun tail(n: Int): String = synchronized(lines) { lines.toList().takeLast(n).joinToString("\n") }
+
+    /**
+     * The log as entries: a line that starts with a time, with the lines after it that do not (a stack's frames), so an entry is never
+     * cut in two when the log is shown newest first.
+     */
+    fun entries(log: String): List<String> {
+        val out = ArrayList<String>()
+        for (line in log.lines()) {
+            if (line.isEmpty()) continue
+            if (STAMP.matches(line.take(12)) || out.isEmpty()) out += line else out[out.size - 1] = out.last() + "\n" + line
+        }
+        return out
+    }
+
+    /**
+     * The freezes of the main thread with [frame] in their stack that the last two runs never came out of (the watchdog writes a line
+     * when the thread is free again; a slow call that did come back is not one), each entry whole.
+     */
+    fun freezes(frame: String): List<String> = listOf(previous?.log.orEmpty(), older).flatMap { log ->
+        val list = entries(log)
+        list.filterIndexed { i, e -> e.contains(Watchdog.STUCK) && e.contains(frame) && list.drop(i + 1).none { it.contains(Watchdog.FREE) } }
+    }
+
+    fun froze(frame: String): Boolean = freezes(frame).isNotEmpty()
+
+    private val STAMP = Regex("\\d{2}:\\d{2}:\\d{2}\\.\\d{3}")
 
     /** The previous run's report has been seen: it is not shown again on the next start. */
     fun acknowledgePrevious() {

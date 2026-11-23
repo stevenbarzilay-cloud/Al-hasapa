@@ -46,12 +46,14 @@
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
             android:theme="@style/Theme.AlHasapa" />
 
-        <!-- Keyboard mode: the phone as the TV app's keyboard. The phone's own keyboard stays up while it is open. -->
+        <!-- Keyboard mode: the phone, sideways, is the TV app's keyboard (its own keys; the system keyboard never comes up). -->
         <activity
             android:name=".keyboard.KeyboardModeActivity"
             android:exported="false"
+            tools:ignore="DiscouragedApi"
+            android:screenOrientation="sensorLandscape"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
-            android:windowSoftInputMode="stateAlwaysVisible|adjustResize"
+            android:windowSoftInputMode="stateAlwaysHidden"
             android:theme="@style/Theme.AlHasapa" />
 
         <!-- The share target: "Share" in any game or app, choose this one, and the result lands on tonight's page. -->

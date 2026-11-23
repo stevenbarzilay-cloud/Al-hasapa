@@ -5,14 +5,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.click
-import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.remote.KeyClient
 import app.couch.alhasapa.remote.KeyLink
@@ -24,9 +22,9 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 
-/** Keyboard mode on the phone, screen by screen, with a fake link to the TV. */
+/** Keyboard mode on the phone, sideways, screen by screen, with a fake link to the TV. */
 @RunWith(AndroidJUnit4::class)
-@Config(sdk = [37], qualifiers = "w411dp-h914dp")
+@Config(sdk = [37], qualifiers = "w914dp-h411dp-land")
 class KeyboardModeScreenTest {
     @get:Rule val rule = createComposeRule()
     private val sent = ArrayList<String>()
@@ -48,8 +46,10 @@ class KeyboardModeScreenTest {
     }
     private var state by mutableStateOf<KeyClient.State>(KeyClient.State.Looking)
     private var game = 0
+    private val tab = hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")
 
     private fun show() = rule.setContent { AlHasapaTheme { KeyboardModeScreen(state, sink, onGame = { game++ }) } }
+    private fun key(d: String) = rule.onNode(hasContentDescription(d))
 
     @Test
     fun theSwitchAtTheTopGoesBackToPlaying() {
@@ -60,57 +60,51 @@ class KeyboardModeScreenTest {
     }
 
     @Test
-    fun itSaysWhatItIsDoingOnTheWayToTheTv() {
-        show()
-        rule.onNodeWithText("מחפשים את הטלוויזיה בבית…").assertIsDisplayed()
-        state = KeyClient.State.Connecting("192.168.1.23:47123"); rule.waitForIdle()
-        rule.onNodeWithText("מתחברים לטלוויזיה…").assertIsDisplayed()
-        state = KeyClient.State.NotFound(KeyClient.NO_TV); rule.waitForIdle()
-        rule.onNodeWithText("לא מצאנו את הטלוויזיה").assertIsDisplayed()
-        rule.onNodeWithText("לחפש שוב").performClick()
-        rule.onNodeWithText("להקליד כתובת").performClick()
-        rule.onNodeWithText("להתחבר").performClick()
-        assertEquals(listOf("retry", "address:"), sent)
-        state = KeyClient.State.NotFound(KeyClient.NO_PERMISSION); rule.waitForIdle()
-        rule.onNodeWithText("לאשר").performClick()
-        assertEquals("permission", sent.last())
-    }
-
-    @Test
-    fun theFourDigitsGoOutAsSoonAsTheyAreTyped() {
-        state = KeyClient.State.NeedCode("MiBOX4"); show()
-        rule.onNodeWithText("בטלוויזיה מופיע קוד של 4 ספרות").assertIsDisplayed()
-        rule.onNode(hasContentDescription("קוד")).performTextInput("4821")
-        rule.waitForIdle()
-        assertEquals(listOf("code:4821"), sent)
-        state = KeyClient.State.NeedCode("MiBOX4", left = 2); rule.waitForIdle()
-        rule.onNodeWithText("הקוד לא נכון. נשארו 2 ניסיונות.").assertIsDisplayed()
-    }
-
-    @Test
-    fun connectedItShowsTheGameTheKeysAndTheEnterThePawPresses() {
-        state = KeyClient.State.Connected("MiBOX4", "Krillion"); show()
+    fun eachKeySendsTheMomentItIsPressedAndThereIsNoTypingLineOnThePhone() {
+        state = KeyClient.State.Connected("MiTV", "Krillion"); show()
         rule.onNodeWithText("Krillion").assertIsDisplayed()
-        rule.onNodeWithText("מה שמקלידים כאן נכתב בטלוויזיה").assertIsDisplayed()
-        rule.onNode(hasContentDescription("אנטר (הכפה לוחצת)")).performClick()
-        rule.onNode(hasContentDescription("Esc")).performClick()
-        rule.onNode(hasContentDescription("Tab")).performClick()
-        rule.waitForIdle()
-        assertEquals(listOf("key:ENTER:TAP", "key:ESCAPE:TAP", "key:TAB:TAP"), sent)
-        rule.onNode(hasContentDescription("חץ שמאלה")).performClick()
-        rule.waitForIdle()
-        assertTrue("an arrow is held while pressed: down, then up", sent.takeLast(2) == listOf("key:LEFT:DOWN", "key:LEFT:UP"))
+        rule.onNodeWithText("מה שמקלידים כאן נכתב בטלוויזיה").assertDoesNotExist()
+        key("q").performClick(); key("Shift").performClick(); key("A").performClick(); key("b").performClick()
+        key("רווח").performClick(); key("1").performClick()
+        assertEquals("Shift is one capital", listOf("text:q", "text:A", "text:b", "text: ", "text:1"), sent)
+        sent.clear()
+        key("Shift").performClick(); key("Shift").performClick()                  // twice: all capitals
+        key("C").performClick(); key("D").performClick()
+        assertEquals(listOf("text:C", "text:D"), sent)
+        key("Shift").performClick()
+        sent.clear()
+        key("Esc").performClick(); key("Tab").performClick(); key("מחיקה").performClick(); key("אנטר (הכפה לוחצת)").performClick()
+        assertEquals(listOf("key:ESCAPE:TAP", "key:TAB:TAP", "key:BACKSPACE:TAP", "key:ENTER:TAP"), sent)
     }
 
     @Test
-    fun theTouchpadIsTuckedAwayUntilPulledOutAndDrivesThePaw() {
-        state = KeyClient.State.Connected("MiBOX4", "Krillion"); show()
-        val tab = hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")
+    fun hebrewAndSymbolsAreOneKeyAway() {
+        state = KeyClient.State.Connected("MiTV", "Krillion"); show()
+        key("עב").performClick(); key("ש").performClick(); key("ם").performClick()
+        key("123").performClick(); key("#").performClick()
+        key("ABC").performClick(); key("z").performClick()
+        assertEquals(listOf("text:ש", "text:ם", "text:#", "text:z"), sent)
+    }
+
+    @Test
+    fun anArrowIsHeldOnTheTvWhileTheFingerIsDown() {
+        state = KeyClient.State.Connected("MiTV", "Krillion"); show()
+        key("חץ שמאלה").performTouchInput { down(center); advanceEventTime(300); up() }
+        assertEquals(listOf("key:LEFT:DOWN", "key:LEFT:UP"), sent)
+    }
+
+    @Test
+    fun theTouchpadIsPulledOutAtTheRightEdgeAndTheKeyboardStaysUsable() {
+        state = KeyClient.State.Connected("MiTV", "Krillion"); show()
         rule.onNode(tab).assertIsDisplayed()
-        rule.onNodeWithText("משטח מגע").assertIsNotDisplayed()
-        rule.onNode(tab).performClick(); rule.waitForIdle()
+        rule.onNodeWithText("משטח מגע").assertDoesNotExist()
+        // Pulled to the left, it comes out.
+        rule.onNode(tab).performTouchInput { down(center); repeat(8) { moveBy(Offset(-60f, 0f), 16) }; up() }
+        rule.mainClock.advanceTimeBy(1_000)
         assertEquals(listOf("pointer:true"), sent)
         rule.onNodeWithText("משטח מגע").assertIsDisplayed()
+        key("q").performClick()
+        assertEquals("the keys still type, beside it", "text:q", sent.last())
         val pad = rule.onNode(hasContentDescription("מזיזים את הכפה עם אצבע אחת · נגיעה קצרה לוחצת · שתי אצבעות גוללות"))
         sent.clear()
         pad.performTouchInput { click(center) }
@@ -126,16 +120,64 @@ class KeyboardModeScreenTest {
         }
         assertTrue("two fingers scroll: $sent", sent.isNotEmpty() && sent.all { it == "scroll:down" })
         sent.clear()
-        rule.onNode(hasContentDescription("גרירה")).performClick()
-        rule.onNode(hasContentDescription("גוררים · לחיצה משחררת")).assertIsDisplayed()
-        rule.onNode(hasContentDescription("סגירת משטח המגע")).performClick(); rule.waitForIdle()
+        key("גרירה").performClick()
+        key("גוררים · לחיצה משחררת").assertIsDisplayed()
+        key("סגירת משטח המגע").performClick()
+        rule.mainClock.advanceTimeBy(1_000)
         assertEquals("closing lifts the finger and puts the paw away", listOf("drag:true", "drag:false", "pointer:false"), sent)
-        rule.onNodeWithText("משטח מגע").assertIsNotDisplayed()
+        rule.onNodeWithText("משטח מגע").assertDoesNotExist()
+    }
+
+    @Test
+    fun aShortPullSpringsBackAndATouchOnTheTabOpensIt() {
+        state = KeyClient.State.Connected("MiTV", "Krillion"); show()
+        rule.onNode(tab).performTouchInput { down(center); moveBy(Offset(-40f, 0f), 200); up() }
+        rule.mainClock.advanceTimeBy(1_000)
+        assertTrue("a little pull is not enough: $sent", sent.isEmpty())
+        rule.onNode(tab).performClick(); rule.mainClock.advanceTimeBy(1_000)
+        assertEquals(listOf("pointer:true"), sent)
+    }
+
+    @Test
+    fun itSaysWhatItIsDoingOnTheWayToTheTv() {
+        show()
+        rule.onNodeWithText("מחפשים את הטלוויזיה בבית…").assertIsDisplayed()
+        state = KeyClient.State.Connecting("192.168.1.23:47123"); rule.waitForIdle()
+        rule.onNodeWithText("מתחברים לטלוויזיה…").assertIsDisplayed()
+        state = KeyClient.State.NotFound(KeyClient.NO_TV); rule.waitForIdle()
+        rule.onNodeWithText("לא מצאנו את הטלוויזיה").assertIsDisplayed()
+        rule.onNodeWithText("לחפש שוב").performClick()
+        rule.onNodeWithText("להקליד כתובת").performClick()
+        for (k in listOf("1", "0", ".", "0", ".", "0", ".", "7")) key(k).performClick()
+        rule.onNodeWithText("להתחבר").performClick()
+        assertEquals(listOf("retry", "address:10.0.0.7"), sent)
+        state = KeyClient.State.NotFound(KeyClient.NO_PERMISSION); rule.waitForIdle()
+        rule.onNodeWithText("לאשר").performClick()
+        assertEquals("permission", sent.last())
+    }
+
+    @Test
+    fun theFourDigitsAreTypedOnItsOwnKeypadAndGoOutAtOnce() {
+        state = KeyClient.State.NeedCode("MiTV"); show()
+        rule.onNodeWithText("בטלוויזיה מופיע קוד של 4 ספרות").assertIsDisplayed()
+        for (k in listOf("4", "8", "⌫", "8", "2", "1")) key(k).performClick()
+        assertEquals(listOf("code:4821"), sent)
+        state = KeyClient.State.NeedCode("MiTV", left = 2); rule.waitForIdle()
+        rule.onNodeWithText("הקוד לא נכון. נשארו 2 ניסיונות.").assertIsDisplayed()
     }
 
     @Test
     fun theTouchpadIsOnlyThereWhenConnected() {
         state = KeyClient.State.Looking; show()
-        rule.onNode(hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")).assertDoesNotExist()
+        rule.onNode(tab).assertDoesNotExist()
+    }
+
+    @Test
+    fun everyRowOfEveryLayoutIsTheSameWidth() {
+        for (l in PhoneLayout.entries) for (row in PhoneKeys.rows(l)) assertEquals("$l $row", PhoneKeys.ROW_UNITS, row.sumOf { it.second.toDouble() }.toFloat(), 0.001f)
+        assertEquals(KeyLink.Msg.Text("A"), PhoneKeys.message(PKey.Ch("a"), shift = true))
+        assertEquals(KeyLink.Msg.Text("ש"), PhoneKeys.message(PKey.Ch("ש"), shift = true))
+        assertEquals(KeyLink.Msg.Press(KeyLink.Key.ESCAPE, KeyLink.Action.TAP), PhoneKeys.message(PKey.Esc, false))
+        assertEquals(null, PhoneKeys.message(PKey.Shift, false))
     }
 }

@@ -68,15 +68,15 @@ object PlayerWebView {
     }
 
     /**
-     * Writes the profile's cookies (the logins) to disk. The cookie jar is looked up here, on the main thread (profiles must be), and
-     * written on a thread of its own: writing blocks until it is done, and on a slow box that froze the screen when a game was left.
+     * Writes the profile's cookies (the logins) to disk at once, on the main thread, like every other call into the WebView. Only when a
+     * sign-in screen is left: that is when a new login must not be lost; otherwise the WebView writes them by itself every few seconds.
+     *
+     * (1.5 to 1.7 wrote them from a thread of their own whenever a game was left. On a TV box the next game then never opened: the
+     * main thread got stuck in the WebView's profile code, most likely waiting for that write. Never again from another thread.)
      */
     fun flushCookies(profile: String) {
-        val jar = runCatching { WebProfiles.cookies(profile) }.getOrNull() ?: return
-        flusher.execute { runCatching { jar.flush() } }
+        runCatching { WebProfiles.cookies(profile).flush() }
     }
-
-    private val flusher = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "cookie-flush").apply { isDaemon = true } }
 }
 
 /**

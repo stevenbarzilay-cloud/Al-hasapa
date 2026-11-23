@@ -24,6 +24,8 @@ class CouchApp : Application() {
         Startup.mark("application")
         Flight.start(this)
         CrashReport.install(this)
+        // Before any WebView: if the WebView got stuck in its profile code last time, profiles stay off on this device (games open).
+        app.couch.alhasapa.player.WebProfiles.init(this)
         registerActivityLifecycleCallbacks(Visibility(this))
         // Not under the unit tests: their main looper is paused on purpose, which a watchdog would take for a frozen app.
         if (Build.FINGERPRINT != "robolectric") {

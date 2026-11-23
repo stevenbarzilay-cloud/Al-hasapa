@@ -234,7 +234,7 @@ fun PlayerScreen(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) {
         webView?.onPause()
-        PlayerWebView.flushCookies(usedProfile)          // logins survive the app being killed
+        if (session.loginMode) PlayerWebView.flushCookies(usedProfile)          // a new login survives the app being killed
     }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { webView?.onResume() }
 
@@ -330,7 +330,6 @@ fun PlayerScreen(
                                     val view = frame.getChildAt(0) as? WebView
                                     if (view != null && webView === view) { webView = null; injector = null }
                                     if (view != null) tv?.releaseWeb(view)
-                                    PlayerWebView.flushCookies(usedProfile)
                                     view?.destroy()
                                 },
                             )
