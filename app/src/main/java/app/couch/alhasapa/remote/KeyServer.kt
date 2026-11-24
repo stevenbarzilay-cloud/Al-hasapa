@@ -39,8 +39,8 @@ class KeyServer(
     private val tvName: String = Build.MODEL.orEmpty().ifBlank { "TV" },
     /** A site's login from the phone (decrypted), on the main thread: the site's name and how many cookies were set, or null. */
     private val onLogins: (String) -> Pair<String, Int>? = { payload -> LoginReceiver.receive(context, payload) },
-    /** This app's version, told to the phone and compared with the phone's (see [RemoteKeys.Ui.older]). */
-    private val appCode: Int = app.couch.alhasapa.BuildConfig.VERSION_CODE,
+    /** Told to the phone and compared with what the phone tells (see [KeyLink.TOGETHER_SINCE] and [RemoteKeys.Ui.older]), and this app's version by name. */
+    private val appCode: Int = KeyLink.TOGETHER_SINCE,
     private val appVer: String = app.couch.alhasapa.BuildConfig.VERSION_NAME.removeSuffix("-tv"),
     /** A phone is connected, or the last one left: the TV's Wi-Fi stays awake meanwhile (see [WifiLatency]). */
     private val onLinked: (Boolean) -> Unit = { on -> WifiLatency.hold(context, on) },

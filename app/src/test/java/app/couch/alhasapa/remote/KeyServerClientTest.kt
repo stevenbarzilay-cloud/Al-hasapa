@@ -122,6 +122,24 @@ class KeyServerClientTest {
         s.close()
     }
     @Test
+    fun aReleaseThatChangesOnlyOneOfTheTwoDoesNotSendThePeopleToUpdateTheOther() {
+        // What the two tell each other is the version at which they last had to be updated together, which this build did not raise:
+        // a TV with the new home (1.9.5) and a phone still on 1.9.4 have nothing to say to each other about versions.
+        assertEquals("raised only by a release that needs both", 28, KeyLink.TOGETHER_SINCE)
+        RemoteStore(context).forgetPhones()
+        val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
+        tv.start()
+        val phone = KeyClient(context, phoneName = "Pixel 8", find = { "127.0.0.1:${tv.port}" }, appVer = "1.9.4").also { clients += it }
+        try {
+            phone.start()
+            waitFor("the TV asks for a code") { phone.state.value is KeyClient.State.NeedCode }
+            phone.sendCode(tv.ui.value.code!!)
+            waitFor("connected") { phone.state.value is KeyClient.State.Connected }
+            assertNull(tv.ui.value.older); assertNull(tv.ui.value.newer); assertNull(phone.versions.value)
+        } finally { phone.stop(); tv.stop() }
+    }
+
+    @Test
     fun eachSideSaysWhenTheOtherOneWasLeftOnAnOldVersion() {
         // The same version on both: nothing to say. And the TV's Wi-Fi is asked to stay awake exactly while a phone is connected.
         val same = pairedPhone()

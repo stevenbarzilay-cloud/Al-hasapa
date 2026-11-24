@@ -8,6 +8,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.catalog.Catalog
@@ -85,7 +87,7 @@ class TvHomeRemoteTest {
     /** The card in focus is on the screen, the whole of it (not cut by an edge, not scrolled half away). */
     private fun assertFocusedCardIsShown() {
         val card = cardOf(focusedGame()!!)
-        val node = rule.onNode(hasContentDescription(card.title + if (card.played) ", שיחקנו הערב" else "")).assertIsDisplayed().fetchSemanticsNode()
+        val node = rule.onNode(hasContentDescription(card.title + ", " + card.kind + if (card.played) ", שיחקנו הערב" else "")).assertIsDisplayed().fetchSemanticsNode()
         val seen = node.boundsInWindow                       // what is left of it after every clip
         assertTrue("${card.id}: all of its width shows ($seen of ${node.size})", seen.width >= node.size.width - 1f)
         assertTrue("${card.id}: all of its height shows ($seen of ${node.size})", seen.height >= node.size.height - 1f)
@@ -136,7 +138,10 @@ class TvHomeRemoteTest {
         assertTrue("on the shelf, beyond the first screenful", at > 5)
         repeat(at) { left() }
         assertEquals("krillion", focusedGame())
-        rule.onNodeWithText("Krillion · ", substring = true).assertIsDisplayed()          // what it is, under the rows
+        // What it is, at the top of the home: its name, its kind and site, and the sentence about it.
+        rule.onNodeWithTag(DETAIL_TITLE).assertIsDisplayed().assertTextEquals("Krillion")
+        rule.onNodeWithTag(DETAIL_KICKER).assertTextEquals("ידע · " + cardOf("krillion").siteName)
+        rule.onNodeWithTag(DETAIL_SUMMARY).assertIsDisplayed().assertTextEquals(cardOf("krillion").description)
         ok()
         assertEquals(listOf("krillion"), played)
     }

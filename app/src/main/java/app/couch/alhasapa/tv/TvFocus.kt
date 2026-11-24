@@ -46,9 +46,10 @@ fun Modifier.tvTarget(id: String?, label: String?, onClick: () -> Unit): Modifie
 
 /**
  * As above. [bring] false: the screen scrolls to the focused button itself (the home's rows of cards), so this one does not ask to be
- * scrolled into view (two scrolls of one row at once fight each other).
+ * scrolled into view (two scrolls of one row at once fight each other). [paint] false: the button marks the focus itself, in its own
+ * shape (a cushion of the home wears a thread around its edge), so it is not filled with the focus's colour here.
  */
-fun Modifier.tvTarget(id: String?, label: String?, bring: Boolean, onClick: () -> Unit): Modifier = composed {
+fun Modifier.tvTarget(id: String?, label: String?, bring: Boolean, paint: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val tv = LocalTv.current
     val myId = remember { id ?: newTvId() }
     val latest by rememberUpdatedState(onClick)
@@ -65,7 +66,7 @@ fun Modifier.tvTarget(id: String?, label: String?, bring: Boolean, onClick: () -
         .onFocusChanged { androidFocused = it.isFocused }
         .drawWithContent {
             // The button itself takes the colour, in its own shape (the clip is earlier in the chain), under its label or icon.
-            if (lit) drawRect(Palette.Red)
+            if (lit && paint) drawRect(Palette.Red)
             drawContent()
         }
         .semantics { if (lit) stateDescription = "נבחר" }

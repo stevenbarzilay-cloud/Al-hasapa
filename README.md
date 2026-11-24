@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.4.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.5.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -273,6 +273,45 @@ want to play on, starting with Krillion and NYT:
     show where they were asked for). `games.json` is the app's own catalogue from here on (the prototype in `couch-artifact/` keeps
     its 54).
     Only Originle, The Dozen and the two Magnitudle games could be opened from the build environment; the other links are as given.
+- **1.9.5 (TV): the home gets its illustrated look back.** The home had been pared down to plain cards to run well on the box. Its
+  look now follows a brief and a demo page from the two of us (kept out of the repository; the demo was a reference for three things:
+  where the logo and the picture go, what a cushion looks like, how the selection walks along a shelf). Only how the TV's home is
+  drawn changed; the phone is as it was.
+  - *What it looks like.* Our logo at the top right; the two of us and our pieces at the top left, and under the names, from the same
+    margin, the picture of us on the couch with the cat (both are the app's original files, `assets/hub/img`, read once at the size
+    the screen needs: `HomeArt`). At the picture's side, what the button in focus is: a game's kind and site, its name in full, the
+    sentence about it; for the app's own buttons, what they are for. Every game is a cushion on a shelf: straight, one size, on one
+    line, at even gaps, also in focus. The fabric's folds and the prints at its corners (the circle, the stair, the zigzag) are the
+    ones on the cushions in our picture; in the middle a symbol for the kind of game (words, logic, quiz, film, music, places,
+    sight: the same kind, the same symbol) and under it the game's name.
+  - *The colours* come from the two colours we chose for our pieces: fabric, print and the wall behind the shelves. Which fabric and
+    print a game gets is decided by its id, so a cushion is the same wherever it stands and whatever was played (`CushionColors`,
+    the demo's arithmetic to the digit: the tests hold golden values made with the demo's own rule). On top of that rule the name
+    and the symbol are made sure of: for every game and every pair of the colours the app offers, the same one twice too, they read
+    at 4.5 to 1 or better against their fabric (the rule alone leaves some two hundred of those 4,352 below that).
+  - *The focus* is a double thread around the cushion's edge, a light one and a dark one. The red that marked the focus until now is
+    kept outside them until the threads have been seen on the TV itself (one argument of `CushionArt.threads` takes it away).
+  - *What did not change:* the games, their order and the two shelves come from the same model; the remote moves by `HomeNav` as
+    before (along a shelf to its very end, up and down between the shelves and the buttons, each row keeping its place); every
+    cushion is the same button with the same id; only the cushions near the screen exist (the same lazy row, which moves so that the
+    one in focus stands at the shelf's start); OK, coming back from a game, the focus moving on after a game was played. Sign-in,
+    "הגדרות ועוד", the information panel, the line about the phone, the day, the count and the points are all still there.
+  - *What a press costs.* A cushion is some fifteen shapes. They exist once for all cushions; each cushion's inside is cut to its
+    edge when the shapes are made (not while drawing); a cushion is drawn once into a picture of its own that the box then only
+    moves; and the focus's thread is drawn apart from that picture, so moving the focus draws three lines around two cushions.
+    Nothing animates but the shelf's own slide (the old card's growing in focus is gone). Measured on the build machine, the shelf
+    walked there and back three times (`TvHomeZapTimingTest`): the work the app does for a press (composing, laying out, issuing
+    the drawing) is what it was, 8.2 ms against 9.0 ms before along a shelf and 5.0 against 3.9 between rows. With every frame
+    painted in software, which is how that machine draws and not how a TV does, a press costs 58 ms against 17 ms: there every
+    cushion is painted from its shapes in every frame, where a TV's graphics chip keeps it as a picture.
+  - *Tried here, with real key events on a TV-sized screen:* the whole shelf card by card and back, the cushion in focus whole on the
+    screen at every step and the top of the home saying what it is; OK on a game beyond the first screenful; down to the other
+    shelf and the buttons and back, each row where it was left; twelve presses with no pause between them; a second shelf of only
+    three games; one of us changing colour while the home is up; a game played while away. **Not tried on the TV:** how it looks
+    there from the couch (the threads' thickness above all), and that the box's graphics chip keeps up while a shelf slides.
+  - Also: what phone and TV tell each other about versions is now the version at which the two last had to be updated together
+    (`KeyLink.TOGETHER_SINCE`, still 1.9.4), so a release like this one, which changes only the TV, does not send anyone to update
+    the phone.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

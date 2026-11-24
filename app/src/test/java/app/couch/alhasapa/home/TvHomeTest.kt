@@ -51,7 +51,8 @@ class TvHomeTest {
         assertEquals(catalog.games.size, m.tonight.size + m.more.size)
         assertTrue("the day in Hebrew: ${m.day}", m.day.contains("23") && m.day.contains("נובמבר"))
         val krillion = m.tonight.last()
-        assertEquals("the site's own colour", HomeModel.colorOf(catalog.siteOf(catalog.game("krillion")!!)!!.color), krillion.color)
+        assertEquals("what it is, for the top of the home", "ידע", krillion.kind)
+        assertEquals(Category.TRIVIA, krillion.category)
     }
 
     @Test
@@ -71,7 +72,7 @@ class TvHomeTest {
         rule.onNodeWithText("שיחקנו 1 מתוך ${m.total}", substring = true).assertIsDisplayed()
         // By touch (the phone's touchpad moves a paw that taps): the cards on the screen and the buttons are plain buttons.
         val first = m.tonight.first()
-        rule.onNode(hasContentDescription(first.title)).performClick()
+        rule.onNode(hasContentDescription(first.title + ", " + first.kind)).performClick()
         assertEquals(listOf(first.id), played)
         rule.onNodeWithText("הגדרות ועוד").performClick()
         rule.onNodeWithText("התחברות לאתרים").performClick()
@@ -110,9 +111,4 @@ class TvHomeTest {
         rule.onNodeWithText("הטלפון מחובר: מקלידים ממנו").assertIsDisplayed()
     }
 
-    @Test
-    fun aColourThatIsNotOneIsTheTint() {
-        assertEquals(app.couch.alhasapa.ui.theme.Palette.Tint, HomeModel.colorOf("blue"))
-        assertEquals(app.couch.alhasapa.ui.theme.Palette.Tint, HomeModel.colorOf(null))
-    }
 }

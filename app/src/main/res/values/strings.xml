@@ -184,6 +184,10 @@
     <string name="home_played">שיחקנו הערב</string>
     <string name="home_empty">המדף ריק. אפשר להוסיף משחקים ב״הגדרות ועוד״.</string>
     <string name="home_accounts">התחברות לאתרים</string>
+    <string name="home_about_accounts">הכי קל מהטלפון: ״מקלדת לטלוויזיה״, ואז ״התחברות לטלוויזיה״. אפשר גם כאן, עם השלט.</string>
+    <string name="home_about_more">הקישורים שלנו, הוספת משחק, גיבוי, והעמוד המלא כמו בטלפון.</string>
+    <string name="home_about_info">מה לצלם ולשלוח כשמשהו לא עובד.</string>
+    <string name="home_couple">%1$s ו%2$s משחקים יחד על הספה, והחתול מאחוריהם</string>
     <string name="home_more_settings">הגדרות ועוד</string>
     <string name="home_phone_on">הטלפון מחובר: מקלידים ממנו</string>
     <string name="home_phone_off">להקליד מהטלפון: ״מקלדת לטלוויזיה״ באפליקציה בטלפון</string>

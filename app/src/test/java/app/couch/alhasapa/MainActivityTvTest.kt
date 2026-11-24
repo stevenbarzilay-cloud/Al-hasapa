@@ -70,13 +70,37 @@ class MainActivityTvTest {
         rule.onNode(hasContentDescription("q")).assertDoesNotExist()                          // and no keyboard
         scenario!!.onActivity { a -> assertNull("no web page behind the home: it is native", webOf(a.window.decorView)) }
         // The first game left to play has the focus from the start: one OK on the remote opens it.
-        rule.onNode(hasContentDescription("Wordle").and(inFocus)).assertIsDisplayed()
+        rule.onNode(hasContentDescription("Wordle, מילים").and(inFocus)).assertIsDisplayed()
         remote(android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
         scenario!!.onActivity { a ->
             val started = org.robolectric.Shadows.shadowOf(a).nextStartedActivity
             assertEquals(app.couch.alhasapa.player.PlayerActivity::class.java.name, started.component!!.className)
             assertEquals("connections", started.getStringExtra(app.couch.alhasapa.player.PlayerActivity.EXTRA_GAME))
         }
+    }
+
+    @Test
+    fun comingBackFromAGameTheShelfAndTheFocusAreWhereTheyWereLeft() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
+        launch()
+        val shelf = (context as CouchApp).catalog.games.filter { it.lib }
+        val left = android.view.KeyEvent.KEYCODE_DPAD_LEFT
+        // Seven steps along the shelf (beyond what a screen shows at first), and OK.
+        remote(left, left, left, left, left, left, left, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+        scenario!!.onActivity { a ->
+            assertEquals(shelf[7].id, org.robolectric.Shadows.shadowOf(a).nextStartedActivity.getStringExtra(app.couch.alhasapa.player.PlayerActivity.EXTRA_GAME))
+        }
+        // The game covers the home, then closes: the home is back as it was left, the same cushion in focus and on the screen.
+        scenario!!.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+        scenario!!.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+        rule.waitForIdle()
+        rule.onNode(hasContentDescription(shelf[7].n, substring = true).and(inFocus)).assertIsDisplayed()
+        rule.onNodeWithText(shelf[7].d).assertIsDisplayed()                              // and the top of the home says what it is
+        // The remote goes on from there, either way.
+        remote(left)
+        rule.onNode(hasContentDescription(shelf[8].n, substring = true).and(inFocus)).assertIsDisplayed()
+        remote(android.view.KeyEvent.KEYCODE_DPAD_RIGHT, android.view.KeyEvent.KEYCODE_DPAD_RIGHT)
+        rule.onNode(hasContentDescription(shelf[6].n, substring = true).and(inFocus)).assertIsDisplayed()
     }
 
     @Test

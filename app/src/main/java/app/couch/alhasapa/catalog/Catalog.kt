@@ -42,6 +42,11 @@ data class Game(
      * after them in the catalogue's own order.
      */
     val pick: Int? = null,
+    /**
+     * Which symbol its cushion wears on the TV's home, where the kind alone does not say ("cinema" for the film games, whose kind is
+     * "ידע" like any quiz); null for the rest, which go by their kind. See home/Category.
+     */
+    val cat: String? = null,
 ) {
     /** Head to head: each person plays alone and pastes their own result (the LinkedIn games). */
     val isDuel: Boolean get() = s == "li"
@@ -124,7 +129,7 @@ class Catalog(val sites: Map<String, Site>, val games: List<Game>) {
             k = o.optString("k"), m = o.optString("m"), u = o.getString("u"), d = o.optString("d"),
             lib = o.optInt("lib", 0) == 1, why = o.optString("why").takeIf { it.isNotBlank() },
             metric = o.optString("metric", "none"), placeholder = o.optBoolean("placeholder", false),
-            pick = o.optInt("pick", 0).takeIf { it > 0 },
+            pick = o.optInt("pick", 0).takeIf { it > 0 }, cat = o.optString("cat").takeIf { it.isNotBlank() },
         )
 
         /** The suggestions in the order they are offered: the hand-picked ones by their [Game.pick], then the rest as the catalogue has them. */

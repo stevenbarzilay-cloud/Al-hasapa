@@ -112,6 +112,8 @@ class TvPreviewTest {
         }
         val model = app.couch.alhasapa.home.HomeModel.from(state, catalog, pieces, date)
         val nav = app.couch.alhasapa.home.HomeNav()
+        // As on the TV, where the app reads the logo and the picture while it starts: they are there with the first frame.
+        app.couch.alhasapa.home.warmHomeArt(ApplicationProvider.getApplicationContext<Context>())
         rule.setContent {
             AlHasapaTheme {
                 TvLayer(c) {
@@ -133,6 +135,33 @@ class TvPreviewTest {
         rule.runOnIdle { c.navigate(Dir.DOWN) }; rule.waitForIdle()
         repeat(3) { rule.runOnIdle { c.navigate(Dir.LEFT) }; rule.waitForIdle() }
         shot("tv-home-more.png")
+    }
+
+    /** The home with two other colours chosen (teal and mustard), at the end of the shelf, where the games played this evening are. */
+    @Test
+    fun drawTheHomeInOtherColours() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val date = java.time.LocalDate.of(2026, 11, 23)
+        val state = app.couch.alhasapa.data.CouchState.empty().also {
+            for (id in listOf("wordle", "bandle")) app.couch.alhasapa.data.CouchState.setEntry(it, app.couch.alhasapa.data.CouchState.dayKey(date), id, org.json.JSONObject().put("w", "").put("t", 1L))
+            it.put("pieces", org.json.JSONObject()
+                .put("a", org.json.JSONObject().put("shape", "circle").put("color", "teal"))
+                .put("b", org.json.JSONObject().put("shape", "star").put("color", "mustard")))
+        }
+        val model = app.couch.alhasapa.home.HomeModel.from(state, catalog, pieces, date)
+        val nav = app.couch.alhasapa.home.HomeNav()
+        app.couch.alhasapa.home.warmHomeArt(ApplicationProvider.getApplicationContext<Context>())
+        rule.setContent {
+            AlHasapaTheme { TvLayer(c) { app.couch.alhasapa.home.TvHome(model, phoneConnected = false, nav = nav, onPlay = {}, onAccounts = {}, onMore = {}, onInfo = {}) } }
+        }
+        rule.waitForIdle()
+        repeat(model.tonight.size - 4) { rule.runOnIdle { c.navigate(Dir.LEFT) }; rule.waitForIdle() }
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "tv-home-colours.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        org.junit.Assert.assertTrue(File(dir, "tv-home-colours.png").length() > 5_000)
     }
 
     private fun save(name: String) {

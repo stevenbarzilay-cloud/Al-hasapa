@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import app.couch.alhasapa.home.HomeModel
 import app.couch.alhasapa.home.HomeNav
 import app.couch.alhasapa.home.TvHome
+import app.couch.alhasapa.home.warmHomeArt
 import app.couch.alhasapa.tv.TvPanel
 import app.couch.alhasapa.remote.RemoteKeys
 import java.time.LocalDate
@@ -92,6 +93,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         tv = TvHost(this)
         tv.title = getString(R.string.remote_screen_home)
+        // The home's logo and picture are read while the rest starts, so they are there with its first frame (see HomeArt).
+        if (tv.enabled) Flight.background { warmHomeArt(applicationContext) }
         Diag.log("activity: onCreate, build ${BuildConfig.VERSION_NAME}, android ${Build.VERSION.RELEASE} (api ${Build.VERSION.SDK_INT})")
         Diag.log("webview package: " + (WebView.getCurrentWebViewPackage()?.let { "${it.packageName} ${it.versionName}" } ?: "NONE"))
         val dm = resources.displayMetrics

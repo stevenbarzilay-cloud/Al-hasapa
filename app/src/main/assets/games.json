@@ -499,7 +499,8 @@
    "u": "https://framed.wtf/",
    "d": "מזהים סרט לפי פריימים.",
    "metric": "guesses",
-   "lib": 1
+   "lib": 1,
+   "cat": "cinema"
   },
   {
    "id": "catfishing",
@@ -676,7 +677,8 @@
    "u": "https://boxofficega.me",
    "d": "מנחשים סרטים לפי רמזי קופות.",
    "metric": "guesses",
-   "why": "וורדל של סרטים"
+   "why": "וורדל של סרטים",
+   "cat": "cinema"
   },
   {
    "id": "cinematrix",
@@ -688,7 +690,8 @@
    "d": "ממלאים לוח 3×3 בסרטים שמתאימים גם לרמז של השורה וגם לרמז של העמודה.",
    "metric": "none",
    "why": "דיונים טובים על הספה",
-   "pick": 7
+   "pick": 7,
+   "cat": "cinema"
   },
   {
    "id": "actorle",
@@ -699,7 +702,8 @@
    "u": "https://actorle.com/",
    "d": "מנחשים מי שיחק בסרטים ברשימה כששמות הסרטים מוסתרים.",
    "metric": "none",
-   "pick": 2
+   "pick": 2,
+   "cat": "cinema"
   },
   {
    "id": "thrice",
@@ -721,7 +725,8 @@
    "u": "https://flickle.app/",
    "d": "מזהים סרט מקטעי וידאו קצרים שנחשפים בהדרגה.",
    "metric": "none",
-   "pick": 6
+   "pick": 6,
+   "cat": "cinema"
   },
   {
    "id": "chronotrivia",

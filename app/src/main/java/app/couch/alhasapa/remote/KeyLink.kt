@@ -12,8 +12,9 @@ import org.json.JSONObject
  *     phone → TV     hello {phone, name, token, proof, app, ver}
  *                                                         proof = HMAC(token, nonce): the token itself is not sent (from 1.9;
  *                                                         before, the token was sent as is, still accepted for typing only)
- *                                                         app, ver: each side's app version (from 1.9.4), so each can say when
- *                                                         the other one was left behind on an old version
+ *                                                         app: the version at which the two last had to be updated together
+ *                                                         ([TOGETHER_SINCE]); ver: the app's version, to name it. From 1.9.4,
+ *                                                         so each side can say when the other was left behind
  *     TV    → phone  code                                 not paired yet: the TV shows four digits
  *     phone → TV     pair {code}
  *     TV    → phone  wrong {left} | paired {token}
@@ -40,6 +41,16 @@ object KeyLink {
     const val PORT = 47123
 
     const val VERSION = 2
+
+    /**
+     * What each side tells the other as its "app" number: the app version at which the phone's app and the TV's last had to be
+     * updated together (28 is 1.9.4, which first said it at all). A side that hears a lower number says the other one should be
+     * updated; one that hears a higher number says so of itself.
+     *
+     * Not simply the app's own version number: a release that changes only one of the two (the TV's home got a new look in 1.9.5)
+     * must not send the people to update the other for nothing. It is raised only when a release needs both.
+     */
+    const val TOGETHER_SINCE = 28
 
     /** A line longer than this is not one of ours (a site's cookies, encrypted, fit well within it). */
     const val MAX_LINE = 65_536

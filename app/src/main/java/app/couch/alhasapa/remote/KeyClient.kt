@@ -27,8 +27,8 @@ class KeyClient(
     private val store: RemoteStore = RemoteStore(context),
     private val phoneName: String = Build.MODEL.orEmpty().ifBlank { "טלפון" },
     private val find: (timeoutMs: Long) -> String? = { NsdFinder(context).find(it) },
-    /** This app's version, told to the TV and compared with the TV's (see [Versions]). */
-    private val appCode: Int = app.couch.alhasapa.BuildConfig.VERSION_CODE,
+    /** Told to the TV and compared with what the TV tells (see [KeyLink.TOGETHER_SINCE] and [Versions]), and this app's version by name. */
+    private val appCode: Int = KeyLink.TOGETHER_SINCE,
     private val appVer: String = app.couch.alhasapa.BuildConfig.VERSION_NAME,
 ) {
     sealed interface State {
