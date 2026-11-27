@@ -15,6 +15,7 @@
     <string name="import_no_log">בגיבוי חסרה ההיסטוריה.</string>
     <string name="player_back">חזרה</string>
     <string name="player_played">שיחקנו</string>
+    <string name="player_played_solo">שוחק לבד</string>
     <string name="player_load_failed">הדף לא נטען</string>
     <string name="player_retry">לנסות שוב</string>
     <string name="player_open_chrome">לפתוח בכרום</string>
@@ -299,4 +300,42 @@
     <string name="cheer_evening">הערב: %1$d</string>
     <string name="cheer_marked">סימנו ששיחקנו</string>
     <string name="kb_save_result">🏁 המשחק נגמר: לשמור את התוצאה בטלוויזיה</string>
+
+    <!-- Solo (1.11): a game played alone on one's own phone, sealed until the other plays it too, then the reveal. -->
+    <string name="solo_channel">אתגרי סולו</string>
+    <string name="solo_channel_desc">כשמישהו שיחק לבד במשחק שעוד לא שיחקת, וכשגם השני סיים</string>
+    <string name="solo_news_played">⚔️ %1$s כבר שיחק היום ב-%2$s</string>
+    <string name="solo_news_played_other">⚔️ %1$s כבר שיחק/ה היום ב-%2$s</string>
+    <string name="solo_news_played_text">מה איתך? התוצאה סגורה במעטפה עד המשחק שלך.</string>
+    <string name="solo_news_reveal">⚔️ חשיפה ב-%1$s!</string>
+    <string name="solo_news_reveal_text">גם %1$s סיים. מי לוקח את הכתר?</string>
+    <string name="solo_news_reveal_text_other">גם %1$s סיים/ה. מי לוקח את הכתר?</string>
+    <string name="solo_reveal_title">⚔️ חשיפה!</string>
+    <string name="solo_sealed_title">✉️ נחתם במעטפה</string>
+    <string name="solo_waiting_title">⏳ מחכים לתוצאה</string>
+    <string name="solo_played_only">שוחק לבד, עוד בלי תוצאה. אפשר להוסיף אותה מתי שרוצים.</string>
+    <string name="solo_until">כשגם %1$s ישחק את זה היום — חשיפה!</string>
+    <string name="solo_until_anyone">כשעוד מישהו ישחק את זה היום לבד — חשיפה!</string>
+    <string name="solo_until_result">החשיפה כשתגיע גם התוצאה השנייה.</string>
+    <string name="solo_in_envelope">✉️ במעטפה</string>
+    <string name="solo_no_result_yet">שיחק, בלי תוצאה</string>
+    <string name="solo_no_result_yet_other">שיחק/ה, בלי תוצאה</string>
+    <string name="solo_crown_mine">👑 הכתר שלך!</string>
+    <string name="solo_crown">👑 הכתר: %1$s</string>
+    <string name="solo_tie">🤝 תיקו! הכתר נשאר באמצע</string>
+    <string name="solo_ok">יופי</string>
+    <string name="solo_badge">⚔️ לבד</string>
+    <string name="solo_marked_toast">סומן: שוחק לבד. את התוצאה שומרים בכפתור התוצאה.</string>
+    <string name="play_mode_question">ביחד או לבד?</string>
+    <string name="play_mode_challenge">%1$s כבר שיחק את זה היום לבד</string>
+    <string name="play_mode_challenge_other">%1$s כבר שיחק/ה את זה היום לבד</string>
+    <string name="play_mode_together">ביחד</string>
+    <string name="play_mode_together_sub">על הספה: נספר לשנינו</string>
+    <string name="play_mode_solo">לבד</string>
+    <string name="play_mode_solo_sub">התוצאה במעטפה, ומשווים</string>
+    <string name="play_mode_solo_challenge">מקבלים את האתגר</string>
+    <string name="play_mode_elsewhere">שיחקתי כבר במקום אחר (מחשב)</string>
+    <string name="play_mode_hint">נשאל פעם אחת לכל משחק ביום.</string>
+    <string name="result_title_solo">⚔️ %1$s · לבד</string>
+    <string name="result_detected_solo">זוהה: %1$s · ייחתם במעטפה</string>
 </resources>

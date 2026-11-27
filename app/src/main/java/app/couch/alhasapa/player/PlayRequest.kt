@@ -15,7 +15,12 @@ object ProfileNames {
     fun forSite(site: Site?, who: String?): String =
         if (site?.profile == "player") (if (who == "b") RONI else STEVE) else GAMES
 
-    fun forPerson(who: String): String = if (who == "b") RONI else STEVE
+    /** A person's own corner: the first and second of us as always; anyone else (1.11, playing alone on a phone) a corner of their own. */
+    fun forPerson(who: String): String = when {
+        who == "b" -> RONI
+        who == "a" || !app.couch.alhasapa.data.Couple.isId(who) -> STEVE
+        else -> "p-$who"
+    }
 }
 
 /** Everything the player needs to open one page. */
@@ -31,16 +36,22 @@ data class PlaySession(
     /** For head-to-head games: "a" or "b", whose turn it is. */
     val who: String?,
     val loginMode: Boolean,
+    /**
+     * Played alone (1.11), by [who]: in that person's own corner (their profile, so a shared login's puzzle stays open for the couch),
+     * and its result is sealed until the others play it alone too.
+     */
+    val solo: Boolean = false,
 ) {
     companion object {
-        fun forGame(catalog: Catalog, state: JSONObject?, game: Game, who: String?): PlaySession {
+        fun forGame(catalog: Catalog, state: JSONObject?, game: Game, who: String?, solo: Boolean = false): PlaySession {
             val url = catalog.urlFor(game, state)
+            val alone = solo && who != null && !game.isDuel
             return PlaySession(
-                title = game.n, url = url,
-                profile = ProfileNames.forSite(catalog.siteOf(game), who),
+                title = if (alone) "⚔️ ${game.n}" else game.n, url = url,
+                profile = if (alone) ProfileNames.forPerson(who!!) else ProfileNames.forSite(catalog.siteOf(game), who),
                 allowedHosts = catalog.allowedHosts(game, url),
                 roaming = catalog.roams(game, url),
-                gameId = game.id, who = who, loginMode = false,
+                gameId = game.id, who = who, loginMode = false, solo = alone,
             )
         }
 

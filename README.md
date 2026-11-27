@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.10.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.11.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -453,6 +453,45 @@ want to play on, starting with Krillion and NYT:
     came to the front, without keyboard mode; the others in "מי פיצח?" (the phone's home, the TV's sheet) and in the stats; a guest of
     another evening left out; the evening's end at five; a removal travelling. **Not tried on the devices:** the quiet hand-over when
     the app opens (how soon our Wi-Fi finds the box), and two phones held by a guest and one of us at once.
+- **1.11: solo: a game played alone on one's own phone, sealed until the other plays it alone too, then the reveal.** "And if I
+  play alone?": one game alone today (Dialed on the bus, say), the rest together in the evening.
+  - *Together or alone?* On the phone, when a game opens, a sheet asks once a game and a day: "🛋️ ביחד" (the couch's game and
+    points, as always) or "⚔️ לבד". When someone already played it alone today it says so ("סטיב כבר שיחק את זה היום לבד") and
+    "alone" takes the challenge. "שיחקתי כבר במקום אחר (מחשב)" types a result in without opening the game. Who holds the phone is
+    asked first when the phone does not know. The TV never asks: the TV is together.
+  - *Alone, in one's own corner.* The game opens in the person's own browser profile (the LinkedIn one for the two of us, a new one for
+    anyone else), not the couch's: a puzzle kept by a shared login (NYT) stays open for the evening, and the shared streak with it.
+    The strip's tick says "שוחק לבד"; the result sheet is one person's ("⚔️ Wordle · לבד", no "who cracked it"); after a while in
+    the game it is marked played alone by itself. Solo results never touch the couch's points or "played tonight".
+  - *Sealed, then revealed.* Saved alone, the result goes into an envelope: "✉️ נחתם במעטפה", and whom it waits for. Nobody else sees
+    how it went (on the other phone: "סטיב שיחק לבד · ✉️") until they have played the same day's game alone too, with a result. Then
+    the reveal: the envelopes open one after the other, and the crown goes to whoever did best (fewer guesses, mistakes, hints or
+    seconds; more points or words; not solved loses), or stays in the middle. It happens wherever the second result is saved; if the
+    other's result arrives while the card is up, it opens there. The TV's home reveals each game both played alone today, once, when
+    it is turned on. The stats page has "⚔️ לבד · ראש בראש החודש": the month's crowns and the last five.
+  - *"רוני כבר שיחק היום ב-Bandle — מה איתך?"* Each phone tells the other through an ntfy topic (ntfy.sh, free, public): one message
+    per change with the sides of whoever holds the phone, of today and yesterday, sealed with AES-256-GCM under a key the phones share.
+    The TV makes the topic and the key once and hands them to each paired phone over the home network, sealed under that connection's
+    own key (`relay` in KeyLink). The server sees that messages come and go on a topic nobody could guess, never what they say; a
+    message under another key, or one phone writing another person's side, is dropped. A phone reads the topic when the app comes to
+    the front, after a game alone, and by itself every quarter of an hour (Android's floor, `SoloJob`; only with a network): someone
+    else's game alone that this phone's person has not played becomes a notification ("⚔️ רוני כבר שיחק היום ב-Bandle", "מה איתך?
+    התוצאה סגורה במעטפה עד המשחק שלך."), and the other result of a game both played becomes "⚔️ חשיפה ב-Bandle!"; each said once. The
+    phone asks whether it may notify the first time a game is played alone; the home's banner offers "🔔" when it may not. On the
+    home: "⚔️ סטיב כבר שיחק היום ב-Bandle. מה איתך?" with "לשחק לבד" (no question), and "⚔️ חשיפה ב-Bandle!" with "לגלות".
+    The relay keeps a message twelve hours, so a phone with a game alone today says it again after six. The TV reads the topic while
+    it is in front (every five minutes), for its reveals.
+  - *A game played on a computer:* copy its share text there and send it to yourself (WhatsApp Web, say); on the phone, share it to
+    "על הספה שלנו": the sheet asks "ביחד או לבד?" too. Or "שיחקתי כבר במקום אחר" and type the result.
+  - Both apps must be updated together (`TOGETHER_SINCE` 36): the TV hands out the relay.
+  - *Tried here:* two phones and a TV through an ntfy topic in memory (Steve's game alone reaching Roni's phone as a challenge, said
+    once; Roni's result reaching Steve's as the reveal; a box under another key and a forged side dropped; the TV keeping both and
+    telling nobody; what could not be sent waiting, and today's sides said again before the relay lets them go), the client against a
+    real HTTP server shaped like ntfy, the TV handing a paired phone the relay, the notifications, the background job; the sheet
+    (asked once; who holds the phone first; the challenge; elsewhere), a result saved alone and sealed and the envelope opening when
+    the other's comes in, a result shared from elsewhere, the TV's reveal (once); the home's banner, sealed row, reveal and crowns in
+    Chromium (`tools/hub_solo_check.cjs`). **Not tried on the devices:** ntfy.sh itself (not reachable from where this is built), and
+    how often a sleeping phone really looks (Xiaomi phones may need the app allowed to start by itself).
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

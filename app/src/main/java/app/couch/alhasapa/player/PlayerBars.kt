@@ -161,7 +161,7 @@ fun PlayerBar(
                     BarItem.UI -> BarButton(stringResource(R.string.bar_ui), h, sp, actions.onCycleUi, description = stringResource(R.string.bar_ui_desc))
                     BarItem.RESULT -> actions.onResult?.let { BarButton(stringResource(R.string.player_result), h, sp, it) }
                     BarItem.PLAYED -> if (data.showPlayed) {
-                        val label = stringResource(R.string.player_played)
+                        val label = stringResource(if (LocalSolo.current) R.string.player_played_solo else R.string.player_played)
                         BarButton(if (data.played) "✓ $label" else label, h, sp, actions.onTogglePlayed, highlighted = data.played)
                     }
                 }

@@ -1,5 +1,11 @@
 package app.couch.alhasapa.player
 
+import app.couch.alhasapa.results.SoloPlay
+import app.couch.alhasapa.results.SoloOutcome
+import app.couch.alhasapa.results.ResultInput
+import app.couch.alhasapa.data.PiecesConfig
+import app.couch.alhasapa.data.Solo
+import app.couch.alhasapa.remote.SoloRelay
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -18,7 +24,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
-import app.couch.alhasapa.data.PiecesConfig
 import app.couch.alhasapa.display.DisplayStore
 import app.couch.alhasapa.results.ResultStore
 import app.couch.alhasapa.diag.Flight
@@ -84,9 +89,13 @@ class PlayerActivity : ComponentActivity() {
                 val revision by app.repo.revision.collectAsState()
                 // Re-read whenever the state changes (a tick, a saved display profile, a result).
                 val state = remember(revision) { app.repo.snapshot() }
-                val played = session.gameId != null && CouchState.entry(state, today(), session.gameId!!) != null
+                val played = session.gameId != null && (
+                    if (session.solo) Solo.side(state, today(), session.gameId!!, session.who.orEmpty()) != null
+                    else CouchState.entry(state, today(), session.gameId!!) != null
+                )
                 val info = remember(revision) { PlayerInfo.from(state, app.catalog, pieces, today(), session.who) }
               tv.Layer {
+               androidx.compose.runtime.CompositionLocalProvider(LocalSolo provides session.solo) {
                 PlayerScreen(
                     session = session,
                     played = played,
@@ -99,7 +108,11 @@ class PlayerActivity : ComponentActivity() {
                         ?.takeIf { !(it.isDuel && session.who == null) }
                         ?.let { ResultSupport(it, state, today()) },
                     onSaveResult = { input -> saveResult(app, input) },
-                    onAutoPlayed = { markPlayed(app) },
+                    onSaveSolo = if (session.solo) ({ input -> saveSolo(app, pieces, input) }) else null,
+                    soloAgain = { soloOutcome(app, pieces) },
+                    revision = revision,
+                    soloOther = when (session.who) { "a" -> info.nameB; "b" -> info.nameA; else -> null },
+                    onAutoPlayed = { if (session.solo) markSolo(app) else markPlayed(app) },
                     // The notes one of us left the other for this game (shown after its result is saved and celebrated).
                     notesFor = {
                         val id = session.gameId
@@ -112,12 +125,13 @@ class PlayerActivity : ComponentActivity() {
                         app.repo.update { s -> Notes.markSeen(s, id, System.currentTimeMillis()) }
                         Flight.log("notes: one was read after its game")
                     },
-                    onClearResult = { clearResult(app) },
-                    onTogglePlayed = { togglePlayed(app) },
+                    onClearResult = { if (session.solo) clearSolo(app) else clearResult(app) },
+                    onTogglePlayed = { if (session.solo) toggleSolo(app) else togglePlayed(app) },
                     reduceMotion = reduceMotion,
                     onClose = { finish() },
                     onOpenInChrome = { url -> ChromeTab.open(this, url) },
                 )
+               }
               }
             }
         }
@@ -168,7 +182,7 @@ class PlayerActivity : ComponentActivity() {
         val gameId = intent.getStringExtra(EXTRA_GAME)
         return if (gameId != null) {
             val game = app.catalog.game(gameId) ?: return null
-            PlaySession.forGame(app.catalog, app.repo.snapshot(), game, intent.getStringExtra(EXTRA_WHO))
+            PlaySession.forGame(app.catalog, app.repo.snapshot(), game, intent.getStringExtra(EXTRA_WHO), intent.getBooleanExtra(EXTRA_SOLO, false))
         } else {
             val site = app.catalog.sites[intent.getStringExtra(EXTRA_SITE)] ?: return null
             PlaySession.forLogin(site, intent.getStringExtra(EXTRA_TITLE) ?: site.name, intent.getStringExtra(EXTRA_PROFILE) ?: ProfileNames.GAMES)
@@ -179,7 +193,7 @@ class PlayerActivity : ComponentActivity() {
      * Saves a result. On a TV a saved result is celebrated on the screen (what this returns); everywhere else, and for a head-to-head
      * side, a short message says how it went.
      */
-    private fun saveResult(app: CouchApp, input: app.couch.alhasapa.results.ResultInput): Cheer? {
+    private fun saveResult(app: CouchApp, input: ResultInput): Cheer? {
         val game = session.gameId?.let { app.catalog.game(it) } ?: return null
         val before = app.repo.snapshot()
         val names = CouchState.names(before)
@@ -202,6 +216,56 @@ class PlayerActivity : ComponentActivity() {
         }
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         return null
+    }
+
+    /** A result of a game played alone (1.11): kept, sent to the relay, and answered with its card (sealed, or the reveal). */
+    private fun saveSolo(app: CouchApp, pieces: PiecesConfig, input: ResultInput): SoloOutcome? {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return null
+        val who = session.who ?: return null
+        SoloPlay.save(app.repo, game, today(), who, input)
+        Flight.log("solo: ${game.n} played alone, its result sealed")
+        tellRelay(app, who)
+        return soloOutcome(app, pieces)
+    }
+
+    /** The solo card as the state has it now (the other's result may have come in the meantime: the envelope opens). */
+    private fun soloOutcome(app: CouchApp, pieces: PiecesConfig): SoloOutcome? {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return null
+        val who = session.who ?: return null
+        return SoloPlay.outcome(app.repo.snapshot(), game, today(), who, pieces)
+    }
+
+    /** What changed alone goes to the relay, and what the others did comes back (a background thread; nothing waits for it). */
+    private fun tellRelay(app: CouchApp, who: String) {
+        val ctx = applicationContext
+        Thread({ runCatching { val r = SoloRelay(ctx, app.repo); r.send(who); r.receive(who) } }, "solo-send").start()
+    }
+
+    private fun markSolo(app: CouchApp) {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return
+        val who = session.who ?: return
+        if (SoloPlay.markPlayed(app.repo, game, today(), who)) {
+            Flight.log("played: ${session.title} marked by itself, alone")
+            Toast.makeText(this, R.string.solo_marked_toast, Toast.LENGTH_SHORT).show()
+            tellRelay(app, who)
+        }
+    }
+
+    private fun clearSolo(app: CouchApp) {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return
+        val who = session.who ?: return
+        SoloPlay.clear(app.repo, game, today(), who)
+        Toast.makeText(this, R.string.result_cleared, Toast.LENGTH_SHORT).show()
+        tellRelay(app, who)
+    }
+
+    /** Alone, "played" is ticked by hand like the couch's tick; un-ticking it takes the result back, "played" stays (it travelled). */
+    private fun toggleSolo(app: CouchApp) {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return
+        val who = session.who ?: return
+        if (Solo.side(app.repo.snapshot(), today(), game.id, who) == null) SoloPlay.markPlayed(app.repo, game, today(), who)
+        else SoloPlay.clear(app.repo, game, today(), who)
+        tellRelay(app, who)
     }
 
     /** Marks today's "we played" by itself (after a while in the game); a tick that is already there stays as it is. */
@@ -240,9 +304,14 @@ class PlayerActivity : ComponentActivity() {
         const val EXTRA_SITE = "site"
         const val EXTRA_TITLE = "title"
         const val EXTRA_PROFILE = "profile"
+        /** Played alone by [EXTRA_WHO] (1.11). */
+        const val EXTRA_SOLO = "solo"
 
-        fun gameIntent(context: Context, gameId: String, who: String?): Intent =
-            Intent(context, PlayerActivity::class.java).putExtra(EXTRA_GAME, gameId).apply { if (who != null) putExtra(EXTRA_WHO, who) }
+        fun gameIntent(context: Context, gameId: String, who: String?, solo: Boolean = false): Intent =
+            Intent(context, PlayerActivity::class.java).putExtra(EXTRA_GAME, gameId).apply {
+                if (who != null) putExtra(EXTRA_WHO, who)
+                if (solo && who != null) putExtra(EXTRA_SOLO, true)
+            }
 
         fun loginIntent(context: Context, siteId: String, title: String, profile: String): Intent =
             Intent(context, PlayerActivity::class.java).putExtra(EXTRA_SITE, siteId).putExtra(EXTRA_TITLE, title).putExtra(EXTRA_PROFILE, profile)

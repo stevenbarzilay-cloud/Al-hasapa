@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <!-- Solo (1.11): "רוני כבר שיחק היום ב-Bandle — מה איתך?" with the app closed. Asked the first time a game is played alone. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The relay's look every quarter of an hour (SoloJob) is kept when the phone restarts. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application>
+        <!-- The look at the relay, by itself (a job: Android runs it when it suits the battery, only with a network). -->
+        <service
+            android:name=".remote.SoloJob"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <!-- Long press on the app's icon: "מקלדת לטלוויזיה" goes straight to keyboard mode. -->
         <activity android:name=".MainActivity" android:exported="true" tools:node="merge">
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />

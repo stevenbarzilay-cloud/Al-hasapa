@@ -61,6 +61,31 @@ class MainActivityTvTest {
 
     private val inFocus = androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "נבחר")
 
+    /** 1.11: a game both of us played alone today, revealed on the TV's home once both results are in, once. */
+    @Test
+    fun aGameBothPlayedAloneIsRevealedOnTheHomeOnce() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
+        val repo = (context as CouchApp).repo
+        val day = app.couch.alhasapa.data.CouchState.dayKey(java.time.LocalDate.now())
+        val now = System.currentTimeMillis()
+        repo.update { st ->
+            app.couch.alhasapa.data.Solo.put(st, day, "bandle", app.couch.alhasapa.data.SoloSide("a", 3.0, 6, false, "guesses", now - 2_000))
+            app.couch.alhasapa.data.Solo.put(st, day, "bandle", app.couch.alhasapa.data.SoloSide("b", 2.0, 6, false, "guesses", now - 1_000))
+        }
+        launch()
+        rule.mainClock.advanceTimeBy(3_000); rule.waitForIdle()
+        rule.onNodeWithText("⚔️ חשיפה!").assertIsDisplayed()
+        rule.onNodeWithText("👑 הכתר: רוני").assertIsDisplayed()
+        // One OK puts it away, and it does not come back.
+        remote(android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.onNodeWithText("⚔️ חשיפה!").assertDoesNotExist()
+        scenario!!.close(); launch()
+        rule.mainClock.advanceTimeBy(3_000); rule.waitForIdle()
+        rule.onNodeWithText("⚔️ חשיפה!").assertDoesNotExist()
+        rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
+        repo.update { st -> st.remove("solo") }
+    }
+
     @Test
     fun aNoteLeftForTheHomeIsReadWithOneOkAndNotShownAgain() {
         CrashReport.clear(context); Flight.acknowledgePrevious()

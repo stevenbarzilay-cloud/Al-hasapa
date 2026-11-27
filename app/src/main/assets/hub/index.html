@@ -156,6 +156,23 @@ img{max-width:100%;height:auto;display:block}
 .me .user{width:18px;height:18px;flex:none}
 .me .cnt{font-size:.8em;background:var(--red);color:#F2EBDD;border-radius:999px;padding:0 6px;min-width:18px;text-align:center}
 .me[hidden]{display:none}
+/* Solo (1.11): a game played alone on one's own phone, sealed until the one looking played it alone too; then the reveal. */
+.solo-news{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}
+.solo-card{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-radius:16px;background:var(--ink);color:var(--cream)}
+.solo-card .t{flex:1 1 180px;font-weight:600;line-height:1.35}
+.solo-card .btn{background:var(--cream);color:var(--ink);border:0;min-height:40px}
+.solo-card.reveal{background:var(--tint);color:var(--ink);border:2px solid var(--ink)}
+.solo-card.reveal .btn{background:var(--ink);color:var(--cream)}
+.solo-bell{align-self:flex-start;font-size:.85em;color:var(--ink-2);text-decoration:underline;min-height:36px;padding:0 4px}
+.row .extra .solo{display:inline-flex;align-items:center;gap:4px;padding:0 8px;min-height:26px;border-radius:999px;background:var(--tint);color:var(--ink);font-weight:600}
+.row .extra .solo .pc{width:13px;height:13px}
+.reveal-list{display:flex;flex-direction:column;gap:8px}
+.reveal-list .rv{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--card);border:1px solid var(--line-2);animation:rvIn .45s var(--press) both;animation-delay:calc(var(--i)*.45s)}
+.reveal-list .rv.win{background:var(--tint);border:2px solid var(--ink)}
+.reveal-list .rv b{flex:1}
+.reveal-list .rv span{font-weight:700;font-size:1.15em;font-variant-numeric:tabular-nums}
+.verdict{margin:4px 0 0;font-size:1.2em;font-weight:700;text-align:center;animation:rvIn .5s var(--press) both;animation-delay:calc(var(--i)*.45s)}
+@keyframes rvIn{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:none}}
 
 /* ---------- pieces: Steve = red circle, Roni = pink triangle ---------- */
 .pc{display:inline-block;flex:none;width:16px;height:16px;vertical-align:-3px}
@@ -670,6 +687,58 @@ const otherPiece=(p,c="pc")=>svgPiece(shapeOf(p.shape||"circle").d,colorOf(p.col
 const pieceOfId=(w,c="pc")=>w==="a"?pcS(c):w==="b"?pcR(c):(state.people&&state.people[w]?otherPiece(state.people[w],c):"");
 const nm=w=>w==="a"?state.names.a:w==="b"?state.names.b:((state.people&&state.people[w]&&state.people[w].name)||"אורח");
 const hash=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))|0;return Math.abs(h)};
+/* Solo (1.11): the games played alone today, side by side. Who holds this phone sees the others' results only once they played it
+   alone too (with a result); until then "played" and an envelope. The reveal is said once on this phone (kept here, per device). */
+const ME=()=>{try{return NATIVE&&NATIVE.me?String(NATIVE.me()||""):""}catch(e){return ""}};
+const soloOf=(id,k=TODAY())=>{const g=state.solo&&state.solo[k]&&state.solo[k][id];
+  return g?Object.entries(g).filter(([w,x])=>x&&x.t).map(([w,x])=>({w,v:x.v,max:x.max,fail:!!x.fail,kind:x.kind||"",t:x.t,has:x.v!=null||!!x.fail})).sort((a,b)=>a.t-b.t):[]};
+const soloKind=(g,sides)=>{const ks=[...new Set(sides.filter(x=>x.has&&x.kind).map(x=>x.kind))];return ks.length===1?ks[0]:(g.metric&&g.metric!=="none"?g.metric:"guesses")};
+function soloCmp(kind,a,b){
+  if(a.fail||b.fail) return a.fail&&b.fail?0:a.fail?-1:1;
+  if(a.v==null) return b.v==null?0:-1; if(b.v==null) return 1;
+  if(kind==="none") return 0;
+  if(kind==="score"){const r=a.max&&b.max&&a.max!==b.max; return (r?a.v/a.max:a.v)-(r?b.v/b.max:b.v)}
+  return kind==="words"?a.v-b.v:b.v-a.v;
+}
+function soloWinner(g,sides){const r=sides.filter(x=>x.has), kind=soloKind(g,sides); if(r.length<2||kind==="none") return null;
+  r.sort((x,y)=>soloCmp(kind,y,x)); return soloCmp(kind,r[0],r[1])===0?"t":r[0].w}
+const soloVal=(g,x,sides)=>x.has?fmtVal(soloKind(g,sides),{v:x.v,max:x.max,fail:x.fail}):"";
+const SEEN_KEY="couch-solo-seen";
+const soloSeen=k=>{try{return (JSON.parse(localStorage.getItem(SEEN_KEY)||"[]")).includes(k)}catch(e){return false}};
+const soloSee=k=>{try{const a=JSON.parse(localStorage.getItem(SEEN_KEY)||"[]").filter(x=>x>=TODAY()); a.push(k); localStorage.setItem(SEEN_KEY,JSON.stringify(a.slice(-80)))}catch(e){}};
+const played2=w=>w==="a"||w==="b"?"שיחק":"שיחק/ה";
+function soloNews(){
+  const me=ME(), t=TODAY(); if(!me) return "";
+  const cards=[];
+  for(const g of GAMES){
+    const sides=soloOf(g.id,t); if(!sides.length) continue;
+    const mine=sides.find(x=>x.w===me), others=sides.filter(x=>x.w!==me);
+    if(!others.length) continue;
+    if(!mine){const o=others[0]; cards.push(`<div class="solo-card" data-id="${esc(g.id)}"><span class="t">⚔️ ${esc(nm(o.w))} כבר ${played2(o.w)} היום ב-${esc(g.n)}. מה איתך?</span><button class="btn sm" type="button" data-act="solo-play">לשחק לבד</button></div>`)}
+    else if(mine.has&&soloWinner(g,sides)&&!soloSeen(t+"|"+g.id)) cards.push(`<div class="solo-card reveal" data-id="${esc(g.id)}"><span class="t">⚔️ חשיפה ב-${esc(g.n)}! ${esc(nm(others.find(x=>x.has).w))} גם סיים.</span><button class="btn sm" type="button" data-act="solo-reveal">לגלות</button></div>`);
+  }
+  if(!cards.length) return "";
+  let bell=""; try{if(NATIVE&&NATIVE.notifications&&NATIVE.notifications()==="no") bell=`<button class="solo-bell" type="button" data-act="notify">🔔 להודיע לי גם כשהאפליקציה סגורה</button>`}catch(e){}
+  return `<div class="solo-news">${cards.slice(0,3).join("")}${bell}</div>`;
+}
+function soloChip(g){
+  const me=ME(), sides=soloOf(g.id); if(!sides.length) return "";
+  const mine=sides.find(x=>x.w===me), w=mine&&mine.has?soloWinner(g,sides):null;
+  if(w) return `<span class="solo" title="לבד, ראש בראש">⚔️ ${sides.filter(x=>x.has).map(x=>`${pieceOfId(x.w)}${esc(soloVal(g,x,sides))}${w===x.w?" 👑":""}`).join(" · ")}${w==="t"?" · תיקו":""}</span>`;
+  if(mine) return `<span class="solo">⚔️ ${mine.has?"שיחקת לבד · ✉️ במעטפה":"שוחק לבד"}</span>`;
+  const o=sides[0]; return `<span class="solo">⚔️ ${pieceOfId(o.w)}${esc(nm(o.w))} ${played2(o.w)} לבד · ✉️</span>`;
+}
+function openReveal(id){
+  const g=byId[id], me=ME(); if(!g) return;
+  const sides=soloOf(id), w=soloWinner(g,sides), shown=sides.filter(x=>x.has);
+  soloSee(TODAY()+"|"+id);
+  const verdict=w==="t"?"🤝 תיקו! הכתר נשאר באמצע":w===me?"👑 הכתר שלך!":`👑 הכתר: ${esc(nm(w))}`;
+  openSheet(`<h3 id="sheetTitle">⚔️ חשיפה · ${esc(g.n)}</h3>
+    <div class="reveal-list">${shown.map((x,i)=>`<div class="rv ${w===x.w?"win":""}" style="--i:${i}">${pieceOfId(x.w,"pc lg")}<b>${esc(nm(x.w))}</b><span>${esc(soloVal(g,x,sides))}</span>${w===x.w?"👑":""}</div>`).join("")}</div>
+    <p class="verdict" style="--i:${shown.length}">${verdict}</p>
+    <div class="row-btns"><button class="btn primary main" type="button" data-act="close">יופי</button></div>`);
+  render();
+}
 let featOffset=0;
 function featured(){const pool=GAMES.filter(g=>inLib(g)&&!isDuel(g)&&!playedOn(g.id,TODAY()));return pool.length?pool[(hash(TODAY())+featOffset)%pool.length]:null}
 const DEFAULT_NOTES=["החתול כבר תפס את הכרית האמצעית.","עוד אחד ונלך לישון. בטח.","פה תגור הבדיחה הפרטית שלכם."];
@@ -722,6 +791,7 @@ function rowHTML(g){
       extra=`${r?`<button class="chip" data-act="result" title="עריכת התוצאה">${esc(fmtVal(r.kind,r))} · ${pts} נק׳</button>`:`<button class="chip add" data-act="result">+ תוצאה</button>`}${crackHTML(g,e.w||"")}`;
     } else if(st>1) extra=`<span>${st} ערבים ברצף</span>`;
     tick=`<button class="tick" data-act="mark" aria-pressed="${done}" aria-label="${done?"לבטל סימון":"סימון שיחקנו"}: ${esc(g.n)}"><span class="box">${CHECK}</span><span class="tl">שיחקנו</span></button>`;
+    extra+=soloChip(g);
   }
   return `<li class="row ${done?"done":""} ${duel?"is-duel":""}" data-id="${g.id}">
     <button class="rm" data-act="remove" aria-label="להוריד את ${esc(g.n)} מהספה" title="להוריד מהספה"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
@@ -765,7 +835,7 @@ function renderHome(){
   }
   const leftN=lib.filter(g=>!playedOn(g.id,t)).length;
   const coda=`<div class="coda">${IMG.cats}<b>${!groups?(filter==="left"?"אין מה להשלים הערב.":"אין פה כלום בסינון הזה."):(leftN?`זו כל הספרייה. נשארו ${leftN} להערב.`:"שיחקנו הכול. החתולים מאשרים.")}</b><span class="help">${!groups&&filter!=="left"?"נסו סינון אחר.":"מה שלא שיחקנו מחכה למחר."}</span></div>`;
-  document.getElementById("v-home").innerHTML=`<div class="tonight">${feat}${side}</div>
+  document.getElementById("v-home").innerHTML=`${soloNews()}<div class="tonight">${feat}${side}</div>
     <div class="lib-head" id="lib"><h2>הספרייה</h2><span class="help">${lib.length} משחקים</span><button class="tbtn" type="button" data-act="accounts">החשבונות</button><button class="tbtn" type="button" data-act="urls">הקישורים שלנו</button>
       <div class="filters" role="group" aria-label="סינון">${chips.map(([v,l])=>`<button class="f" data-filter="${esc(v)}" aria-pressed="${filter===v}">${esc(l)}</button>`).join("")}</div></div>
     <div class="groups">${groups}</div>${coda}`;
@@ -820,6 +890,16 @@ function renderStats(){
   const coHTML=Object.entries(co).map(([w,n])=>`<div>${pieceOfId(w)||""}<b>${n}</b><span>${esc(nm(w))}</span></div>`).join("");
   const lead=da===db_?"שוויון. כרגיל.":(da>db_?state.names.a:state.names.b)+" מוביל. בינתיים.";
   const bestList=Object.entries(best).filter(([id])=>byId[id]).slice(0,8);
+  // Solo (1.11): who took the crown in the games played alone, this month; and the last few.
+  const sw={a:0,b:0}, sRecent=[]; let sTies=0; const month=TODAY().slice(0,7);
+  for(const k of Object.keys(state.solo||{}).sort()) for(const id in state.solo[k]){
+    const g=byId[id]; if(!g) continue; const w=soloWinner(g,soloOf(id,k)); if(!w) continue;
+    sRecent.push({k,g,w}); if(k.slice(0,7)!==month) continue; if(w==="t") sTies++; else sw[w]=(sw[w]||0)+1;
+  }
+  const soloPanel=sRecent.length?`<div class="panel"><h3>⚔️ לבד · ראש בראש החודש</h3>
+      <div class="crack">${Object.entries(sw).map(([w,n])=>`<div>${pieceOfId(w)||""}<b>${n}</b><span>${esc(nm(w))}</span></div>`).join("")}</div>
+      <p class="help" style="margin:8px 0 0">כל אחד שיחק לבד בטלפון שלו, ואז נחשף. ${sTies?sTies+" תיקו.":""}</p>
+      <ul class="top" style="margin-top:12px">${sRecent.slice(-5).reverse().map(d=>`<li>${sym(d.g.k)}<span>${esc(d.g.n)} <span class="help">${new Date(d.k).toLocaleDateString("he-IL",{day:"numeric",month:"numeric"})}</span></span><b>${d.w==="t"?"תיקו":(pieceOfId(d.w)||"")+" 👑"}</b></li>`).join("")}</ul></div>`:"";
   document.getElementById("v-stats").innerHTML=`<div class="stats">
     <div class="panel"><h3>נקודות ספה · ביחד</h3>
       <div class="team"><b>${teamPts}</b><span>נקודות מאז שהתחלנו</span></div>
@@ -839,6 +919,7 @@ function renderStats(){
       </div></div>
       ${IMG.board}
     </div>
+    ${soloPanel}
     <div class="panel"><h3>השיאים שלנו</h3>${bestList.length?`<ul class="top">${bestList.map(([id,b])=>`<li>${sym(byId[id].k)}<span>${esc(byId[id].n)}</span><b>${esc(fmtVal(b.kind,b.r))}</b></li>`).join("")}</ul>`:`<p class="help">מדביקים תוצאות, והשיאים יופיעו כאן.</p>`}</div>
     <div class="panel"><h3>במספרים</h3><div class="facts">
       <div><b>${total}</b><span>משחקים ששיחקנו</span></div><div><b>${ks.length}</b><span>ערבים על הספה</span></div>
@@ -1087,6 +1168,9 @@ document.querySelector("main").addEventListener("click",e=>{
   const f=e.target.closest("[data-filter]"); if(f){filter=f.dataset.filter;renderHome();document.getElementById("lib").scrollIntoView({block:"start"});return}
   const a=e.target.closest("[data-act]"); if(!a) return;
   const act=a.dataset.act, host=a.closest("[data-id]"), id=a.dataset.id||(host&&host.dataset.id), t=TODAY();
+  if(act==="solo-play"){if(NATIVE&&NATIVE.playSolo)NATIVE.playSolo(id);return}
+  if(act==="solo-reveal"){openReveal(id);return}
+  if(act==="notify"){if(NATIVE&&NATIVE.allowNotifications)NATIVE.allowNotifications();return}
   if(act==="shuffle"){featOffset++;renderHome();return}
   if(act==="accounts"){NATIVE?NATIVE.openAccounts():toast("החשבונות זמינים באפליקציה.");return}
   if(act==="urls"){setView("settings");return}

@@ -54,6 +54,19 @@ class HomeDialogsPreviewTest {
         saveDialog("phone-home-guest.png")
     }
 
+    /** Together or alone? (1.11), with someone who already played it alone today. */
+    @Test fun playMode() {
+        rule.setContent {
+            AlHasapaTheme {
+                app.couch.alhasapa.ui.PlayModeDialog(
+                    "Bandle", listOf(app.couch.alhasapa.ui.Challenger("סטיב", pieces.styleFor(null, "a"), true)),
+                    onTogether = {}, onSolo = {}, onElsewhere = {}, onDismiss = {},
+                )
+            }
+        }
+        saveDialog("phone-play-mode.png")
+    }
+
     /** A note from the home, for anyone here. */
     @Test fun noteForAnyone() {
         rule.setContent {

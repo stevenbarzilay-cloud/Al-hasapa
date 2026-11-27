@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -21,6 +22,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.BuildConfig
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.data.Solo
+import app.couch.alhasapa.data.SoloSide
+import app.couch.alhasapa.remote.RelayStore
+import app.couch.alhasapa.remote.RemoteStore
+import app.couch.alhasapa.ui.PLAY_SOLO_TAG
 import app.couch.alhasapa.player.PlayerActivity
 import java.time.LocalDate
 import org.junit.After
@@ -188,5 +194,64 @@ class ResultFlowTest {
         assertNotNull(ShareReceiverActivity.sharedText(Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT, "hi")))
         assertNull("another action is not a share", ShareReceiverActivity.sharedText(Intent(Intent.ACTION_VIEW).putExtra(Intent.EXTRA_TEXT, "hi")))
         assertNull("far too long to be a result", ShareReceiverActivity.sharedText(Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT, "x".repeat(20_001))))
+    }
+
+    // ---- alone (1.11) ----
+
+    @Test
+    fun aGamePlayedAloneIsSealedUntilTheOtherPlaysItThenTheEnvelopeOpens() {
+        phoneOnly()
+        app.repo.update { it.remove("solo") }
+        scenario = ActivityScenario.launch<PlayerActivity>(PlayerActivity.gameIntent(context, "wordle", "b", solo = true)); rule.waitForIdle()
+        resultButton()
+        rule.onNodeWithText("⚔️ Wordle · לבד").assertIsDisplayed()
+        rule.onNodeWithText("מי פיצח?").assertDoesNotExist()
+        type("או ידנית: ניסיונות", "4")
+        rule.onNodeWithText("זוהה: 4/6 · ייחתם במעטפה").assertIsDisplayed()
+        press("שמירה"); rule.waitForIdle()
+        assertNull("not on the couch's page", CouchState.entry(app.repo.snapshot(), today, "wordle"))
+        assertEquals(4.0, Solo.side(app.repo.snapshot(), today, "wordle", "b")!!.v!!, 0.0)
+        rule.onNodeWithText("✉️ נחתם במעטפה").assertIsDisplayed()
+        rule.onNodeWithText("כשגם סטיב ישחק את זה היום — חשיפה!").assertIsDisplayed()
+        // Steve's result comes in (the relay) while the card is up: the envelope opens, line by line, and the crown is Roni's.
+        app.repo.update { Solo.put(it, today, "wordle", SoloSide("a", 5.0, 6, false, "guesses", System.currentTimeMillis())) }
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(3_000); rule.waitForIdle()
+        rule.onNodeWithText("⚔️ חשיפה!").assertIsDisplayed()
+        rule.onNodeWithText("👑 הכתר שלך!").assertIsDisplayed()
+        rule.onNode(hasTestTag(SOLO_OK_TAG)).performClick(); rule.waitForIdle()
+        rule.onNodeWithText("⚔️ חשיפה!").assertDoesNotExist()
+        app.repo.update { it.remove("solo") }
+    }
+
+    @Test
+    fun aGamePlayedAloneElsewhereHasItsResultTypedIn() {
+        phoneOnly()
+        app.repo.update { it.remove("solo") }
+        RemoteStore(context).me = "a"
+        scenario = ActivityScenario.launch<ShareReceiverActivity>(ShareReceiverActivity.soloIntent(context, "wordle")); rule.waitForIdle()
+        rule.onNodeWithText("⚔️ Wordle · לבד").assertIsDisplayed()
+        type("או ידנית: ניסיונות", "3")
+        press("שמירה"); rule.waitForIdle()
+        assertEquals(3.0, Solo.side(app.repo.snapshot(), today, "wordle", "a")!!.v!!, 0.0)
+        rule.onNodeWithText("✉️ נחתם במעטפה").assertIsDisplayed()
+        RemoteStore(context).me = null
+        app.repo.update { it.remove("solo") }
+    }
+
+    @Test
+    fun aSharedResultAsksTogetherOrAloneOnThePhoneOfSomeoneKnown() {
+        phoneOnly()
+        app.repo.update { it.remove("solo") }
+        RemoteStore(context).me = "b"
+        share("Wordle 1,618 3/6\n\n🟩🟩🟩🟩🟩")
+        rule.onNodeWithText("ביחד או לבד?").assertIsDisplayed()
+        rule.onNode(hasTestTag(PLAY_SOLO_TAG)).performClick(); rule.waitForIdle()
+        rule.onNodeWithText("⚔️ Wordle · לבד").assertIsDisplayed()
+        press("שמירה"); rule.waitForIdle()
+        assertEquals(3.0, Solo.side(app.repo.snapshot(), today, "wordle", "b")!!.v!!, 0.0)
+        assertNull("not on the couch's page", CouchState.entry(app.repo.snapshot(), today, "wordle"))
+        assertEquals("solo", RelayStore(context).mode(today, "wordle"))
+        RemoteStore(context).me = null
+        app.repo.update { it.remove("solo") }
     }
 }

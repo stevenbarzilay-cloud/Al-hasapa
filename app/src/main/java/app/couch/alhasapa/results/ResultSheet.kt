@@ -101,12 +101,15 @@ fun ResultSheet(
     modifier: Modifier = Modifier,
     /** The text was read off the game's end screen rather than copied by the game (1.9.10). */
     fromScreen: Boolean = false,
+    /** Played alone by [who] (1.11): one person's result, like a head-to-head side, sealed until the others play it alone too. */
+    solo: Boolean = false,
 ) {
     val game = support.game
     val kind = ResultDraft.kindOf(game)
-    val duel = game.isDuel
+    val duel = game.isDuel || solo
     val existing = CouchState.entry(support.state, support.day, game.id)
-    val existingResult: Result? = if (duel) null else Result.fromJson(existing?.optJSONObject("r"))
+    val soloSide = if (solo && who != null) app.couch.alhasapa.data.Solo.side(support.state, support.day, game.id, who) else null
+    val existingResult: Result? = if (solo) soloSide?.asResult() else if (duel) null else Result.fromJson(existing?.optJSONObject("r"))
 
     var text by remember { mutableStateOf(initialText) }
     var manual by remember { mutableStateOf(existingResult?.takeIf { it.raw.isNullOrEmpty() }?.let { if (kind == "time") Scoring.fmtT(it.v) else jsNumber(it.v).toString() }.orEmpty()) }
@@ -115,7 +118,7 @@ fun ResultSheet(
 
     val log = support.state.optJSONObject("log") ?: JSONObject()
     val draft = remember(text, manual, fail, support) { ResultDraft.evaluate(game, text, manual, fail, log, support.day) }
-    val canClear = onClear != null && (if (duel) existing?.optJSONObject("d")?.optJSONObject(who ?: "") != null else existingResult != null)
+    val canClear = onClear != null && (if (solo) soloSide?.hasResult == true else if (duel) existing?.optJSONObject("d")?.optJSONObject(who ?: "") != null else existingResult != null)
     val save = { onSave(ResultInput(text = text, manual = manual, fail = fail, credit = if (duel) null else credit)) }
 
     // On a TV (1.9.7): nothing here can be typed with a remote, so the sheet is buttons only (the number has − and +), the arrows stay
@@ -132,8 +135,13 @@ fun ResultSheet(
         }
     }
 
-    val title = if (duel) stringResource(R.string.result_title_duel, game.n, couple.name(who)) else stringResource(R.string.result_title, game.n)
+    val title = when {
+        solo -> stringResource(R.string.result_title_solo, game.n)
+        duel -> stringResource(R.string.result_title_duel, game.n, couple.name(who))
+        else -> stringResource(R.string.result_title, game.n)
+    }
     val preview = when {
+        draft.result != null && solo -> stringResource(R.string.result_detected_solo, Scoring.fmtVal(draft.result.kind, draft.result))
         draft.result != null && duel -> stringResource(R.string.result_detected_duel, Scoring.fmtVal(kind, draft.result))
         draft.result != null -> stringResource(R.string.result_detected, Scoring.fmtVal(kind, draft.result), draft.points)
         text.isNotBlank() -> stringResource(R.string.result_unrecognised)

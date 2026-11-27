@@ -53,6 +53,8 @@ class KeyServer(
     private val onMirroring: (Boolean) -> Unit = { on -> RemoteKeys.touchModeChanged(on) },
     /** Both of us as this TV knows us, and the notes the phones leave (1.9.9). */
     private val book: CoupleBook = RepoCoupleBook { (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo },
+    /** Where the phones tell each other of the games played alone (1.11): made here once, handed to each paired phone. */
+    private val relay: () -> RelayConfig? = { RelayStore(context).ensure() },
 ) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -312,6 +314,11 @@ class KeyServer(
             // Both of us as the TV knows us: the phone keeps what is newer (its own word comes back from it, see Msg.CoupleMsg).
             // (Not to a phone app from before 1.9, which sends its token as is: it would not know what to do with it.)
             if (!plain) runCatching { book.couple() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { send(Msg.CoupleMsg("", it)) }
+            // The solo relay (1.11), sealed for this phone only: someone else on the home network sees that something went, not what.
+            val key = frameKey
+            if (!plain && key != null) runCatching { relay() }.getOrNull()?.let { c ->
+                send(Msg.Relay(RelayCrypto.seal(key, KeyLink.RELAY_AAD, c.toJson().toByteArray())))
+            }
             Flight.log(
                 "phone keyboard: $name connected" +
                     if (app != appCode) " (its app is ${if (app < appCode) "older" else "newer"}: ${ver.ifEmpty { "before 1.9.4" }}; this TV has $appVer)" else "",

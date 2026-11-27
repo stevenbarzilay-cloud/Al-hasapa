@@ -45,6 +45,12 @@ class HubBridge(
 
         /** A note for one of us, written here (sent to the TV when it is reached). */
         fun openNote() {}
+
+        /** A game to play alone (1.11), straight away: the challenge on the home was taken. */
+        fun playSolo(gameId: String) {}
+
+        /** The phone is asked whether the app may say things with the app closed (1.11). */
+        fun allowNotifications() {}
     }
 
     /** `{rev, fresh, state}`: `fresh` is true on the very first run, when the page may bring over what it stored itself. */
@@ -99,6 +105,17 @@ class HubBridge(
 
     @JavascriptInterface
     fun openNote() { if (!TvMode.isTelevision(context)) actions.openNote() }
+
+    /** A game to play alone (1.11), from the home's challenge: no question first. */
+    @JavascriptInterface
+    fun playSolo(gameId: String) { if (!TvMode.isTelevision(context)) actions.playSolo(gameId) }
+
+    /** Whether the app may say things with the app closed: "yes", "no" (the home offers to ask), or "" on a TV. */
+    @JavascriptInterface
+    fun notifications(): String = if (TvMode.isTelevision(context)) "" else if (app.couch.alhasapa.remote.SoloNews.allowed(context)) "yes" else "no"
+
+    @JavascriptInterface
+    fun allowNotifications() { if (!TvMode.isTelevision(context)) actions.allowNotifications() }
 
     /** How many notes written on this phone wait for the TV. */
     @JavascriptInterface

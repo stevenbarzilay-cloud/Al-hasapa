@@ -42,6 +42,14 @@ import app.couch.alhasapa.catalog.Game
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.data.PiecesConfig
 import app.couch.alhasapa.ui.WhoPlaysDialog
+import app.couch.alhasapa.BuildConfig
+import app.couch.alhasapa.data.Solo
+import app.couch.alhasapa.data.Couple as People
+import app.couch.alhasapa.remote.RelayStore
+import app.couch.alhasapa.remote.RemoteStore
+import app.couch.alhasapa.remote.SoloRelay
+import app.couch.alhasapa.ui.Challenger
+import app.couch.alhasapa.ui.PlayModeDialog
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 import app.couch.alhasapa.ui.theme.Palette
 import java.time.LocalDate
@@ -55,39 +63,70 @@ class ShareReceiverActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val text = sharedText(intent)
+        val app = application as CouchApp
+        // 1.11: a result typed in for a game played alone elsewhere (a computer), from the home's "together or alone?".
+        val manualSolo = intent?.getBooleanExtra(EXTRA_SOLO, false) == true
+        val text = if (manualSolo) "" else sharedText(intent)
         if (text == null) {
             Toast.makeText(this, R.string.share_not_text, Toast.LENGTH_SHORT).show()
             finish(); return
         }
-        val app = application as CouchApp
         val pieces = PiecesConfig.load(this)
         val day = CouchState.dayKey(LocalDate.now())
-        val detected = GameDetector.detect(text, app.catalog)
+        val detected = if (manualSolo) intent.getStringExtra(EXTRA_GAME)?.let { app.catalog.game(it) } else GameDetector.detect(text, app.catalog)
+        if (manualSolo && detected == null) { finish(); return }
+        // Who holds this phone, if they are here this evening: only they can play alone on it.
+        val me = RemoteStore(this).me?.takeIf { w -> People.everyone(app.repo.snapshot(), People.evening()).any { it.who == w } }
+        val relay = RelayStore(this)
 
         setContent {
             AlHasapaTheme {
                 var game by remember { mutableStateOf(detected) }
                 var who by remember { mutableStateOf<String?>(null) }
+                // Together or alone (1.11), on a phone whose holder is known: kept for the game and the day, asked when not yet.
+                var mode by remember { mutableStateOf(if (manualSolo) "solo" else null) }
+                var solo by remember { mutableStateOf<SoloOutcome?>(null) }
                 val state = remember { app.repo.snapshot() }
                 val (nameA, nameB) = CouchState.names(state)
                 val couple = Couple(nameA, nameB, pieces.styleFor(state, "a"), pieces.styleFor(state, "b"))
 
                 Box(Modifier.fillMaxSize().background(Palette.Cream).safeDrawingPadding(), contentAlignment = Alignment.Center) {
                     val g = game
-                    if (g == null) {
+                    val o = solo
+                    val askMode = g != null && !g.isDuel && me != null && !BuildConfig.TV && (mode ?: relay.mode(day, g.id)) == null
+                    val alone = g != null && !g.isDuel && me != null && (mode ?: relay.mode(day, g.id)) == "solo"
+                    if (o != null) {
+                        SoloCard(o, other = when (me) { "a" -> nameB; "b" -> nameA; else -> null }, reduceMotion = false, onDone = { finish() }, modifier = Modifier.padding(16.dp))
+                    } else if (g == null) {
                         GamePicker(app, state, onPick = { game = it }, onCancel = { finish() })
+                    } else if (askMode) {
+                        PlayModeDialog(
+                            gameName = g.n,
+                            challengers = Solo.sides(state, day, g.id).filter { it.who != me }
+                                .map { s -> Challenger(People.name(state, s.who), pieces.styleOf(People.person(state, s.who)), s.who in People.WHO) },
+                            onTogether = { relay.setMode(day, g.id, "together"); mode = "together" },
+                            onSolo = { relay.setMode(day, g.id, "solo"); mode = "solo" },
+                            onElsewhere = null,
+                            onDismiss = { finish() },
+                        )
                     } else {
                         ResultSheet(
                             support = ResultSupport(g, state, day),
                             couple = couple,
-                            who = who,
+                            who = if (alone) me else who,
                             initialText = text,
-                            captured = true,
-                            onSave = { input -> save(app, g, day, who, input, couple); finish() },
+                            captured = !manualSolo,
+                            onSave = { input ->
+                                if (alone) {
+                                    SoloPlay.save(app.repo, g, day, me, input)
+                                    Thread({ runCatching { SoloRelay(applicationContext, app.repo).let { r -> r.send(me); r.receive(me) } } }, "solo-send").start()
+                                    solo = SoloPlay.outcome(app.repo.snapshot(), g, day, me, pieces) ?: run { finish(); null }
+                                } else { save(app, g, day, who, input, couple); finish() }
+                            },
                             onClear = null,
                             onCancel = { finish() },
                             modifier = Modifier.padding(12.dp),
+                            solo = alone,
                         )
                         if (g.isDuel && who == null) {
                             WhoPlaysDialog(
@@ -118,6 +157,12 @@ class ShareReceiverActivity : ComponentActivity() {
 
     companion object {
         const val MAX_SHARED = 20_000
+        const val EXTRA_GAME = "game"
+        const val EXTRA_SOLO = "solo"
+
+        /** A result typed in by hand for [gameId], played alone elsewhere (1.11). */
+        fun soloIntent(context: android.content.Context, gameId: String): Intent =
+            Intent(context, ShareReceiverActivity::class.java).putExtra(EXTRA_GAME, gameId).putExtra(EXTRA_SOLO, true)
 
         /** The text another app shared, if it is a plain, reasonably small piece of text. */
         fun sharedText(intent: Intent?): String? {

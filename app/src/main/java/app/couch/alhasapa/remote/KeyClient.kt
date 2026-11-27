@@ -95,6 +95,22 @@ class KeyClient(
     @Volatile private var mirrorCrop: KeyLink.Crop? = null
     /** The connection's picture key (see [FrameCrypto]): from the pairing token and the TV's nonce of this connection. */
     @Volatile private var frameKey: ByteArray? = null
+    private val appContext: Context = context.applicationContext
+
+    /**
+     * The solo relay from the TV (1.11), sealed under this connection's key: kept, and the phone starts looking at the relay by itself.
+     * Anything that does not open is dropped.
+     */
+    private fun takeRelay(sealed: String) {
+        val key = frameKey ?: return
+        val c = RelayCrypto.open(key, KeyLink.RELAY_AAD, sealed)?.let { RelayConfig.parse(String(it, Charsets.UTF_8)) }
+        if (c == null) { Flight.log("relay: what the TV sent could not be opened; not kept"); return }
+        val rs = RelayStore(appContext)
+        if (rs.config == c) return
+        rs.config = c
+        Flight.log("relay: the TV gave this phone the relay")
+        SoloJob.schedule(appContext)
+    }
     @Volatile private var nonce = ""
     @Volatile private var badFrames = 0
 
@@ -307,6 +323,7 @@ class KeyClient(
                     is Msg.FrameNone -> if (mirrorWidth > 0) { _frame.value = null; _frameNone.value = m.why }
                     is Msg.CoupleMsg -> runCatching { book.offer(m.people) }
                     is Msg.NoteOk -> { store.noteKept(m.id); _notesWaiting.value = store.pendingNotes().size }
+                    is Msg.Relay -> takeRelay(m.sealed)
                     is Msg.Bye -> { if (m.why == "wait") _state.value = State.Wait; break }
                     else -> {}
                 }

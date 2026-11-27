@@ -39,11 +39,13 @@ class KeyServerClientTest {
         override fun note(n: app.couch.alhasapa.data.Note): Boolean = if (notes.any { it.id == n.id }) false else { notes += n; true }
     }
     private val tvBook = Book(app.couch.alhasapa.data.Person("a", "סטיב", "circle", "red", 100), app.couch.alhasapa.data.Person("b", "רוני", "triangle", "pink", 100))
+    /** The TV's solo relay (1.11), kept apart from the phone's own store (both live in this one app here). */
+    private val relayCfg = RelayConfig.create()
     private val server = KeyServer(
         context, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = "MiBOX4",
         onLogins = { payload -> received += payload; "NYT Games" to 3 },
         appCode = 28, appVer = "1.9.4", onLinked = { on -> if (linked.lastOrNull() != on) linked += on },
-        frameSource = { source }, onMirroring = { mirroring += it }, book = tvBook,
+        frameSource = { source }, onMirroring = { mirroring += it }, book = tvBook, relay = { relayCfg },
     )
     private val clients = ArrayList<KeyClient>()
 
@@ -210,6 +212,18 @@ class KeyServerClientTest {
         store.me = null
     }
 
+    /** 1.11: the TV hands each paired phone the solo relay, sealed under that connection's key; the phone keeps it and looks by itself. */
+    @Test
+    fun theTvHandsAPairedPhoneTheSoloRelay() {
+        RelayStore(context).config = null
+        val phone = paired()
+        waitFor("the phone keeps the TV's relay") { RelayStore(context).config == relayCfg }
+        assertTrue(phone.state.value is KeyClient.State.Connected)
+        val jobs = context.getSystemService(android.app.job.JobScheduler::class.java).allPendingJobs
+        assertEquals("and looks at it by itself (a phone)", !app.couch.alhasapa.BuildConfig.TV, jobs.any { it.id == SoloJob.JOB_ID })
+        RelayStore(context).config = null
+    }
+
     @Test
     fun aNewPhonePairsWithTheCodeShownOnTheTvThenTypesAndComesBackWithoutIt() {
         RemoteStore(context).forgetPhones()
@@ -286,7 +300,7 @@ class KeyServerClientTest {
         // What the two tell each other is the version at which they last had to be updated together (raised by 1.9.7, the end of a
         // game, by 1.9.8, touch mode, and by 1.9.9, each of us on our own phone): two apps of releases after it that changed only one
         // of the two have nothing to say to each other about versions.
-        assertEquals("raised only by a release that needs both", 34, KeyLink.TOGETHER_SINCE)
+        assertEquals("raised only by a release that needs both", 36, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()

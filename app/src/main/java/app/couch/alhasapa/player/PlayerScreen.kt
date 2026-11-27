@@ -118,6 +118,9 @@ private val BOTTOM_OF_BOTH = listOf(BarItem.PROGRESS, BarItem.POINTS, BarItem.PI
  * The couch UI is always on screen, never behind a menu that vanishes: panels beside the game, bars above and below it, or at the
  * least a floating hamburger (see UiPlace). The hamburger opens the settings and the quick actions. Everything else is the game's.
  */
+/** Played alone (1.11): the strip's tick says "played alone", not "we played". */
+val LocalSolo = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 @Composable
 fun PlayerScreen(
     session: PlaySession,
@@ -142,6 +145,13 @@ fun PlayerScreen(
     onOpenInChrome: (String) -> Unit,
     reduceMotion: Boolean = false,
     dndSignals: app.couch.alhasapa.dnd.DndSignals? = null,
+    /** Played alone (1.11): saving a result answers with the solo card (sealed, or the reveal) instead of a celebration. */
+    onSaveSolo: ((ResultInput) -> app.couch.alhasapa.results.SoloOutcome?)? = null,
+    /** Who a sealed result waits for, by name (the other one of the two of us), for the solo card. */
+    soloOther: String? = null,
+    /** The solo card as it is now, asked again whenever the state changes ([revision]): the other's result may come in meanwhile. */
+    soloAgain: () -> app.couch.alhasapa.results.SoloOutcome? = { null },
+    revision: Long = 0,
 ) {
     val tv = LocalTv.current
     val activity = LocalContext.current.findActivity()
@@ -395,6 +405,10 @@ fun PlayerScreen(
     var notes by remember { mutableStateOf<List<app.couch.alhasapa.tv.NoteView>>(emptyList()) }
     val latestNotesFor by androidx.compose.runtime.rememberUpdatedState(notesFor)
     LaunchedEffect(cheer) { if (cheer != null) { delay(CHEER_MS); cheer = null; if (tv != null) notes = latestNotesFor() } }
+    // A game played alone (1.11): its card after the result is saved, until it is put away.
+    var solo by remember { mutableStateOf<app.couch.alhasapa.results.SoloOutcome?>(null) }
+    val latestSoloAgain by androidx.compose.runtime.rememberUpdatedState(soloAgain)
+    LaunchedEffect(revision) { if (solo != null) latestSoloAgain()?.let { solo = it } }
 
     // On a TV the game's frame lives in the dock at the left edge.
     if (tv != null) {
@@ -448,7 +462,7 @@ fun PlayerScreen(
                             if (result != null) PanelButton(stringResource(R.string.player_result)) { openResult() }
                             if (!session.loginMode) {
                                 Spacer(Modifier.height(8.dp))
-                                val label = stringResource(R.string.player_played)
+                                val label = stringResource(if (LocalSolo.current) R.string.player_played_solo else R.string.player_played)
                                 PanelButton(if (played) "✓ $label" else label, primary = played, onClick = onTogglePlayed)
                             }
                         }
@@ -621,15 +635,28 @@ fun PlayerScreen(
                         support = result,
                         couple = Couple(info.nameA, info.nameB, info.pieceA, info.pieceB, info.others),
                         who = session.who,
-                        initialText = resultText.ifEmpty { existingRaw(result, session.who) },
+                        initialText = resultText.ifEmpty { if (session.solo) "" else existingRaw(result, session.who) },
                         captured = resultCaptured,
                         fromScreen = resultFromScreen,
-                        onSave = { markedByHand = true; cheer = onSaveResult(it); resultOpen = false },
+                        solo = session.solo,
+                        onSave = {
+                            markedByHand = true
+                            val alone = onSaveSolo
+                            if (session.solo && alone != null) solo = alone(it) else cheer = onSaveResult(it)
+                            resultOpen = false
+                        },
                         onClear = { onClearResult(); resultOpen = false },
                         onCancel = { resultOpen = false },
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                     )
                 }
+            }
+        }
+
+        // A game played alone (1.11): sealed in its envelope, or the reveal.
+        solo?.let { o ->
+            Box(Modifier.fillMaxSize().background(Palette.Ink.copy(alpha = 0.45f)).pointerInput(Unit) { detectTapGestures { } }, contentAlignment = Alignment.Center) {
+                app.couch.alhasapa.results.SoloCard(o, soloOther, reduceMotion, onDone = { solo = null }, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp))
             }
         }
 

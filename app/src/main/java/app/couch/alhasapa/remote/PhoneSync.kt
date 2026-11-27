@@ -31,10 +31,15 @@ class PhoneSync(
     private var connectedAt = 0L
     private var target = 0L
 
-    /** Whether anything waits for the TV. */
+    /** Whether anything waits for the TV (or the TV has something for the phone: the solo relay, 1.11). */
     fun waiting(): Boolean {
         val store = RemoteStore(context)
-        return store.pendingNotes().isNotEmpty() || newest() > store.syncedAt
+        return store.pendingNotes().isNotEmpty() || newest() > store.syncedAt || needsRelay()
+    }
+
+    private fun needsRelay(): Boolean {
+        val r = RelayStore(context)
+        return r.config == null && System.currentTimeMillis() - r.askedAt > RELAY_ASK_MS
     }
 
     fun start() {
@@ -43,6 +48,7 @@ class PhoneSync(
         if (!waiting() || store.lastAddress == null) return       // nothing to hand over, or no TV was ever found from here
         if (Build.VERSION.SDK_INT >= 37 && context.checkSelfPermission(LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED) return
         target = newest()
+        if (needsRelay()) RelayStore(context).askedAt = System.currentTimeMillis()
         val c = newClient()
         client = c
         since = SystemClock.uptimeMillis(); connectedAt = 0L
@@ -81,6 +87,8 @@ class PhoneSync(
         /** Connected this long (the couple goes at once, the notes are said to be kept), it lets go. */
         const val SETTLE_MS = 1_500L
         const val LIMIT_MS = 20_000L
+        /** A phone without the solo relay asks the TV for it at most this often. */
+        const val RELAY_ASK_MS = 24 * 60 * 60 * 1000L
         private const val LOOK_MS = 400L
     }
 }

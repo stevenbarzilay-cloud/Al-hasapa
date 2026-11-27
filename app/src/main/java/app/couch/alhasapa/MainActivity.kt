@@ -55,6 +55,15 @@ import app.couch.alhasapa.data.Note
 import app.couch.alhasapa.data.Couple
 import app.couch.alhasapa.remote.PhoneSync
 import app.couch.alhasapa.remote.RemoteStore
+import app.couch.alhasapa.remote.RelayStore
+import app.couch.alhasapa.remote.SoloJob
+import app.couch.alhasapa.remote.SoloRelay
+import app.couch.alhasapa.data.Solo
+import app.couch.alhasapa.ui.Challenger
+import app.couch.alhasapa.ui.PlayModeDialog
+import app.couch.alhasapa.results.ShareReceiverActivity
+import app.couch.alhasapa.results.SoloPlay
+import app.couch.alhasapa.tv.SoloTvCard
 
 class MainActivity : ComponentActivity() {
     private lateinit var tv: TvHost
@@ -67,6 +76,17 @@ class MainActivity : ComponentActivity() {
     private var meOpen by mutableStateOf(false)
     private var noteOpen by mutableStateOf(false)
     private var hubReloads by androidx.compose.runtime.mutableIntStateOf(0)
+
+    /** On a phone (1.11): the game waiting for "together or alone?", and a game to play alone once who holds the phone is said. */
+    private var playModeFor by mutableStateOf<String?>(null)
+    private var soloAfterMe: Pair<String, Boolean>? = null
+    /** A game to play alone once the phone has asked whether it may say things when the app is closed (asked once, ever). */
+    private var soloAfterAsk: Pair<String, Boolean>? = null
+    private val notifyAsk = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        Flight.log("solo: notifications ${if (ok) "allowed" else "not allowed"}")
+        soloAfterAsk?.let { (g, e) -> soloAfterAsk = null; launchSolo(g, e) }
+        hubReloads++
+    }
 
     /** Notes and changes waiting for the TV are handed over when the app comes to the front (see PhoneSync). */
     private val phoneSync by lazy { PhoneSync(this, onDone = { hubReloads++ }) }
@@ -81,10 +101,72 @@ class MainActivity : ComponentActivity() {
      * Opens a game, from the hub or the TV's home. Head to head (LinkedIn): each person plays alone, in their own account, so it asks
      * whose turn it is first. On the main thread.
      */
-    private fun openGame(gameId: String) {
+    private fun openGame(gameId: String, mode: String? = null) {
         val game = (application as CouchApp).catalog.game(gameId) ?: return
-        if (game.isDuel) whoPlaysFor = gameId else startActivity(PlayerActivity.gameIntent(this, gameId, null))
+        if (game.isDuel) { whoPlaysFor = gameId; return }
+        // On a phone (1.11): together or alone, asked once a game and a day.
+        if (tv.enabled) { startActivity(PlayerActivity.gameIntent(this, gameId, null)); return }
+        when (mode ?: RelayStore(this).mode(today(), gameId)) {
+            SOLO -> playSolo(gameId, elsewhere = false)
+            TOGETHER -> startActivity(PlayerActivity.gameIntent(this, gameId, null))
+            else -> playModeFor = gameId
+        }
     }
+
+    private fun today(): String = CouchState.dayKey(LocalDate.now())
+
+    /** Who holds this phone, if they are here this evening (a guest of another evening holds it no longer). */
+    private fun heldBy(): String? {
+        val me = RemoteStore(this).me ?: return null
+        return me.takeIf { w -> Couple.everyone((application as CouchApp).repo.snapshot(), Couple.evening()).any { it.who == w } }
+    }
+
+    /**
+     * A game played alone (1.11): who holds the phone is asked first when it is not known; the first time ever, whether the app may say
+     * things with the app closed ("רוני כבר שיחק..."); then the game opens in that person's corner, or the result sheet for one played
+     * [elsewhere] (a computer).
+     */
+    private fun playSolo(gameId: String, elsewhere: Boolean) {
+        if (heldBy() == null) { soloAfterMe = gameId to elsewhere; meOpen = true; return }
+        RelayStore(this).setMode(today(), gameId, SOLO)
+        val relay = RelayStore(this)
+        if (android.os.Build.VERSION.SDK_INT >= 33 && !relay.notifyAsked &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            relay.notifyAsked = true
+            soloAfterAsk = gameId to elsewhere
+            notifyAsk.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        launchSolo(gameId, elsewhere)
+    }
+
+    private fun launchSolo(gameId: String, elsewhere: Boolean) {
+        val me = heldBy() ?: return
+        Flight.log("solo: a game played alone${if (elsewhere) ", elsewhere" else ""}")
+        startActivity(if (elsewhere) ShareReceiverActivity.soloIntent(this, gameId) else PlayerActivity.gameIntent(this, gameId, me, solo = true))
+    }
+
+    /** On a phone (1.11): what the others played alone comes in, and the home redraws with it. In the background. */
+    private fun soloLook() {
+        val app = application as CouchApp
+        SoloJob.schedule(this)
+        Thread({
+            val before = app.repo.revision.value
+            runCatching { SoloRelay(applicationContext, app.repo).sync(heldBy()) }
+            if (app.repo.revision.value != before) runOnUiThread { hubReloads++ }
+        }, "solo-look").start()
+    }
+
+    /** On a TV (1.11): the relay is read while the app is in front, every few minutes, for the reveals on the home. */
+    private val tvLook = object : Runnable {
+        override fun run() {
+            val app = application as CouchApp
+            Thread({ runCatching { SoloRelay(applicationContext, app.repo).receive(null) } }, "solo-look").start()
+            tvLookHandler.postDelayed(this, TV_LOOK_MS)
+        }
+    }
+    private val tvLookHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
     /**
      * What the hub's page can ask of the app (it calls from its own thread). A property, so a test can press what the page presses.
@@ -108,16 +190,26 @@ class MainActivity : ComponentActivity() {
 
         // A note needs a writer: who holds the phone is asked first when it is not known.
         override fun openNote() { runOnUiThread { if (RemoteStore(this@MainActivity).me == null) meOpen = true else noteOpen = true } }
+
+        override fun playSolo(gameId: String) { runOnUiThread { this@MainActivity.openGame(gameId, SOLO) } }
+
+        override fun allowNotifications() {
+            runOnUiThread {
+                if (android.os.Build.VERSION.SDK_INT >= 33) notifyAsk.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     override fun onStart() {
         super.onStart()
-        if (!TvMode.isTelevision(this)) phoneSync.start()
+        if (!TvMode.isTelevision(this)) { phoneSync.start(); soloLook() }
+        else if (RelayStore(this).config != null) tvLookHandler.post(tvLook)
     }
 
     override fun onStop() {
         super.onStop()
         phoneSync.stop()
+        tvLookHandler.removeCallbacks(tvLook)
     }
 
     /**
@@ -138,6 +230,8 @@ class MainActivity : ComponentActivity() {
                     meOpen = false; hubReloads++
                     Flight.log("me: this phone is held by ${if (p.who in Couple.WHO) "one of the two of us" else if (p.guest) "a guest" else "someone else"}")
                     phoneSync.start()
+                    // A game was waiting to be played alone until it was known who plays it.
+                    soloAfterMe?.let { (g, e) -> soloAfterMe = null; playSolo(g, e) }
                 },
                 onRemove = { w ->
                     couch.repo.update { Couple.remove(it, w, System.currentTimeMillis()) }
@@ -145,9 +239,26 @@ class MainActivity : ComponentActivity() {
                     meOpen = false; hubReloads++
                     phoneSync.start()
                 },
-                onDismiss = { meOpen = false },
+                onDismiss = { meOpen = false; soloAfterMe = null },
             )
         }
+        playModeFor?.let { id -> couch.catalog.game(id)?.let { game ->
+            val state = couch.repo.snapshot()
+            val me = heldBy()
+            val challengers = Solo.sides(state, today(), id).filter { it.who != me }
+                .map { s -> Challenger(Couple.name(state, s.who), pieces.styleOf(Couple.person(state, s.who)), s.who in Couple.WHO) }
+            PlayModeDialog(
+                gameName = game.n, challengers = challengers,
+                onTogether = {
+                    playModeFor = null
+                    RelayStore(this).setMode(today(), id, TOGETHER)
+                    startActivity(PlayerActivity.gameIntent(this, id, null))
+                },
+                onSolo = { playModeFor = null; playSolo(id, elsewhere = false) },
+                onElsewhere = { playModeFor = null; playSolo(id, elsewhere = true) },
+                onDismiss = { playModeFor = null },
+            )
+        } }
         if (noteOpen) {
             val me = store.me
             val state = couch.repo.snapshot()
@@ -246,6 +357,22 @@ class MainActivity : ComponentActivity() {
                             Flight.log("notes: one was read on the home")
                         }
                     }
+                    // A game both of us played alone today (1.11): its reveal, once, when no note is up.
+                    if (homeNotes.isEmpty()) {
+                        val relay = remember { RelayStore(this@MainActivity) }
+                        var revealsSeen by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+                        val day = CouchState.dayKey(LocalDate.now())
+                        val reveal = remember(revision, revealsSeen) {
+                            SoloPlay.tvReveal(app.repo.snapshot(), app.catalog.games, day, pieces) { relay.told("$day|$it|tv|reveal") }
+                        }
+                        reveal?.let { (gameId, o) ->
+                            SoloTvCard(o, reduceMotion) {
+                                relay.tell("$day|$gameId|tv|reveal", CouchState.dayKey(LocalDate.now().minusDays(1)))
+                                revealsSeen++
+                                Flight.log("solo: a reveal on the home")
+                            }
+                        }
+                    }
                 } else {
                     // On a TV the web hub is a step away from the home (the cats cover it until it is ready), and Back from it goes
                     // back to the home.
@@ -273,5 +400,13 @@ class MainActivity : ComponentActivity() {
         }
         // Plain views, no Compose and no WebView: readable even if either of those fails. Debug builds only.
         if (BuildConfig.DEBUG) DiagOverlay.install(this)
+    }
+
+    companion object {
+        /** Together or alone, as kept for a game and a day (see [RelayStore.mode]). */
+        const val SOLO = "solo"
+        const val TOGETHER = "together"
+        /** How often a TV in front reads the relay (for the reveals on its home). */
+        const val TV_LOOK_MS = 5 * 60 * 1000L
     }
 }

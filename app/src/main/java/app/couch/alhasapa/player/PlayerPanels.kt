@@ -217,7 +217,7 @@ fun TuningSheet(
                 if (onResult != null) SheetButton(stringResource(R.string.player_result), null, Modifier.weight(1f), onClick = onResult)
             }
             if (showPlayed) {
-                val label = stringResource(R.string.player_played)
+                val label = stringResource(if (LocalSolo.current) R.string.player_played_solo else R.string.player_played)
                 SheetButton(if (played) "✓ $label" else label, null, Modifier.fillMaxWidth(), primary = played, onClick = onTogglePlayed)
             }
             Text(stringResource(R.string.display_mode), fontSize = PanelText, fontWeight = FontWeight.Bold, color = Palette.Ink)
