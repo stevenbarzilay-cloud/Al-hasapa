@@ -63,7 +63,9 @@ object Scoring {
     private val GUESS_FRACTION = Regex("$NOT_AFTER_WORD([1-9X])$S/$S([1-9][0-9]?)$NOT_BEFORE_WORD", RegexOption.IGNORE_CASE)
     private val GUESS_WORD = Regex("([0-9]+)${S}(?:guess(?:es)?|ניחושים|ניסיונות|clues?)", RegexOption.IGNORE_CASE)
     private val MISTAKE_WORD = Regex("([0-9])${S}(?:mistakes?|טעויות|טעות)", RegexOption.IGNORE_CASE)
-    private val HINT_WORD = Regex("([0-9]+)${S}(?:hints?|רמזים)", RegexOption.IGNORE_CASE)
+    /** Hints, or the steps a game counts them in (Haaretz's "מי אני?": "הצלחת לזהות את הדמות תוך 6 צעדים", 1.11.2). */
+    private val HINT_WORD = Regex("([0-9]+)${S}(?:hints?|רמזים|צעדים|steps?)", RegexOption.IGNORE_CASE)
+    private val HINT_ONE = Regex("(?:רמז|צעד) אחד")
     private val WORDS_WORD = Regex("([0-9]+)${S}(?:words?|מילים)", RegexOption.IGNORE_CASE)
 
     /** A score out of something ("8/10", "41.23/50", "34,567/50,000"): the first fraction in the text. */
@@ -128,6 +130,7 @@ object Scoring {
                 val bulbs = t.codePoints().toArray().count { it == LIGHT_BULB }
                 if (t.contains("🔵") || t.contains("🟡") || bulbs > 0) return Parsed(bulbs.toDouble(), null, false)
                 HINT_WORD.find(t)?.let { return Parsed(it.groupValues[1].toDouble(), null, false) }
+                if (HINT_ONE.containsMatchIn(t)) return Parsed(1.0, null, false)
                 return null
             }
             "words" -> {

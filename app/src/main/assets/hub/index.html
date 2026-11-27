@@ -647,7 +647,7 @@ function parseResult(text,kind){
     const m=t.match(/(\d)\s*(?:mistakes?|טעויות|טעות)/i); if(m) return {v:+m[1],fail:+m[1]>=4};
     return null;
   }
-  if(kind==="hints"){const n=(t.match(/💡/gu)||[]).length; if(/[🔵🟡]/u.test(t)||n) return {v:n,fail:false}; const m=t.match(/(\d+)\s*(?:hints?|רמזים)/i); return m?{v:+m[1],fail:false}:null}
+  if(kind==="hints"){const n=(t.match(/💡/gu)||[]).length; if(/[🔵🟡]/u.test(t)||n) return {v:n,fail:false}; const m=t.match(/(\d+)\s*(?:hints?|רמזים|צעדים|steps?)/i); return m?{v:+m[1],fail:false}:/(?:רמז|צעד) אחד/.test(t)?{v:1,fail:false}:null}
   if(kind==="words"){const m=t.match(/(\d+)\s*(?:words?|מילים)/i); return m?{v:+m[1],fail:false}:null}
   /* More is better (1.9.7): a quiz's "8/10", a score's "41.23/50" or "34,567/50,000"; or "12 points" with nothing to be out of. */
   if(kind==="score"){

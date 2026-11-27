@@ -196,6 +196,18 @@ class ResultFlowTest {
         assertNull("far too long to be a result", ShareReceiverActivity.sharedText(Intent(Intent.ACTION_SEND).putExtra(Intent.EXTRA_TEXT, "x".repeat(20_001))))
     }
 
+    /** 1.11.2: Haaretz's own share of "מי אני?": the game known by its link, the steps read as its hints. */
+    @Test
+    fun haaretzsShareOfWhoAmIIsUnderstood() {
+        phoneOnly()
+        share("כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים\n\nhttps://www.haaretz.co.il/riddles/2023-02-26/ty-article-static/.premium/00000184-9eae-d199-ade4-dfef359e0000")
+        rule.onNodeWithText("מי אני?: התוצאה שלנו").assertIsDisplayed()
+        rule.onNodeWithText("זוהה: 6 רמזים · 5 נקודות ספה").assertIsDisplayed()
+        press("שמירה"); rule.waitForIdle()
+        assertEquals(6, CouchState.entry(app.repo.snapshot(), today, "hzwho")!!.getJSONObject("r").getInt("v"))
+        app.repo.update { s -> CouchState.setEntry(s, today, "hzwho", null) }
+    }
+
     // ---- alone (1.11) ----
 
     @Test

@@ -45,7 +45,7 @@ object ResultWatch {
      * (HebrewResult) and the lines themselves are not kept.
      */
     const val LINES = """(function(){try{
-  var RX=/ניסיונ|נסיונ|ניחוש|טעות|טעויות|רמז|שחקנ|משתתפ|פותר|גולש|שניות|דקות|מתוך|פתרת|פתרנו|הצלחת|הצלחנו|נגמרו|%|[0-9]+ *\/ *[0-9]+|[0-9]{1,2}:[0-9]{2}/;
+  var RX=/ניסיונ|נסיונ|ניחוש|טעות|טעויות|רמז|צעד|שחקנ|משתתפ|פותר|גולש|שניות|דקות|מתוך|פתרת|פתרנו|הצלחת|הצלחנו|נגמרו|%|[0-9]+ *\/ *[0-9]+|[0-9]{1,2}:[0-9]{2}/;
   var out=[];
   function take(doc,depth){
     var t=(doc.body&&doc.body.innerText)||'', ls=t.split(/\n+/);

@@ -192,6 +192,22 @@ class ResultsTest {
         assertEquals("hz5", id("5 אותיות\n🟩🟩⬛"))
     }
 
+    /** 1.11.2: Haaretz's share names no game, only its link ("מי אני?" counts its hints in steps). */
+    @Test
+    fun aShareWithOnlyTheGamesLinkIsThatGameAndItsStepsAreItsHints() {
+        val share = "כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים\n\nhttps://www.haaretz.co.il/riddles/2023-02-26/ty-article-static/.premium/00000184-9eae-d199-ade4-dfef359e0000"
+        assertEquals("hzwho", GameDetector.detect(share, catalog)?.id)
+        assertEquals("the same page however the link is dressed", "hzwho", GameDetector.detect(
+            "תוך 3 צעדים http://haaretz.co.il/riddles/2023-02-26/ty-article-static/.premium/00000184-9eae-d199-ade4-dfef359e0000/?utm_source=whatsapp#x", catalog)?.id)
+        assertEquals("by the page's id when the rest of the address differs", "hzwho", GameDetector.detect(
+            "https://www.haaretz.co.il/riddles/ty-article/00000184-9eae-d199-ade4-dfef359e0000", catalog)?.id)
+        assertNull("a link to nothing of ours", GameDetector.detect("https://www.haaretz.co.il/news/somewhere", catalog))
+        val p = Scoring.parseResult(share, "hints")!!
+        assertEquals(6.0, p.v, 0.0); assertEquals(false, p.fail)
+        assertEquals(1.0, Scoring.parseResult("כל הכבוד! הצלחת לזהות את הדמות תוך צעד אחד", "hints")!!.v, 0.0)
+        assertEquals("read off the end screen too", 6, HebrewResult.read("כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים").hints)
+    }
+
     @Test
     fun whatItCannotTellItDoesNotGuess() {
         assertNull(GameDetector.detect("just some text", catalog))

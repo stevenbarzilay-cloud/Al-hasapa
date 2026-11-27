@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.11.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.11.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -504,6 +504,11 @@ want to play on, starting with Krillion and NYT:
     flow with a stand-in reader (the camera app asked for the app's own file, the result in the sheet, saved alone, the photo gone; a
     photo with no result, then typed). **Not tried on the devices:** ML Kit itself (it runs in Google Play services), and how well a
     photo of a screen reads (glare, an angle).
+- **1.11.2: Haaretz's "מי אני?" share understood.** Its share is "כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים" and the game's
+  link: it named no game the app knew, and counted in steps, a word no reader knew. A share that names no game is now matched by the
+  game's link in it (ours or the catalogue's; the same page however the link is dressed, or by the page's id), and steps are read as
+  the game's hints ("6 צעדים" is 6, "צעד אחד" is 1), by the app, the home's page and the end-screen reader alike (`GameDetector`,
+  `Scoring`, `HebrewResult`, `ResultWatch`). Tried here with that very share, through the share target to a saved result.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

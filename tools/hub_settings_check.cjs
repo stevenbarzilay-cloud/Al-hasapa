@@ -146,6 +146,9 @@ server.listen(0, '127.0.0.1', async () => {
     ok(after.w === 'u5d6e7f8' && after.toast.includes('מיה'), `the guest is credited, and said so (${JSON.stringify(after)})`);
     await p2.click('.tab[data-view="stats"]'); await p2.waitForTimeout(200);
     ok(await p2.evaluate(() => document.querySelector('.crack').textContent.includes('מיה')), 'and counted among who cracked it');
+    // 1.11.2: Haaretz's "מי אני?" counts its hints in steps, and the home reads them as the app does.
+    const steps = await p2.evaluate(() => [parseResult('כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים\n\nhttps://www.haaretz.co.il/riddles/x', 'hints'), parseResult('תוך צעד אחד', 'hints')]);
+    ok(steps[0] && steps[0].v === 6 && steps[1] && steps[1].v === 1, `steps are read as hints (${JSON.stringify(steps)})`);
     ok(errs.length === 0, 'no errors with the others (' + (errs.join(' | ') || 'none') + ')');
     await ctx2.close();
   }

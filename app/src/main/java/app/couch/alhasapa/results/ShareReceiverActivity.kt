@@ -116,7 +116,7 @@ class ShareReceiverActivity : ComponentActivity() {
         }
         val pieces = PiecesConfig.load(this)
         val day = CouchState.dayKey(LocalDate.now())
-        val detected = if (manualSolo) intent.getStringExtra(EXTRA_GAME)?.let { app.catalog.game(it) } else GameDetector.detect(text, app.catalog)
+        val detected = if (manualSolo) intent.getStringExtra(EXTRA_GAME)?.let { app.catalog.game(it) } else GameDetector.detect(text, app.catalog, app.repo.snapshot())
         if (manualSolo && detected == null) { finish(); return }
         // Who holds this phone, if they are here this evening: only they can play alone on it.
         val me = RemoteStore(this).me?.takeIf { w -> People.everyone(app.repo.snapshot(), People.evening()).any { it.who == w } }

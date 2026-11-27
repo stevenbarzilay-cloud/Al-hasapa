@@ -46,8 +46,9 @@ object HebrewResult {
     private val MISTAKES = Regex("([0-9]{1,2})\\s*טעויות")
     private val MISTAKE_ONE = Regex("טעות אחת")
     private val MISTAKES_NONE = Regex("(?:בלי|ללא|אפס|0)\\s*טעויות|(?:בלי|ללא)\\s*טעות")
-    private val HINTS = Regex("([0-9]{1,2})\\s*רמזים")
-    private val HINT_ONE = Regex("רמז אחד")
+    /** Hints, or the steps a game counts them in ("תוך 6 צעדים", מי אני?). */
+    private val HINTS = Regex("([0-9]{1,2})\\s*(?:רמזים|צעדים)")
+    private val HINT_ONE = Regex("(?:רמז|צעד) אחד")
     private val HINTS_NONE = Regex("(?:בלי|ללא|אפס|0)\\s*רמזים|(?:בלי|ללא)\\s*רמז")
     private val TIME = Regex("(?<![0-9:])([0-9]{1,2}):([0-9]{2})(?![0-9:])")
     private val SCORE = Regex("(?<![0-9])([0-9]{1,3})\\s*(?:/|מתוך)\\s*([0-9]{1,3})(?![0-9])")
