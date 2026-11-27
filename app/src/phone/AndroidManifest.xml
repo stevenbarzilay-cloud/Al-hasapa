@@ -12,6 +12,17 @@
             android:name=".remote.SoloJob"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- 1.11.1: a photo of a computer's screen for a result. The camera app writes it here (the app itself never uses the camera);
+             it is read on the phone and deleted. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.photos"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/photo_paths" />
+        </provider>
+        <!-- Google Play services downloads the text model with the app, so the first photo is read at once. -->
+        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="ocr" />
         <!-- Long press on the app's icon: "מקלדת לטלוויזיה" goes straight to keyboard mode. -->
         <activity android:name=".MainActivity" android:exported="true" tools:node="merge">
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />

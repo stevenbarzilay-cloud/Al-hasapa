@@ -337,4 +337,12 @@
     <string name="play_mode_hint">נשאל פעם אחת לכל משחק ביום.</string>
     <string name="result_title_solo">⚔️ %1$s · לבד</string>
     <string name="result_detected_solo">זוהה: %1$s · ייחתם במעטפה</string>
+    <!-- 1.11.1: a photo of a computer's screen -->
+    <string name="result_photo_take">📷 לצלם את המסך</string>
+    <string name="result_photo_pick">🖼️ תמונה מהגלריה</string>
+    <string name="result_photo_help">מצלמים את מסך המחשב כשהתוצאה עליו. התמונה נקראת בטלפון ונמחקת מיד. אותיות בעברית לא נקראות, רק המספרים.</string>
+    <string name="result_photo_read">📷 קראנו מהתמונה. כדאי לבדוק.</string>
+    <string name="result_photo_none">📷 לא מצאנו תוצאה בתמונה. אפשר להקליד אותה.</string>
+    <string name="result_photo_wait">הזיהוי עוד מתכונן בטלפון (פעם ראשונה). נסו שוב בעוד רגע.</string>
+    <string name="result_photo_failed">לא הצלחנו לקרוא את התמונה.</string>
 </resources>

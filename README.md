@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.11.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.11.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -492,6 +492,18 @@ want to play on, starting with Krillion and NYT:
     the other's comes in, a result shared from elsewhere, the TV's reveal (once); the home's banner, sealed row, reveal and crowns in
     Chromium (`tools/hub_solo_check.cjs`). **Not tried on the devices:** ntfy.sh itself (not reachable from where this is built), and
     how often a sleeping phone really looks (Xiaomi phones may need the app allowed to start by itself).
+- **1.11.1 (the phone only): a photo of the computer's screen, for a game played there.** In "שיחקתי כבר במקום אחר (מחשב)":
+  "📷 לצלם את המסך" (the phone's own camera app writes the photo into the app's cache; the app never uses the camera itself) or
+  "🖼️ תמונה מהגלריה" (a screenshot sent to the phone, say). The picture is read on the phone (ML Kit, Google Play services' own
+  model, downloaded with the app; no picture leaves the phone), only the line that holds the result is kept ("3/6", "Time 1:42",
+  "41.23/50", "2 mistakes"; read across two lines when the screen splits it; never a date; the computer's clock alone on a line last),
+  and the photo is deleted at once. The sheet says "📷 קראנו מהתמונה. כדאי לבדוק." over what it understood, or "לא מצאנו תוצאה
+  בתמונה" and the number is typed as always. It reads English and numbers, not Hebrew letters: on Haaretz's games only the numbers
+  come through, so their result is typed. The TV takes no photos (`PhotoText`, the phone's `FlavorText`).
+  - *Tried here:* the line picker on screens made of lines (with the clock and a date, a split score, a page with no result), and the
+    flow with a stand-in reader (the camera app asked for the app's own file, the result in the sheet, saved alone, the photo gone; a
+    photo with no result, then typed). **Not tried on the devices:** ML Kit itself (it runs in Google Play services), and how well a
+    photo of a screen reads (glare, an angle).
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

@@ -60,6 +60,49 @@ import java.time.LocalDate
  * player shows what was understood and what it is worth. Nothing is saved until "שמירה".
  */
 class ShareReceiverActivity : ComponentActivity() {
+    /**
+     * A photo of a computer's screen (1.11.1): the camera app writes it into the cache, its text is read on the phone, the line that
+     * holds the result goes into the sheet ([photoLine], said by [photoNote]), and the photo is deleted.
+     */
+    private var photoLine by mutableStateOf<String?>(null)
+    private var photoNote by mutableStateOf<Int?>(null)
+    private var photoRound by androidx.compose.runtime.mutableIntStateOf(0)
+    private var photoKind = "guesses"
+    private val photoFile by lazy { java.io.File(cacheDir, "photos/screen.jpg").apply { parentFile?.mkdirs() } }
+    private val takePhoto = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.TakePicture()) { ok ->
+        if (ok) readPhoto(photoUri()) else photoFile.delete()
+    }
+    private val pickPhoto = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) readPhoto(uri)
+    }
+
+    private fun photoUri(): android.net.Uri = androidx.core.content.FileProvider.getUriForFile(this, "$packageName.photos", photoFile)
+
+    private fun askPhoto(camera: Boolean) {
+        if (camera) { photoFile.delete(); takePhoto.launch(photoUri()) }
+        else pickPhoto.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
+
+    /** The picture's text, read on the phone: only the line with the result is kept, and the photo goes. */
+    internal fun readPhoto(uri: android.net.Uri) {
+        PhotoText.reader.read(this, uri) { r ->
+            runOnUiThread {
+                photoFile.delete()
+                when (r) {
+                    is PhotoRead.Lines -> {
+                        val line = PhotoText.resultLine(r.lines, photoKind)
+                        photoLine = line
+                        photoNote = if (line != null) R.string.result_photo_read else R.string.result_photo_none
+                        photoRound++
+                        app.couch.alhasapa.diag.Flight.log("photo: ${r.lines.size} lines read, ${if (line != null) "a result found" else "no result"}")
+                    }
+                    PhotoRead.NotReady -> Toast.makeText(this, R.string.result_photo_wait, Toast.LENGTH_LONG).show()
+                    PhotoRead.Failed -> Toast.makeText(this, R.string.result_photo_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -109,12 +152,12 @@ class ShareReceiverActivity : ComponentActivity() {
                             onElsewhere = null,
                             onDismiss = { finish() },
                         )
-                    } else {
+                    } else androidx.compose.runtime.key(photoRound) {
                         ResultSheet(
                             support = ResultSupport(g, state, day),
                             couple = couple,
                             who = if (alone) me else who,
-                            initialText = text,
+                            initialText = photoLine ?: text,
                             captured = !manualSolo,
                             onSave = { input ->
                                 if (alone) {
@@ -127,6 +170,9 @@ class ShareReceiverActivity : ComponentActivity() {
                             onCancel = { finish() },
                             modifier = Modifier.padding(12.dp),
                             solo = alone,
+                            // A game played elsewhere (1.11.1): its result from a photo of the screen, on a phone.
+                            onPhoto = if (manualSolo && !BuildConfig.TV) ({ camera -> photoKind = ResultDraft.kindOf(g); askPhoto(camera) }) else null,
+                            photoNote = photoNote?.let { stringResource(it) },
                         )
                         if (g.isDuel && who == null) {
                             WhoPlaysDialog(

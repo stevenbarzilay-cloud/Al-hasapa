@@ -16,8 +16,8 @@ android {
     defaultConfig {
         applicationId = "app.couch.alhasapa"
         targetSdk = 37
-        versionCode = 36
-        versionName = "1.11.0"
+        versionCode = 37
+        versionName = "1.11.1"
     }
 
     // Two builds from one codebase: the phone app, and the Android TV app (a Xiaomi Mi Box runs Android TV 8.1 or 9, so the TV
@@ -107,6 +107,8 @@ dependencies {
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.browser)
+    // The phone reads a photo of a computer's screen for a result (1.11.1); the TV never takes one.
+    "phoneImplementation"(libs.mlkit.text.recognition)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

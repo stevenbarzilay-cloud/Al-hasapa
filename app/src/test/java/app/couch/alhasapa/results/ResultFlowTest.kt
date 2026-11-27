@@ -254,4 +254,58 @@ class ResultFlowTest {
         RemoteStore(context).me = null
         app.repo.update { it.remove("solo") }
     }
+
+    // ---- a photo of a computer's screen (1.11.1) ----
+
+    @Test
+    fun aPhotoOfTheComputersScreenFillsInTheResultOfAGamePlayedElsewhere() {
+        phoneOnly()
+        app.repo.update { it.remove("solo") }
+        RemoteStore(context).me = "a"
+        PhotoText.reader = TextReader { _, _, done -> done(PhotoRead.Lines(listOf("Wordle 1,618", "4/6", "Statistics", "27/11/2026"))) }
+        try {
+            scenario = ActivityScenario.launch<ShareReceiverActivity>(ShareReceiverActivity.soloIntent(context, "wordle")); rule.waitForIdle()
+            rule.onNodeWithText("🖼️ תמונה מהגלריה").assertIsDisplayed()
+            rule.onNodeWithText("📷 לצלם את המסך").performClick(); rule.waitForIdle()
+            // The camera app is asked to write the photo where the app reads it (the app itself never uses the camera).
+            scenario!!.onActivity { a ->
+                val i = org.robolectric.Shadows.shadowOf(a).nextStartedActivityForResult.intent
+                assertEquals(android.provider.MediaStore.ACTION_IMAGE_CAPTURE, i.action)
+                @Suppress("DEPRECATION")
+                val out = i.getParcelableExtra<android.net.Uri>(android.provider.MediaStore.EXTRA_OUTPUT)!!
+                assertEquals("app.couch.alhasapa.photos", out.authority)
+            }
+            // It was taken: read on the phone, only the line with the result kept.
+            scenario!!.onActivity { (it as ShareReceiverActivity).readPhoto(android.net.Uri.parse("content://app.couch.alhasapa.photos/photos/screen.jpg")) }
+            rule.waitForIdle()
+            rule.onNodeWithText("📷 קראנו מהתמונה. כדאי לבדוק.").assertIsDisplayed()
+            rule.onNodeWithText("זוהה: 4/6 · ייחתם במעטפה").assertIsDisplayed()
+            press("שמירה"); rule.waitForIdle()
+            val side = Solo.side(app.repo.snapshot(), today, "wordle", "a")!!
+            assertEquals(4.0, side.v!!, 0.0)
+            assertTrue("the photo is gone", !java.io.File(context.cacheDir, "photos/screen.jpg").exists())
+        } finally {
+            PhotoText.reader = FlavorText
+            RemoteStore(context).me = null
+            app.repo.update { it.remove("solo") }
+        }
+    }
+
+    @Test
+    fun aPhotoWithNoResultOnItSaysSoAndLeavesTheSheetToBeTyped() {
+        phoneOnly()
+        RemoteStore(context).me = "b"
+        PhotoText.reader = TextReader { _, _, done -> done(PhotoRead.Lines(listOf("Inbox", "Settings"))) }
+        try {
+            scenario = ActivityScenario.launch<ShareReceiverActivity>(ShareReceiverActivity.soloIntent(context, "wordle")); rule.waitForIdle()
+            scenario!!.onActivity { (it as ShareReceiverActivity).readPhoto(android.net.Uri.parse("content://app.couch.alhasapa.photos/photos/screen.jpg")) }
+            rule.waitForIdle()
+            rule.onNodeWithText("📷 לא מצאנו תוצאה בתמונה. אפשר להקליד אותה.").assertIsDisplayed()
+            type("או ידנית: ניסיונות", "5")
+            rule.onNodeWithText("זוהה: 5/6 · ייחתם במעטפה").assertIsDisplayed()
+        } finally {
+            PhotoText.reader = FlavorText
+            RemoteStore(context).me = null
+        }
+    }
 }

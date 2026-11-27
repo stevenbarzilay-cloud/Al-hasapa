@@ -103,6 +103,10 @@ fun ResultSheet(
     fromScreen: Boolean = false,
     /** Played alone by [who] (1.11): one person's result, like a head-to-head side, sealed until the others play it alone too. */
     solo: Boolean = false,
+    /** A game played elsewhere (1.11.1): a photo of its screen, taken ([camera]) or picked from the gallery, read for the result. */
+    onPhoto: ((camera: Boolean) -> Unit)? = null,
+    /** What the photo came to, said under its buttons. */
+    photoNote: String? = null,
 ) {
     val game = support.game
     val kind = ResultDraft.kindOf(game)
@@ -200,6 +204,14 @@ fun ResultSheet(
     ) {
         Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
         if (captured) Text(stringResource(R.string.result_captured), fontSize = SheetText, color = Palette.Ink2)
+        if (onPhoto != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PhotoButton(stringResource(R.string.result_photo_take), Modifier.weight(1f)) { onPhoto(true) }
+                PhotoButton(stringResource(R.string.result_photo_pick), Modifier.weight(1f)) { onPhoto(false) }
+            }
+            Text(photoNote ?: stringResource(R.string.result_photo_help), fontSize = 15.sp, color = if (photoNote != null) Palette.Ink else Palette.Ink2,
+                fontWeight = if (photoNote != null) FontWeight.SemiBold else FontWeight.Normal)
+        }
 
         Field(
             label = stringResource(R.string.result_paste_label), help = stringResource(R.string.result_paste_help),
@@ -232,6 +244,21 @@ fun ResultSheet(
 }
 
 /** "We did not make it this time": a tick, and on a TV a button of the remote's too. */
+@Composable
+private fun PhotoButton(label: String, modifier: Modifier, onClick: () -> Unit) {
+    Text(
+        label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(Palette.Card)
+            .border(BorderStroke(1.5.dp, Palette.Ink), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .semantics { role = androidx.compose.ui.semantics.Role.Button }
+            .padding(horizontal = 10.dp, vertical = 12.dp),
+    )
+}
+
 @Composable
 private fun FailRow(duel: Boolean, fail: Boolean, onTv: Boolean, onChange: (Boolean) -> Unit) {
     Row(
