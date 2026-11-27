@@ -151,6 +151,11 @@ fun PlayerScreen(
     soloOther: String? = null,
     /** The solo card as it is now, asked again whenever the state changes ([revision]): the other's result may come in meanwhile. */
     soloAgain: () -> app.couch.alhasapa.results.SoloOutcome? = { null },
+    /** Played alone (2.0): where the result goes, on the button that saves it, and who, which couch and which day's puzzle it is for. */
+    soloSaveLabel: String? = null,
+    soloWhere: String? = null,
+    /** Leaving the contest without a result. */
+    onSoloWithdraw: (() -> Unit)? = null,
     revision: Long = 0,
 ) {
     val tv = LocalTv.current
@@ -639,6 +644,7 @@ fun PlayerScreen(
                         captured = resultCaptured,
                         fromScreen = resultFromScreen,
                         solo = session.solo,
+                        saveLabel = soloSaveLabel.takeIf { session.solo }, whereNote = soloWhere.takeIf { session.solo },
                         onSave = {
                             markedByHand = true
                             val alone = onSaveSolo
@@ -656,7 +662,10 @@ fun PlayerScreen(
         // A game played alone (1.11): sealed in its envelope, or the reveal.
         solo?.let { o ->
             Box(Modifier.fillMaxSize().background(Palette.Ink.copy(alpha = 0.45f)).pointerInput(Unit) { detectTapGestures { } }, contentAlignment = Alignment.Center) {
-                app.couch.alhasapa.results.SoloCard(o, soloOther, reduceMotion, onDone = { solo = null }, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp))
+                app.couch.alhasapa.results.SoloCard(
+                    o, soloOther, reduceMotion, onDone = { solo = null }, modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                    onWithdraw = onSoloWithdraw?.let { w -> { w(); solo = latestSoloAgain() } },
+                )
             }
         }
 

@@ -51,6 +51,9 @@ class HubBridge(
 
         /** The phone is asked whether the app may say things with the app closed (1.11). */
         fun allowNotifications() {}
+
+        /** "הספות שלי" (2.0): the home couch, friends' couches, a visit, and the app's install link for a friend. */
+        fun openCouches() {}
     }
 
     /** `{rev, fresh, state}`: `fresh` is true on the very first run, when the page may bring over what it stored itself. */
@@ -121,6 +124,13 @@ class HubBridge(
 
     @JavascriptInterface
     fun allowNotifications() { if (!TvMode.isTelevision(context)) actions.allowNotifications() }
+
+    /** The couch this is the state of, by name (2.0), for the chip at the top of the phone's home; "" on a TV. */
+    @JavascriptInterface
+    fun couchName(): String = if (TvMode.isTelevision(context)) "" else repo.peek { app.couch.alhasapa.data.Couches.name(it) }
+
+    @JavascriptInterface
+    fun openCouches() { if (!TvMode.isTelevision(context)) actions.openCouches() }
 
     /** How many notes written on this phone wait for the TV. */
     @JavascriptInterface

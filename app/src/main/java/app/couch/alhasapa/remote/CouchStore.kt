@@ -80,7 +80,8 @@ data class SoloTarget(val couch: String, val name: String, val who: String, val 
  * is ever sent to another device.
  */
 class CouchStore(context: Context, name: String = "couches") {
-    private val prefs = context.applicationContext.getSharedPreferences(name, Context.MODE_PRIVATE)
+    private val app = context.applicationContext
+    private val prefs = app.getSharedPreferences(name, Context.MODE_PRIVATE)
 
     // ---- the home couch ----
 
@@ -164,7 +165,11 @@ class CouchStore(context: Context, name: String = "couches") {
         val v = visit ?: return null
         visit = null
         val c = saved(v.couch)
-        if (c != null && !c.kept) write(saved().filter { it.id != c.id })
+        if (c == null || !c.kept) {
+            write(saved().filter { it.id != v.couch })
+            prefs.edit { remove("people_${v.couch}") }
+            if (v.tv.isNotEmpty()) RemoteStore(app).forgetTv(v.tv)
+        }
         return v
     }
 

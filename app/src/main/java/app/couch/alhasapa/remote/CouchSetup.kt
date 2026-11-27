@@ -120,11 +120,7 @@ object CouchSetup {
 
     /** The visit is over: the phone is at home again. A couch that was for the evening only is forgotten, its pairing too. */
     fun endVisit(context: Context): Visit? {
-        val couches = CouchStore(context)
-        val v = couches.visit ?: return null
-        val kept = couches.saved(v.couch)?.kept == true
-        couches.endVisit()
-        if (!kept) RemoteStore(context).forgetTv(v.tv)
+        val v = CouchStore(context).endVisit() ?: return null
         Flight.log("couches: the visit is over")
         return v
     }

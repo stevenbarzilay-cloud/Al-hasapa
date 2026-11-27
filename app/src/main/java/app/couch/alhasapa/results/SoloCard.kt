@@ -43,6 +43,8 @@ import kotlinx.coroutines.delay
 
 /** The tag of the card's button, for the tests. */
 const val SOLO_OK_TAG = "solo-ok"
+const val SOLO_PENDING_TAG = "solo-pending"
+const val SOLO_WITHDRAW_TAG = "solo-withdraw"
 
 /**
  * The card after a game played alone is saved (1.11). Sealed: "✉️ נחתם במעטפה", the result, and who it waits for. The reveal: the
@@ -50,7 +52,11 @@ const val SOLO_OK_TAG = "solo-ok"
  * [other] is who the result waits for when nobody else has played it (the other one of the two of us; null for anyone else).
  */
 @Composable
-fun SoloCard(o: SoloOutcome, other: String?, reduceMotion: Boolean, onDone: () -> Unit, modifier: Modifier = Modifier) {
+fun SoloCard(
+    o: SoloOutcome, other: String?, reduceMotion: Boolean, onDone: () -> Unit, modifier: Modifier = Modifier,
+    /** Leaving the contest without a result (2.0), offered to someone who joined and has none: the others are not kept waiting. */
+    onWithdraw: (() -> Unit)? = null,
+) {
     val lines = listOf(o.mine) + o.others
     // The reveal comes line by line (none of it when motion is off).
     var shown by remember(o) { mutableStateOf(if (reduceMotion || !o.revealed) lines.size + 1 else 0) }
@@ -67,13 +73,16 @@ fun SoloCard(o: SoloOutcome, other: String?, reduceMotion: Boolean, onDone: () -
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         val waitingForResult = !o.revealed && o.mine.hasResult && o.others.isNotEmpty() && o.others.none { it.hasResult }
+        // With more than two (2.0): the results are open to whoever handed in, and the crown waits for those still playing.
+        val waitingForSome = !o.revealed && o.mine.hasResult && o.waiting.isNotEmpty() && o.others.any { it.hasResult }
         val title = when {
             o.revealed -> stringResource(R.string.solo_reveal_title)
-            waitingForResult -> stringResource(R.string.solo_waiting_title)
+            waitingForResult || waitingForSome -> stringResource(R.string.solo_waiting_title)
             else -> stringResource(R.string.solo_sealed_title)
         }
         Text(title, fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center)
-        Text(o.gameName, fontSize = 18.sp, color = Palette.Ink2, textAlign = TextAlign.Center)
+        // The game, and the couch its contest is at: where this result counts.
+        Text(o.gameName + (o.couch?.let { " · $it" } ?: ""), fontSize = 18.sp, color = Palette.Ink2, textAlign = TextAlign.Center)
         Spacer(Modifier.height(2.dp))
 
         lines.forEachIndexed { i, l ->
@@ -89,9 +98,14 @@ fun SoloCard(o: SoloOutcome, other: String?, reduceMotion: Boolean, onDone: () -
             !o.revealed -> when {
                 !o.mine.hasResult -> stringResource(R.string.solo_played_only)
                 o.others.isEmpty() -> if (other != null) stringResource(R.string.solo_until, other) else stringResource(R.string.solo_until_anyone)
+                waitingForSome -> stringResource(R.string.solo_waiting_for, o.waiting.joinToString(" ול"))
                 waitingForResult -> stringResource(R.string.solo_until_result)
                 else -> stringResource(R.string.solo_until_anyone)
             }
+            o.winner == "t" && o.level.size > 1 -> stringResource(
+                R.string.solo_tie_between,
+                if (o.level.size == 2) o.level[0] + " ל" + o.level[1] else o.level.dropLast(1).joinToString(", ") + " ו" + o.level.last(),
+            )
             o.winner == "t" -> stringResource(R.string.solo_tie)
             o.viewer && o.winner == o.mine.who -> stringResource(R.string.solo_crown_mine)
             else -> stringResource(R.string.solo_crown, lines.firstOrNull { it.who == o.winner }?.name.orEmpty())
@@ -102,6 +116,15 @@ fun SoloCard(o: SoloOutcome, other: String?, reduceMotion: Boolean, onDone: () -
         ) {
             Text(verdict, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, textAlign = TextAlign.Center)
         }
+        // At a friend's couch, not reached yet: kept here, to be sent; counted nowhere else meanwhile.
+        if (o.pending && o.couch != null) Text(
+            stringResource(R.string.solo_pending_send, app.couch.alhasapa.data.Couches.toCouch(o.couch)), fontSize = 15.sp, color = Palette.Ink2, textAlign = TextAlign.Center,
+            modifier = Modifier.testTag(SOLO_PENDING_TAG),
+        )
+        if (onWithdraw != null && o.viewer && !o.mine.hasResult && !o.revealed) Text(
+            stringResource(R.string.solo_withdraw), fontSize = 16.sp, color = Palette.Ink2, textAlign = TextAlign.Center,
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).heightIn(min = 44.dp).tvTarget(onWithdraw).testTag(SOLO_WITHDRAW_TAG).padding(horizontal = 12.dp, vertical = 11.dp),
+        )
         Spacer(Modifier.height(4.dp))
         Text(
             stringResource(R.string.solo_ok), fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Palette.Cream, textAlign = TextAlign.Center,

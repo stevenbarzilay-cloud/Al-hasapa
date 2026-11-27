@@ -43,12 +43,16 @@ data class PlaySession(
     val solo: Boolean = false,
 ) {
     companion object {
-        fun forGame(catalog: Catalog, state: JSONObject?, game: Game, who: String?, solo: Boolean = false): PlaySession {
+        /**
+         * [corner]: whose own corner of the app a game played alone opens in (2.0): whoever holds the phone at home, also when the
+         * game is played for a friend's couch as the player they are there ([who]). Their logins stay theirs, in one place.
+         */
+        fun forGame(catalog: Catalog, state: JSONObject?, game: Game, who: String?, solo: Boolean = false, corner: String? = null): PlaySession {
             val url = catalog.urlFor(game, state)
             val alone = solo && who != null && !game.isDuel
             return PlaySession(
                 title = if (alone) "⚔️ ${game.n}" else game.n, url = url,
-                profile = if (alone) ProfileNames.forPerson(who!!) else ProfileNames.forSite(catalog.siteOf(game), who),
+                profile = if (alone) ProfileNames.forPerson(corner ?: who!!) else ProfileNames.forSite(catalog.siteOf(game), who),
                 allowedHosts = catalog.allowedHosts(game, url),
                 roaming = catalog.roams(game, url),
                 gameId = game.id, who = who, loginMode = false, solo = alone,

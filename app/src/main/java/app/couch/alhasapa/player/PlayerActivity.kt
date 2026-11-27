@@ -23,6 +23,16 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import app.couch.alhasapa.CouchApp
+import app.couch.alhasapa.data.Couple as People
+import app.couch.alhasapa.data.SoloSide
+import app.couch.alhasapa.data.Couches
+import app.couch.alhasapa.results.SoloTargets
+import app.couch.alhasapa.results.GuestPlay
+import app.couch.alhasapa.remote.RemoteStore
+import app.couch.alhasapa.remote.Links
+import app.couch.alhasapa.remote.GuestSolo
+import app.couch.alhasapa.remote.CouchStore
+import app.couch.alhasapa.remote.SoloTarget
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.display.DisplayStore
 import app.couch.alhasapa.results.ResultStore
@@ -51,6 +61,14 @@ import app.couch.alhasapa.data.Notes
 class PlayerActivity : ComponentActivity() {
     private lateinit var session: PlaySession
     private lateinit var tv: TvHost
+
+    /**
+     * Where a game played alone goes (2.0): the couch and the player there, as it was said before the game opened and is kept with
+     * the game and the day. Null for a game that is not played alone. [guest]: it is a friend's couch (nothing of it touches the home).
+     */
+    private var target: SoloTarget? = null
+    private val guest: SoloTarget?
+        get() = target?.takeIf { !SoloTargets.isHome(it, (application as CouchApp).repo) }
 
     /** For the tests: the remote of this screen. */
     internal val remote get() = tv.controller
@@ -87,12 +105,23 @@ class PlayerActivity : ComponentActivity() {
         setContent {
             AlHasapaTheme {
                 val revision by app.repo.revision.collectAsState()
+                // (At a friend's couch: what is kept of the game there, and what that couch's TV says of its contest.)
+                val guestChanges by GuestSolo.changes.collectAsState()
                 // Re-read whenever the state changes (a tick, a saved display profile, a result).
                 val state = remember(revision) { app.repo.snapshot() }
+                val g = guest
+                val gameHere = session.gameId?.let { app.catalog.game(it) }
+                val guestSide = remember(guestChanges, g) { if (g != null && gameHere != null) GuestPlay.side(this, gameHere, today(), g) else null }
                 val played = session.gameId != null && (
-                    if (session.solo) Solo.side(state, today(), session.gameId!!, session.who.orEmpty()) != null
+                    if (g != null) guestSide != null
+                    else if (session.solo) Solo.side(state, today(), session.gameId!!, session.who.orEmpty()) != null
                     else CouchState.entry(state, today(), session.gameId!!) != null
                 )
+                // Where the result goes, said on the button that saves it and under the sheet's title.
+                val where = target?.let { t ->
+                    getString(R.string.solo_save_in, Couches.inCouch(t.name)) to
+                        getString(R.string.solo_who_where, t.whoName, t.name, getString(R.string.day_today))
+                }
                 val info = remember(revision) { PlayerInfo.from(state, app.catalog, pieces, today(), session.who) }
               tv.Layer {
                androidx.compose.runtime.CompositionLocalProvider(LocalSolo provides session.solo) {
@@ -106,11 +135,14 @@ class PlayerActivity : ComponentActivity() {
                     onResetDisplay = { key -> DisplayStore.reset(app.repo, key) },
                     result = session.gameId?.let { id -> app.catalog.game(id) }
                         ?.takeIf { !(it.isDuel && session.who == null) }
-                        ?.let { ResultSupport(it, state, today()) },
+                        // (A friend's couch: the sheet is shown this phone's own side there, and nothing of the home's evening.)
+                        ?.let { ResultSupport(it, if (g != null) guestState(g, it.id, guestSide) else state, today()) },
                     onSaveResult = { input -> saveResult(app, input) },
                     onSaveSolo = if (session.solo) ({ input -> saveSolo(app, pieces, input) }) else null,
                     soloAgain = { soloOutcome(app, pieces) },
-                    revision = revision,
+                    revision = revision + guestChanges,
+                    soloSaveLabel = where?.first, soloWhere = where?.second,
+                    onSoloWithdraw = if (session.solo) ({ withdrawSolo(app) }) else null,
                     soloOther = when (session.who) { "a" -> info.nameB; "b" -> info.nameA; else -> null },
                     onAutoPlayed = { if (session.solo) markSolo(app) else markPlayed(app) },
                     // The notes one of us left the other for this game (shown after its result is saved and celebrated).
@@ -165,6 +197,18 @@ class PlayerActivity : ComponentActivity() {
         }.onFailure { Flight.log("touch mode: the TV could not picture the page (${it.javaClass.simpleName})"); done(null) }
     }
 
+    // During a visit (2.0) the phone's connection to the friend's TV stays open under the game: a result played alone for that
+    // couch reaches it at once, and its contest's card follows the others as they hand in.
+    override fun onStart() {
+        super.onStart()
+        if (!tv.enabled && ::session.isInitialized && (guest != null || CouchStore(this).visitNow() != null)) Links.acquire(this, this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!tv.enabled) Links.release(this)
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
@@ -182,7 +226,19 @@ class PlayerActivity : ComponentActivity() {
         val gameId = intent.getStringExtra(EXTRA_GAME)
         return if (gameId != null) {
             val game = app.catalog.game(gameId) ?: return null
-            PlaySession.forGame(app.catalog, app.repo.snapshot(), game, intent.getStringExtra(EXTRA_WHO), intent.getBooleanExtra(EXTRA_SOLO, false))
+            val solo = intent.getBooleanExtra(EXTRA_SOLO, false) && !game.isDuel
+            if (solo) {
+                // Where it goes was said before the game opened (the home, unless a visit was on and the person said otherwise).
+                val t = CouchStore(this).target(today(), gameId)
+                    ?: SoloTargets.home(this, app.repo)
+                    ?: intent.getStringExtra(EXTRA_WHO)?.let { w -> app.repo.peek { s -> SoloTarget(Couches.of(s)?.id.orEmpty(), Couches.name(s), w, People.name(s, w), true) } }
+                target = t
+                val who = t?.who ?: intent.getStringExtra(EXTRA_WHO)
+                val s = PlaySession.forGame(app.catalog, app.repo.snapshot(), game, who, true, corner = RemoteStore(this).me ?: who)
+                // The couch it is played for, by name, on the game's own screen.
+                return if (t != null && s.solo) s.copy(title = "${s.title} · ${t.name}") else s
+            }
+            PlaySession.forGame(app.catalog, app.repo.snapshot(), game, intent.getStringExtra(EXTRA_WHO), false)
         } else {
             val site = app.catalog.sites[intent.getStringExtra(EXTRA_SITE)] ?: return null
             PlaySession.forLogin(site, intent.getStringExtra(EXTRA_TITLE) ?: site.name, intent.getStringExtra(EXTRA_PROFILE) ?: ProfileNames.GAMES)
@@ -218,10 +274,21 @@ class PlayerActivity : ComponentActivity() {
         return null
     }
 
+    /** What the result sheet is shown of a game played alone for a friend's couch: this phone's own side there, and nothing else. */
+    private fun guestState(t: SoloTarget, gameId: String, side: SoloSide?): JSONObject =
+        CouchState.empty().also { s -> if (side != null) Solo.put(s, today(), gameId, side.copy(who = t.who)) }
+
     /** A result of a game played alone (1.11): kept, sent to the relay, and answered with its card (sealed, or the reveal). */
     private fun saveSolo(app: CouchApp, pieces: PiecesConfig, input: ResultInput): SoloOutcome? {
         val game = session.gameId?.let { app.catalog.game(it) } ?: return null
         val who = session.who ?: return null
+        // For a friend's couch (2.0): kept on this phone apart from the home's state, and handed to that couch's TV. The home's
+        // history, points, relay and notifications hear nothing of it.
+        guest?.let { g ->
+            GuestPlay.save(this, game, today(), g, input)
+            Flight.log("solo: ${game.n} played alone for a friend's couch")
+            return soloOutcome(app, pieces)
+        }
         SoloPlay.save(app.repo, game, today(), who, input)
         Flight.log("solo: ${game.n} played alone, its result sealed")
         tellRelay(app, who)
@@ -232,7 +299,17 @@ class PlayerActivity : ComponentActivity() {
     private fun soloOutcome(app: CouchApp, pieces: PiecesConfig): SoloOutcome? {
         val game = session.gameId?.let { app.catalog.game(it) } ?: return null
         val who = session.who ?: return null
-        return SoloPlay.outcome(app.repo.snapshot(), game, today(), who, pieces)
+        guest?.let { g -> return GuestPlay.outcome(this, game, today(), g, pieces) }
+        return SoloPlay.outcome(app.repo.snapshot(), game, today(), who, pieces)?.copy(couch = target?.name)
+    }
+
+    /** Leaving the contest without a result: the others are not kept waiting. */
+    private fun withdrawSolo(app: CouchApp) {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return
+        val who = session.who ?: return
+        guest?.let { g -> GuestPlay.withdraw(this, game, today(), g) }
+            ?: run { SoloPlay.withdraw(app.repo, game, today(), who); tellRelay(app, who) }
+        Toast.makeText(this, R.string.solo_withdrawn, Toast.LENGTH_SHORT).show()
     }
 
     /** What changed alone goes to the relay, and what the others did comes back (a background thread; nothing waits for it). */
@@ -244,6 +321,10 @@ class PlayerActivity : ComponentActivity() {
     private fun markSolo(app: CouchApp) {
         val game = session.gameId?.let { app.catalog.game(it) } ?: return
         val who = session.who ?: return
+        guest?.let { g ->
+            if (GuestPlay.markPlayed(this, game, today(), g)) Toast.makeText(this, R.string.solo_marked_toast, Toast.LENGTH_SHORT).show()
+            return
+        }
         if (SoloPlay.markPlayed(app.repo, game, today(), who)) {
             Flight.log("played: ${session.title} marked by itself, alone")
             Toast.makeText(this, R.string.solo_marked_toast, Toast.LENGTH_SHORT).show()
@@ -254,6 +335,11 @@ class PlayerActivity : ComponentActivity() {
     private fun clearSolo(app: CouchApp) {
         val game = session.gameId?.let { app.catalog.game(it) } ?: return
         val who = session.who ?: return
+        guest?.let { g ->
+            GuestPlay.clear(this, game, today(), g)
+            Toast.makeText(this, R.string.result_cleared, Toast.LENGTH_SHORT).show()
+            return
+        }
         SoloPlay.clear(app.repo, game, today(), who)
         Toast.makeText(this, R.string.result_cleared, Toast.LENGTH_SHORT).show()
         tellRelay(app, who)
@@ -263,6 +349,11 @@ class PlayerActivity : ComponentActivity() {
     private fun toggleSolo(app: CouchApp) {
         val game = session.gameId?.let { app.catalog.game(it) } ?: return
         val who = session.who ?: return
+        guest?.let { g ->
+            if (GuestPlay.side(this, game, today(), g) == null) GuestPlay.markPlayed(this, game, today(), g)
+            else GuestPlay.clear(this, game, today(), g)
+            return
+        }
         if (Solo.side(app.repo.snapshot(), today(), game.id, who) == null) SoloPlay.markPlayed(app.repo, game, today(), who)
         else SoloPlay.clear(app.repo, game, today(), who)
         tellRelay(app, who)

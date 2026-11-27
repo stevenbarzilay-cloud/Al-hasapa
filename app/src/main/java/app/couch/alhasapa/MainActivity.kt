@@ -64,6 +64,22 @@ import app.couch.alhasapa.ui.PlayModeDialog
 import app.couch.alhasapa.results.ShareReceiverActivity
 import app.couch.alhasapa.results.SoloPlay
 import app.couch.alhasapa.tv.SoloTvCard
+import app.couch.alhasapa.couches.CouchTargetDialog
+import app.couch.alhasapa.couches.CouchesActivity
+import app.couch.alhasapa.couches.OpenContest
+import app.couch.alhasapa.couches.VisitBar
+import app.couch.alhasapa.couches.WelcomeScreen
+import app.couch.alhasapa.data.Couches
+import app.couch.alhasapa.remote.CouchStore
+import app.couch.alhasapa.remote.KeyClient
+import app.couch.alhasapa.remote.GuestSolo
+import app.couch.alhasapa.remote.CouchSetup
+import app.couch.alhasapa.remote.Links
+import app.couch.alhasapa.remote.SoloTarget
+import app.couch.alhasapa.results.SoloTargets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBars
 
 class MainActivity : ComponentActivity() {
     private lateinit var tv: TvHost
@@ -141,10 +157,51 @@ class MainActivity : ComponentActivity() {
         launchSolo(gameId, elsewhere)
     }
 
+    /**
+     * Couches (2.0): the game waiting for "which couch is this result for?", asked before a game is played alone during a visit; and
+     * a nudge for what shows the visit to read it again.
+     */
+    private var targetAsk by mutableStateOf<Pair<String, SoloTargets.Need.Ask>?>(null)
+    private var couchTick by androidx.compose.runtime.mutableIntStateOf(0)
+    /** A new phone joined the couch of a TV it chose: who holds it is asked next. */
+    private val joinCouch = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == RESULT_OK && RemoteStore(this).me == null) meOpen = true
+        hubReloads++; couchTick++
+    }
+
     private fun launchSolo(gameId: String, elsewhere: Boolean) {
-        val me = heldBy() ?: return
-        Flight.log("solo: a game played alone${if (elsewhere) ", elsewhere" else ""}")
-        startActivity(if (elsewhere) ShareReceiverActivity.soloIntent(this, gameId) else PlayerActivity.gameIntent(this, gameId, me, solo = true))
+        heldBy() ?: return
+        // Played elsewhere: the sheet asks which day's puzzle it was, and with it where the result goes.
+        if (elsewhere) { Flight.log("solo: a game played alone, elsewhere"); startActivity(ShareReceiverActivity.soloIntent(this, gameId)); return }
+        // Where it goes (2.0): the home couch, with no question; during a visit, the person says, before the game opens.
+        when (val need = SoloTargets.resolve(this, (application as CouchApp).repo, today(), gameId)) {
+            SoloTargets.Need.Who -> { soloAfterMe = gameId to false; meOpen = true }
+            is SoloTargets.Need.Ask -> targetAsk = gameId to need
+            is SoloTargets.Need.Go -> openSolo(gameId, need.t)
+        }
+    }
+
+    private fun openSolo(gameId: String, t: SoloTarget) {
+        SoloTargets.choose(this, today(), gameId, t)
+        Flight.log("solo: a game played alone${if (t.home) "" else ", for a friend's couch"}")
+        startActivity(PlayerActivity.gameIntent(this, gameId, t.who, solo = true))
+    }
+
+    /** "להצטרף לתחרות ... בספה של דני": the game opens for that couch's contest; which couch is already said. */
+    private fun joinContest(gameId: String) {
+        val t = SoloTargets.visit(this) ?: return
+        RelayStore(this).setMode(today(), gameId, SOLO)
+        openSolo(gameId, t)
+    }
+
+    /** The visit ends now: the friend's TV is let go of at once, and the phone is at home again. */
+    private fun endVisit() {
+        CouchSetup.endVisit(this)
+        Links.refresh(this)
+        Links.release(this)
+        couchTick++
+        android.widget.Toast.makeText(this, R.string.visit_ended, android.widget.Toast.LENGTH_SHORT).show()
+        phoneSync.start()
     }
 
     /** On a phone (1.11): what the others played alone comes in, and the home redraws with it. In the background. */
@@ -166,7 +223,11 @@ class MainActivity : ComponentActivity() {
         override fun run() {
             val app = application as CouchApp
             if (TvMode.isTelevision(this@MainActivity)) Thread({ runCatching { SoloRelay(applicationContext, app.repo).sync(null) } }, "solo-look").start()
-            else soloLook()
+            else {
+                soloLook()
+                // A visit ends with its evening, also while the app is open: the phone is at home again.
+                if (CouchStore(this@MainActivity).visit != null && CouchStore(this@MainActivity).visitNow() == null) { Links.refresh(this@MainActivity); Links.release(this@MainActivity); couchTick++ }
+            }
             tvLookHandler.postDelayed(this, TV_LOOK_MS)
         }
     }
@@ -202,17 +263,25 @@ class MainActivity : ComponentActivity() {
                 if (android.os.Build.VERSION.SDK_INT >= 33) notifyAsk.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+
+        override fun openCouches() { runOnUiThread { startActivity(Intent(this@MainActivity, CouchesActivity::class.java)) } }
     }
 
     override fun onStart() {
         super.onStart()
-        if (!TvMode.isTelevision(this)) phoneSync.start()
+        if (!TvMode.isTelevision(this)) {
+            // During a visit (2.0) the phone holds its connection to the friend's TV while the app is in front, so the visit's line
+            // says at once when it is lost; at home it only hands over what waits for the home's TV, and lets go.
+            if (CouchStore(this).visitNow() != null) Links.acquire(this, this) else { Links.release(this); phoneSync.start() }
+            couchTick++
+        }
         tvLookHandler.post(tvLook)
     }
 
     override fun onStop() {
         super.onStop()
         phoneSync.stop()
+        if (!TvMode.isTelevision(this)) Links.release(this)
         tvLookHandler.removeCallbacks(tvLook)
     }
 
@@ -261,6 +330,13 @@ class MainActivity : ComponentActivity() {
                 onSolo = { playModeFor = null; playSolo(id, elsewhere = false) },
                 onElsewhere = { playModeFor = null; playSolo(id, elsewhere = true) },
                 onDismiss = { playModeFor = null },
+            )
+        } }
+        targetAsk?.let { (id, need) -> couch.catalog.game(id)?.let { game ->
+            CouchTargetDialog(
+                game.n, need.home, need.visit,
+                onPick = { t -> targetAsk = null; openSolo(id, t) },
+                onDismiss = { targetAsk = null },
             )
         } }
         if (noteOpen) {
@@ -333,6 +409,21 @@ class MainActivity : ComponentActivity() {
                     }
                     return@Layer
                 }
+                // A new device (2.0): a couch of one's own, or the one that already is in this home. Nothing of anyone's is shown before.
+                val stateRev by app.repo.revision.collectAsState()
+                val needsSetup = remember(stateRev) { app.repo.peek { Couches.needsSetup(it) } }
+                if (needsSetup) {
+                    WelcomeScreen(
+                        tv = tv.enabled, tvName = Build.MODEL.orEmpty().ifBlank { "TV" },
+                        onCreate = { c, a, b ->
+                            CouchSetup.create(this@MainActivity, app.repo, c, a, b)
+                            if (!tv.enabled) meOpen = true
+                        },
+                        onJoin = { joinCouch.launch(CouchesActivity.joinIntent(this@MainActivity)) },
+                    )
+                    if (!tv.enabled) PhoneHomeDialogs(app, pieces)
+                    return@Layer
+                }
                 if (tv.enabled && !webHub) {
                     // The TV opens on its own native home: there at once, and the remote moves between real buttons.
                     val revision by app.repo.revision.collectAsState()
@@ -383,10 +474,43 @@ class MainActivity : ComponentActivity() {
                 } else {
                     // On a TV the web hub is a step away from the home (the cats cover it until it is ready), and Back from it goes
                     // back to the home.
-                    AppRoot(
-                        playSplash = if (tv.enabled) true else playSplash, reduceMotion = reduceMotion,
-                        onExit = { if (tv.enabled) webHub = false else finish() }, bridge = bridge, reloads = hubReloads,
-                    )
+                    val guestChanges by GuestSolo.changes.collectAsState()
+                    val visit = remember(couchTick, guestChanges, hubReloads) { if (tv.enabled) null else CouchStore(this@MainActivity).visitNow() }
+                    androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+                        // A visit (2.0): its line stays at the top for as long as it lasts, with the way out of it.
+                        if (visit != null) {
+                            val link by remember { Links.client(this@MainActivity) }.state.collectAsState()
+                            val linkTv by remember { Links.client(this@MainActivity) }.tv.collectAsState()
+                            val guestStore = remember { GuestSolo(this@MainActivity) }
+                            val contests = remember(guestChanges, visit) {
+                                guestStore.contests(visit.couch, today()).mapNotNull { id ->
+                                    val game = app.catalog.game(id) ?: return@mapNotNull null
+                                    if (guestStore.entry(visit.couch, today(), id) != null) return@mapNotNull null
+                                    val people = CouchStore(this@MainActivity).people(visit.couch).associateBy { it.who }
+                                    val players = guestStore.contest(visit.couch, today(), id).filter { !it.out && it.who != visit.me }.map { people[it.who]?.name ?: "אורח" }
+                                    if (players.isEmpty()) null else OpenContest(id, game.n, players.joinToString(", "))
+                                }
+                            }
+                            VisitBar(
+                                visit, connected = link is KeyClient.State.Connected && linkTv?.couch?.id == visit.couch,
+                                pending = guestStore.pending(visit.couch).map { app.catalog.game(it.game)?.n ?: it.game },
+                                contests = contests,
+                                onEnd = { endVisit() },
+                                onOpen = { startActivity(Intent(this@MainActivity, CouchesActivity::class.java)) },
+                                onJoin = { joinContest(it) },
+                            )
+                        }
+                        androidx.compose.foundation.layout.Box(
+                            androidx.compose.ui.Modifier.weight(1f).then(
+                                if (visit != null) androidx.compose.ui.Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.statusBars) else androidx.compose.ui.Modifier,
+                            ),
+                        ) {
+                            AppRoot(
+                                playSplash = if (tv.enabled) true else playSplash, reduceMotion = reduceMotion,
+                                onExit = { if (tv.enabled) webHub = false else finish() }, bridge = bridge, reloads = hubReloads,
+                            )
+                        }
+                    }
                 }
                 if (!tv.enabled) PhoneHomeDialogs(app, pieces)
                 whoPlaysFor?.let { id ->

@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -82,6 +83,9 @@ data class CreditOther(val id: String, val name: String, val piece: PieceStyle)
 
 private val SheetText = 20.sp
 
+/** The line that says who, which couch and which day's puzzle a result is for (2.0). */
+const val WHERE_TAG = "result-where"
+
 /**
  * The result of a game, filled in from what the game copied (or typed by hand), with the points it is worth shown before
  * saving. Used in the player (landscape, over the game) and by the share target (portrait, a screen of its own).
@@ -107,6 +111,10 @@ fun ResultSheet(
     onPhoto: ((camera: Boolean) -> Unit)? = null,
     /** What the photo came to, said under its buttons. */
     photoNote: String? = null,
+    /** Where the result goes, on the button that saves it (2.0: "שמירת תוצאת הסולו בספה של דני"); null: the plain "save". */
+    saveLabel: String? = null,
+    /** Who, which couch and which day's puzzle the result is for (2.0), said under the title. */
+    whereNote: String? = null,
 ) {
     val game = support.game
     val kind = ResultDraft.kindOf(game)
@@ -168,6 +176,7 @@ fun ResultSheet(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+            if (whereNote != null) Text(whereNote, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.testTag(WHERE_TAG))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (captured) Text(stringResource(if (fromScreen) R.string.result_read_screen else R.string.result_captured), fontSize = 16.sp, color = Palette.Ink2)
@@ -187,7 +196,7 @@ fun ResultSheet(
                 Text(stringResource(R.string.result_credit), fontSize = SheetText, fontWeight = FontWeight.Bold, color = Palette.Ink, modifier = Modifier.padding(end = 6.dp))
                 CreditChips(couple, credit, Modifier.weight(1f)) { credit = if (credit == it) "" else it }
             }
-            Actions(canClear, Modifier.padding(top = 2.dp), onSave = save, onClear = onClear, onCancel = onCancel)
+            Actions(canClear, Modifier.padding(top = 2.dp), onSave = save, onClear = onClear, onCancel = onCancel, saveLabel = saveLabel)
         }
         return
     }
@@ -204,6 +213,7 @@ fun ResultSheet(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+        if (whereNote != null) Text(whereNote, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.testTag(WHERE_TAG))
         if (captured) Text(stringResource(R.string.result_captured), fontSize = SheetText, color = Palette.Ink2)
         if (onPhoto != null) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -241,7 +251,7 @@ fun ResultSheet(
         }
 
         Spacer(Modifier.height(4.dp))
-        Actions(canClear, Modifier, onSave = save, onClear = onClear, onCancel = onCancel)
+        Actions(canClear, Modifier, onSave = save, onClear = onClear, onCancel = onCancel, saveLabel = saveLabel)
     }
 }
 
@@ -285,9 +295,9 @@ private fun androidx.compose.foundation.layout.RowScope.CreditChips(couple: Coup
 }
 
 @Composable
-private fun Actions(canClear: Boolean, modifier: Modifier, onSave: () -> Unit, onClear: (() -> Unit)?, onCancel: () -> Unit) {
+private fun Actions(canClear: Boolean, modifier: Modifier, onSave: () -> Unit, onClear: (() -> Unit)?, onCancel: () -> Unit, saveLabel: String? = null) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = modifier.fillMaxWidth()) {
-        SheetAction(SAVE_ID, stringResource(R.string.result_save), primary = true, modifier = Modifier.weight(2f), onClick = onSave)
+        SheetAction(SAVE_ID, saveLabel ?: stringResource(R.string.result_save), primary = true, modifier = Modifier.weight(if (saveLabel != null) 3f else 2f), onClick = onSave)
         if (canClear) SheetAction(SHEET_PREFIX + "clear", stringResource(R.string.result_clear), modifier = Modifier.weight(1.5f)) { onClear?.invoke() }
         SheetAction(SHEET_PREFIX + "cancel", stringResource(R.string.result_cancel), modifier = Modifier.weight(1f), onClick = onCancel)
     }
