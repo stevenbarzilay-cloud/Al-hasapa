@@ -341,10 +341,17 @@ class KeyServer(
                 // What a phone of the home knows (1.12): kept where newer, and passed on to the home's other phones connected.
                 // (From a guest it is not looked at: nothing of another couch comes in, and nothing of this one goes out.)
                 if (member) {
+                    val had = runCatching { book.couch() }.getOrNull() != null
                     val changed = runCatching { book.takeShare(m.share) }.getOrDefault(false)
                     if (changed) {
                         peers.forEach { if (it !== this && it.member) it.send(m) }
                         peers.forEach { if (it.ready && it.guest) it.sendContests() }
+                        // This TV was of no couch, and took this phone's (2.0): the couch's relay goes to the phone now.
+                        if (!had && runCatching { book.couch() }.getOrNull() != null) {
+                            sendRelay()
+                            Flight.log("couches: this TV joined the couch of ${shownName()}'s phone")
+                            publish()
+                        }
                     }
                 }
                 true
@@ -405,11 +412,8 @@ class KeyServer(
             if (!plain) runCatching { book.couple() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { send(Msg.CoupleMsg("", it)) }
             // The solo relay (1.11), sealed for this phone only: someone else on the home network sees that something went, not what.
             // Only to the home's own phones: a guest never holds the home's relay.
-            val key = frameKey
             val hasCouch = runCatching { book.couch() }.getOrNull() != null
-            if (member && key != null && hasCouch) runCatching { relay() }.getOrNull()?.let { c ->
-                send(Msg.Relay(RelayCrypto.seal(key, KeyLink.RELAY_AAD, c.toJson().toByteArray())))
-            }
+            if (hasCouch) sendRelay()
             // Everything the TV keeps alike with the phones (1.12): two weeks of evenings, and the rest. A TV that is of no couch yet
             // (2.0: it is joining the one a phone began) says nothing of its own first: it takes the phone's.
             if (member && hasCouch) for (s in ShareBus.opening(book)) send(Msg.Share(s))
@@ -419,6 +423,13 @@ class KeyServer(
                     if (app != appCode) " (its app is ${if (app < appCode) "older" else "newer"}: ${ver.ifEmpty { "before 1.9.4" }}; this TV has $appVer)" else "",
             )
             publish()
+        }
+
+        /** The solo relay, sealed for this phone (one of the home's own only). */
+        private fun sendRelay() {
+            val key = frameKey ?: return
+            if (!member) return
+            runCatching { relay() }.getOrNull()?.let { c -> send(Msg.Relay(RelayCrypto.seal(key, KeyLink.RELAY_AAD, c.toJson().toByteArray()))) }
         }
 
         private fun askForCode(): Boolean {

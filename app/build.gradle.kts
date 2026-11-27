@@ -16,8 +16,8 @@ android {
     defaultConfig {
         applicationId = "app.couch.alhasapa"
         targetSdk = 37
-        versionCode = 39
-        versionName = "1.12.0"
+        versionCode = 40
+        versionName = "2.0.0"
     }
 
     // Two builds from one codebase: the phone app, and the Android TV app (a Xiaomi Mi Box runs Android TV 8.1 or 9, so the TV
@@ -42,12 +42,26 @@ android {
     // Every build, whether from Android Studio, a terminal or this repo's CI, is then signed the same,
     // so a new APK always installs OVER the old one and the logins and history survive updates.
     // A per-machine debug key would force an uninstall each time, which wipes both.
+    //
+    // 2.0, the builds handed to friends: a private key that is never in the repository. The release workflow
+    // (.github/workflows/release.yml) gets it from the repository's secrets and names it in these four environment variables;
+    // without them (every local build, and the builds in dist/ for our own devices) a release is signed with the committed key
+    // above, exactly as before, so our devices go on updating over what they have. See docs/DISTRIBUTION.md.
+    val friendsKeystore: String? = System.getenv("COUCH_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
             storePassword = "android"
             keyAlias = "androiddebugkey"
             keyPassword = "android"
+        }
+        if (friendsKeystore != null) {
+            create("friends") {
+                storeFile = file(friendsKeystore)
+                storePassword = System.getenv("COUCH_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("COUCH_KEY_ALIAS")
+                keyPassword = System.getenv("COUCH_KEY_PASSWORD")
+            }
         }
     }
 
@@ -59,8 +73,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // The same committed key as the debug build, so a release APK installs OVER a debug one (and the logins survive).
-            signingConfig = signingConfigs.getByName("debug")
+            // The same committed key as the debug build, so a release APK installs OVER a debug one (and the logins survive);
+            // in the release workflow, the friends' private key instead (see above).
+            signingConfig = signingConfigs.findByName("friends") ?: signingConfigs.getByName("debug")
         }
     }
 

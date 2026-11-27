@@ -287,7 +287,8 @@ class SoloRelay(
         for (game in Solo.games(after, day)) {
             val mine = Solo.side(after, day, game, me)
             for (s in Solo.sides(after, day, game)) {
-                if (s.who == me) continue
+                // (Someone who left the contest is no news.)
+                if (s.who == me || s.out) continue
                 val was = Solo.side(before, day, game, s.who)
                 if (was != null && was.t >= s.t) continue                       // nothing new from them
                 // Their result, new, when this phone's person has one too: the reveal (once; a later mend of it is no news).

@@ -144,6 +144,11 @@ img{max-width:100%;height:auto;display:block}
 .mode[aria-selected="true"]{background:var(--ink);color:var(--cream)}
 .mode svg{width:18px;height:18px;flex:none}
 @media (max-width:460px){.mode .long{display:none}.mode{padding:0 11px}}
+/* 2.0: the home couch by name (words and a mark, never colour alone); a press opens "הספות שלי". */
+.couchline{display:flex;align-items:center;gap:6px;min-height:40px;padding:0 13px;border-radius:999px;border:1px solid var(--line-2);font-weight:600;font-size:.88em;color:var(--ink);max-width:100%;min-width:0}
+.couchline[hidden]{display:none}
+.couchline .cn{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+.couchline .go{margin-inline-start:auto;color:var(--ink-2);flex:none}
 /* In a row of its own the switch has room for its whole name again. */
 @media (max-width:720px){.mast.people .mode .long{display:inline}}
 .mast .date{color:var(--ink-2);font-size:.9em;white-space:nowrap}
@@ -357,6 +362,7 @@ footer .joke{font-style:italic}
   .mast.people .mode{flex:1;justify-content:center;min-height:36px}
   .mast.people .who{padding:0 11px}
   .mast.people .me{padding:0 10px}
+  .mast.people .couchline{order:6;flex:1 1 100%;min-height:36px}
   .navbar{order:4;background:var(--cream);border-top:1px solid var(--line-2)}
   .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
   .navbar .wrap{padding:0 0 env(safe-area-inset-bottom);border:0}
@@ -461,6 +467,7 @@ footer .joke{font-style:italic}
     <button class="who" id="who" type="button" aria-label="מי על הספה, והבדיחות שלנו"></button>
     <button class="me" id="me" type="button" hidden></button>
     <button class="me" id="noteBtn" type="button" hidden aria-label="השארת פתק"></button>
+    <button class="couchline" id="couchBtn" type="button" hidden></button>
   </div>
 </header>
 <nav class="navbar">
@@ -518,7 +525,7 @@ const KINDS = ["מילים","היגיון","ידע","מוזיקה","חושים",
    with a revision so a stale save can never overwrite a newer change (say, a result saved from the player).
    In a plain browser (tests, previews) it falls back to localStorage, so the page still works on its own. */
 const LS="couch-games-v1", NATIVE=window.couchNative||null;
-const DEFAULT_STATE=()=>({v:1,names:{a:"סטיב",b:"רוני"},prefs:{},log:{}});
+const DEFAULT_STATE=()=>({v:1,names:{a:"שחקן 1",b:"שחקן 2"},prefs:{},log:{}});
 let state=DEFAULT_STATE(), stateRev=0;
 function readLocal(){try{const s=JSON.parse(localStorage.getItem(LS)||"null"); if(s&&s.v===1) return s}catch(e){} return null}
 function loadState(){
@@ -648,9 +655,9 @@ const CHECK='<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5 5.6 1
 const art=(name,cls,w,h,alt)=>{const m=n=>`style="-webkit-mask-image:url(img/${name}-${n}.webp);mask-image:url(img/${name}-${n}.webp)"`;
   return `<span class="art ${cls}"><img src="${TINTED[name]||"img/"+name+".webp"}" width="${w}" height="${h}" alt="${alt}"><i class="lift" style="background-image:url(img/${name}.webp);-webkit-mask-image:url(img/${name}-r.webp);mask-image:url(img/${name}-r.webp)"></i><i class="tint tr" ${m("r")}></i><i class="tint tp" ${m("p")}></i></span>`};
 const IMG={
-  get couple(){return art("couple","ill-couple",1100,715,"סטיב ורוני על הספה, משחקים בטאבלט, והחתול השחור ישן על המסעד")},
+  get couple(){return art("couple","ill-couple",1100,715,`${state.names.a} ו${state.names.b} על הספה, משחקים בטאבלט, והחתול השחור ישן על המסעד`)},
   get cats(){return art("cats","",1100,547,"שלושה חתולים ישנים על הספה, והשלט נעלם בין הכריות")},
-  get board(){return art("board","ill-board",900,804,"סטיב ורוני על כריות, מזיזים כלים על לוח")}
+  get board(){return art("board","ill-board",900,804,`${state.names.a} ו${state.names.b} על כריות, מזיזים כלים על לוח`)}
 };
 
 /* ================= scoring =================
@@ -725,7 +732,7 @@ const hash=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))|0;return Math.a
    alone too (with a result); until then "played" and an envelope. The reveal is said once on this phone (kept here, per device). */
 const ME=()=>{try{return NATIVE&&NATIVE.me?String(NATIVE.me()||""):""}catch(e){return ""}};
 const soloOf=(id,k=TODAY())=>{const g=state.solo&&state.solo[k]&&state.solo[k][id];
-  return g?Object.entries(g).filter(([w,x])=>x&&x.t).map(([w,x])=>({w,v:x.v,max:x.max,fail:!!x.fail,kind:x.kind||"",t:x.t,has:x.v!=null||!!x.fail})).sort((a,b)=>a.t-b.t):[]};
+  return g?Object.entries(g).filter(([w,x])=>x&&x.t&&!x.out).map(([w,x])=>({w,v:x.v,max:x.max,fail:!!x.fail,kind:x.kind||"",t:x.t,has:x.v!=null||!!x.fail})).sort((a,b)=>a.t-b.t):[]};
 const soloKind=(g,sides)=>{const ks=[...new Set(sides.filter(x=>x.has&&x.kind).map(x=>x.kind))];return ks.length===1?ks[0]:(g.metric&&g.metric!=="none"?g.metric:"guesses")};
 function soloCmp(kind,a,b){
   if(a.fail||b.fail) return a.fail&&b.fail?0:a.fail?-1:1;
@@ -734,7 +741,9 @@ function soloCmp(kind,a,b){
   if(kind==="score"){const r=a.max&&b.max&&a.max!==b.max; return (r?a.v/a.max:a.v)-(r?b.v/b.max:b.v)}
   return kind==="words"?a.v-b.v:b.v-a.v;
 }
-function soloWinner(g,sides){const r=sides.filter(x=>x.has), kind=soloKind(g,sides); if(r.length<2||kind==="none") return null;
+/* With more than two (2.0) nobody is crowned while someone who joined is still playing; once the day is over, whoever handed in is compared. */
+function soloWinner(g,sides,over){const r=sides.filter(x=>x.has), kind=soloKind(g,sides); if(r.length<2||kind==="none") return null;
+  if(!over&&sides.some(x=>!x.has)) return null;
   r.sort((x,y)=>soloCmp(kind,y,x)); return soloCmp(kind,r[0],r[1])===0?"t":r[0].w}
 const soloVal=(g,x,sides)=>x.has?fmtVal(soloKind(g,sides),{v:x.v,max:x.max,fail:x.fail}):"";
 const SEEN_KEY="couch-solo-seen";
@@ -790,7 +799,15 @@ function renderMast(){
   const onTV=document.documentElement.classList.contains("tv");
   const canMe=!onTV&&!!(NATIVE&&NATIVE.openMe&&NATIVE.me), canNote=!onTV&&!!(NATIVE&&NATIVE.openNote);
   meBtn.hidden=!canMe; noteBtn.hidden=!canNote;
-  document.querySelector(".mast").classList.toggle("people",canMe||canNote);
+  // 2.0: which couch this is (the phone's home), always in sight; a press opens "הספות שלי".
+  const couchBtn=document.getElementById("couchBtn"), canCouch=!onTV&&!!(NATIVE&&NATIVE.couchName&&NATIVE.openCouches);
+  couchBtn.hidden=!canCouch;
+  if(canCouch){
+    let cn=""; try{cn=String(NATIVE.couchName()||"")}catch(e){}
+    couchBtn.innerHTML=`<span aria-hidden="true">🏠</span><span class="cn">${esc(cn)}</span><span class="go" aria-hidden="true">הספות שלי ‹</span>`;
+    couchBtn.setAttribute("aria-label",`ספת הבית שלי: ${cn}. לפתיחת «הספות שלי»`);
+  }
+  document.querySelector(".mast").classList.toggle("people",canMe||canNote||canCouch);
   if(canMe){
     let me=""; try{me=String(NATIVE.me()||"")}catch(e){}
     const USER='<svg class="user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
@@ -929,7 +946,7 @@ function renderStats(){
   // Solo (1.11): who took the crown in the games played alone, this month; and the last few.
   const sw={a:0,b:0}, sRecent=[]; let sTies=0; const month=TODAY().slice(0,7);
   for(const k of Object.keys(state.solo||{}).sort()) for(const id in state.solo[k]){
-    const g=byId[id]; if(!g) continue; const w=soloWinner(g,soloOf(id,k)); if(!w) continue;
+    const g=byId[id]; if(!g) continue; const w=soloWinner(g,soloOf(id,k),k<EVENING()); if(!w) continue;
     sRecent.push({k,g,w}); if(k.slice(0,7)!==month) continue; if(w==="t") sTies++; else sw[w]=(sw[w]||0)+1;
   }
   const soloPanel=sRecent.length?`<div class="panel"><h3>⚔️ לבד · ראש בראש החודש</h3>
@@ -1001,6 +1018,9 @@ function renderSettings(){
       <p class="help" style="margin:0 0 8px">שורה לכל משחק: שם, קו אנכי, קישור. אפשר להוסיף אחריו קו אנכי וסוג. למשל: <span dir="ltr">מילים בשש | https://example.com/play | מילים</span></p>
       <textarea id="manyTxt" dir="auto" spellcheck="false" aria-label="רשימת משחקים"></textarea>
       <div class="row-btns"><button class="btn primary" type="button" data-act="addMany">הוספת כולם</button></div></div>
+    ${NATIVE&&NATIVE.openCouches&&!document.documentElement.classList.contains("tv")?`<div class="panel"><h3>הספות שלי</h3>
+      <p class="help" style="margin:0 0 8px">ספת הבית, ספות של חברים שמתארחים בהן, חיבור טלוויזיה, ושליחת האפליקציה לחבר (קישור התקנה בלבד, בלי פרטים שלכם).</p>
+      <div class="row-btns"><button class="btn" type="button" data-act="couches">הספות שלי</button><button class="btn" type="button" data-act="couches">שליחת האפליקציה לחבר</button></div></div>`:""}
     <div class="panel"><h3>החשבונות</h3>
       <p class="help" style="margin:0 0 8px">התחברות ל-NYT, להארץ ולשני חשבונות הלינקדאין. נשמרת רק באפליקציה הזאת.</p>
       <div class="row-btns"><button class="btn" type="button" data-act="accounts">לחשבונות</button></div></div>
@@ -1153,6 +1173,7 @@ function openDuel(id){
 }
 document.getElementById("me").addEventListener("click",()=>{if(NATIVE&&NATIVE.openMe)NATIVE.openMe()});
 document.getElementById("noteBtn").addEventListener("click",()=>{if(NATIVE&&NATIVE.openNote)NATIVE.openNote()});
+document.getElementById("couchBtn").addEventListener("click",()=>{if(NATIVE&&NATIVE.openCouches)NATIVE.openCouches()});
 document.getElementById("who").addEventListener("click",()=>{
   const before=state.pieces?JSON.stringify(state.pieces):null; let saved=false;
   const cur=()=>{if(!state.pieces||!state.pieces.a||!state.pieces.b) state.pieces=JSON.parse(JSON.stringify(PCFG.defaults)); return state.pieces};
@@ -1183,7 +1204,7 @@ document.getElementById("who").addEventListener("click",()=>{
     cur()[b.dataset.w][b.dataset.pick]=b.dataset.v; refresh();});
   onSheetClose=()=>{ if(saved) return; if(before===null) delete state.pieces; else state.pieces=JSON.parse(before); applyTheme(); render(); };
   form.addEventListener("submit",e=>{e.preventDefault();
-    state.names.a=document.getElementById("na").value.trim()||"סטיב";state.names.b=document.getElementById("nb").value.trim()||"רוני";
+    state.names.a=document.getElementById("na").value.trim()||"שחקן 1";state.names.b=document.getElementById("nb").value.trim()||"שחקן 2";
     state.jokes=document.getElementById("jk").value.split("\n").map(s=>s.trim()).filter(Boolean).slice(0,60);
     saved=true; save();closeSheet();render();toast("נשמר.")});
   document.getElementById("exp").addEventListener("click",async()=>{
@@ -1214,6 +1235,7 @@ document.querySelector("main").addEventListener("click",e=>{
   if(act==="notify"){if(NATIVE&&NATIVE.allowNotifications)NATIVE.allowNotifications();return}
   if(act==="shuffle"){featOffset++;renderHome();return}
   if(act==="accounts"){NATIVE?NATIVE.openAccounts():toast("החשבונות זמינים באפליקציה.");return}
+  if(act==="couches"){if(NATIVE&&NATIVE.openCouches)NATIVE.openCouches();return}
   if(act==="urls"){setView("settings");return}
   if(act==="saveLinks"){saveLinks();return}
   if(act==="addGame"){addGameFromForm();return}

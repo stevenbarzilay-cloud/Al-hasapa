@@ -116,6 +116,8 @@ data class HomeModel(
     val more: List<HomeCard>,
     /** The wall behind the shelves: cream with a breath of the two people's colours. */
     val wall: Color,
+    /** The couch this TV is of, by name (2.0): said at the top of its home, so a guest knows whose couch they sit on. */
+    val couch: String = "",
 ) {
     companion object {
         private val HEBREW = Locale.forLanguageTag("he")
@@ -141,7 +143,7 @@ data class HomeModel(
                 done = shelf.count { it.played },
                 total = shelf.size,
                 points = Scoring.dayPts(state.optJSONObject("log") ?: JSONObject(), day),
-                nameA = a, nameB = b,
+                nameA = a, nameB = b, couch = app.couch.alhasapa.data.Couches.name(state),
                 pieceA = pieceA, pieceB = pieceB,
                 tonight = shelf.filter { !it.played } + shelf.filter { it.played },
                 more = Catalog.offered(rest).map(::card),
@@ -293,7 +295,7 @@ fun TvHome(
             Column(Modifier.bringIntoViewRequester(sections[0])) {
                 ShelfTitle(
                     stringResource(R.string.home_tonight),
-                    model.day + " · " + stringResource(R.string.home_progress, model.done, model.total) + " · " + stringResource(R.string.panel_points, model.points),
+                    (if (model.couch.isNotEmpty()) model.couch + " · " else "") + model.day + " · " + stringResource(R.string.home_progress, model.done, model.total) + " · " + stringResource(R.string.panel_points, model.points),
                 )
                 if (model.tonight.isEmpty()) {
                     Text(stringResource(R.string.home_empty), fontSize = 18.sp, color = Palette.Ink2, modifier = Modifier.padding(horizontal = Side, vertical = 12.dp))

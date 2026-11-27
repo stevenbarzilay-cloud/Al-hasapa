@@ -144,7 +144,7 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
                 if (remote.phones.size > phones) c.notice(TvHint.PHONE)
                 phones = remote.phones.size
             }
-            remote.code?.let { PairingCard(it, remote.codeFor.orEmpty(), Modifier.align(Alignment.TopCenter).padding(top = 12.dp)) }
+            remote.code?.let { PairingCard(it, remote.codeFor.orEmpty(), Modifier.align(Alignment.TopCenter).padding(top = 12.dp), remote.codeAs) }
             // While the picture's size is being set: its four corners, which must all be seen whole on the TV.
             if (c.panel == TvPanel.SETTINGS) FitCorners()
             CursorOverlay(c)
@@ -287,7 +287,20 @@ private fun PhoneBadge() {
 
 /** The four digits a phone needs to pair as the keyboard, large, at the top of the screen while it waits. */
 @Composable
-private fun PairingCard(code: String, phone: String, modifier: Modifier) {
+private fun PairingCard(code: String, phone: String, modifier: Modifier, asked: String? = null) {
+    // What the phone asks to come as (2.0): one of the home's own (it sees the home's history and points), or a guest (the remote
+    // and the contests only). Whoever reads the code out knows what they let in.
+    val title = when (asked) {
+        app.couch.alhasapa.remote.KeyLink.AS_HOME -> R.string.remote_pair_home
+        app.couch.alhasapa.remote.KeyLink.AS_GUEST -> R.string.remote_pair_guest
+        app.couch.alhasapa.remote.KeyLink.AS_EVENING -> R.string.remote_pair_evening
+        else -> R.string.remote_pair_title
+    }
+    val body = when (asked) {
+        app.couch.alhasapa.remote.KeyLink.AS_HOME -> R.string.remote_pair_home_body
+        app.couch.alhasapa.remote.KeyLink.AS_GUEST, app.couch.alhasapa.remote.KeyLink.AS_EVENING -> R.string.remote_pair_guest_body
+        else -> R.string.remote_pair_body
+    }
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
         Row(
             modifier.widthIn(max = 820.dp).clip(RoundedCornerShape(28.dp)).background(Palette.Ink.copy(alpha = 0.96f))
@@ -297,8 +310,8 @@ private fun PairingCard(code: String, phone: String, modifier: Modifier) {
         ) {
             PawIcon(40.dp, Palette.Red, outline = Palette.Ink)
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(stringResource(R.string.remote_pair_title) + if (phone.isNotBlank()) " ($phone)" else "", fontSize = 22.sp, color = Palette.Cream, fontWeight = FontWeight.Medium)
-                Text(stringResource(R.string.remote_pair_body), fontSize = 18.sp, color = Palette.Cream.copy(alpha = 0.8f))
+                Text(stringResource(title) + if (phone.isNotBlank()) " ($phone)" else "", fontSize = 22.sp, color = Palette.Cream, fontWeight = FontWeight.Medium)
+                Text(stringResource(body), fontSize = 18.sp, color = Palette.Cream.copy(alpha = 0.8f))
             }
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                 Text(code.toCharArray().joinToString(" "), fontSize = 46.sp, fontWeight = FontWeight.Bold, color = Palette.Cream,

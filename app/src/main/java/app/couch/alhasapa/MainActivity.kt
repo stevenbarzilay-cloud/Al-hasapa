@@ -318,7 +318,7 @@ class MainActivity : ComponentActivity() {
         playModeFor?.let { id -> couch.catalog.game(id)?.let { game ->
             val state = couch.repo.snapshot()
             val me = heldBy()
-            val challengers = Solo.sides(state, today(), id).filter { it.who != me }
+            val challengers = Solo.players(state, today(), id).filter { it.who != me }
                 .map { s -> Challenger(Couple.name(state, s.who), pieces.styleOf(Couple.person(state, s.who)), s.who in Couple.WHO) }
             PlayModeDialog(
                 gameName = game.n, challengers = challengers,
