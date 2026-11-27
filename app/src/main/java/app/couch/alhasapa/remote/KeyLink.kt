@@ -18,7 +18,10 @@ import org.json.JSONObject
  *     TV    → phone  code                                 not paired yet: the TV shows four digits
  *     phone → TV     pair {code}
  *     TV    → phone  wrong {left} | paired {token}
- *     TV    → phone  ok {screen}, then screen {screen}    ready; what the TV is showing (for the phone's status line)
+ *     TV    → phone  ok {screen}, then screen {screen, result}  ready; what the TV is showing (for the phone's status line);
+ *                                                         result: a game's end screen is up (from 1.9.7), and the phone
+ *                                                         offers to save the result
+ *     phone → TV     save-result                          press "save the result" on the TV (from 1.9.7)
  *     phone → TV     text {s} | key {k, a} | ping
  *     phone → TV     pointer {on} | move {dx, dy, at} | click | drag {on} | scroll {dy} the touchpad (dp of the phone's pad;
  *                                                         at: when the finger moved, by the phone's clock, from 1.9.4)
@@ -50,7 +53,7 @@ object KeyLink {
      * Not simply the app's own version number: a release that changes only one of the two (the TV's home got a new look in 1.9.5)
      * must not send the people to update the other for nothing. It is raised only when a release needs both.
      */
-    const val TOGETHER_SINCE = 28
+    const val TOGETHER_SINCE = 31
 
     /** A line longer than this is not one of ours (a site's cookies, encrypted, fit well within it). */
     const val MAX_LINE = 65_536
@@ -81,7 +84,10 @@ object KeyLink {
         data class Wrong(val left: Int) : Msg
         data class Paired(val token: String) : Msg
         data class Ok(val screen: String) : Msg
-        data class Screen(val screen: String) : Msg
+        data class Screen(val screen: String, val result: Boolean = false) : Msg
+
+        /** Press "save the result" on the TV (offered on the phone while [Screen.result] is true). */
+        data object SaveResult : Msg
         data class Text(val s: String) : Msg
         data class Press(val key: Key, val action: Action) : Msg
 
@@ -117,7 +123,8 @@ object KeyLink {
         is Msg.Wrong -> JSONObject().put("t", "wrong").put("left", m.left)
         is Msg.Paired -> JSONObject().put("t", "paired").put("token", m.token)
         is Msg.Ok -> JSONObject().put("t", "ok").put("screen", m.screen)
-        is Msg.Screen -> JSONObject().put("t", "screen").put("screen", m.screen)
+        is Msg.Screen -> JSONObject().put("t", "screen").put("screen", m.screen).apply { if (m.result) put("result", true) }
+        Msg.SaveResult -> JSONObject().put("t", "save-result")
         is Msg.Text -> JSONObject().put("t", "text").put("s", m.s)
         is Msg.Press -> JSONObject().put("t", "key").put("k", m.key.name).put("a", m.action.name.lowercase())
         is Msg.Pointer -> JSONObject().put("t", "pointer").put("on", m.on)
@@ -148,7 +155,8 @@ object KeyLink {
             "wrong" -> Msg.Wrong(o.optInt("left", 0))
             "paired" -> Msg.Paired(s("token"))
             "ok" -> Msg.Ok(s("screen"))
-            "screen" -> Msg.Screen(s("screen"))
+            "screen" -> Msg.Screen(s("screen"), o.optBoolean("result", false))
+            "save-result" -> Msg.SaveResult
             "text" -> o.optString("s", "").takeIf { it.isNotEmpty() && it.length <= 1_000 }?.let { Msg.Text(it) }
             "key" -> {
                 val key = runCatching { Key.valueOf(o.optString("k")) }.getOrNull() ?: return null

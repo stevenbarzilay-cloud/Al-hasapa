@@ -84,6 +84,22 @@ import androidx.compose.ui.platform.LocalContext
 import org.json.JSONObject
 import app.couch.alhasapa.ui.theme.Palette
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
+/** After this long in a game, it is marked as played by itself. */
+const val AUTO_PLAYED_MS = 30_000L
+
+/** How long "save the result" waits for the page to say where its share button is. */
+private const val PAGE_ANSWER_MS = 800L
+
+/** How long "save the result" waits for the game to hand its result over after its share button was pressed for us. */
+private const val CAPTURE_WAIT_MS = 1_800L
+
+/** How long the celebration of a saved result stays. */
+private const val CHEER_MS = 2_800L
+
+/** The dock's "save the result" button, where the focus goes when a game's end screen comes up. */
+const val RESULT_ID = "dock:result"
 
 /** The first look at a page's sound, and how often after that. */
 private const val SOUND_FIRST_LOOK_MS = 10_000L
@@ -112,7 +128,10 @@ fun PlayerScreen(
     onResetDisplay: (key: String) -> Unit,
     /** Null for the login screens and anything else that is not a game: no result to record. */
     result: ResultSupport? = null,
-    onSaveResult: (ResultInput) -> Unit = {},
+    /** Saves a result; on a TV what it returns is shown as a little celebration (null: nothing to show, the caller said it). */
+    onSaveResult: (ResultInput) -> app.couch.alhasapa.results.Cheer? = { null },
+    /** The game was played long enough to count as played (it is marked by itself, see [AUTO_PLAYED_MS]). */
+    onAutoPlayed: () -> Unit = {},
     onClearResult: () -> Unit = {},
     onClose: () -> Unit,
     onOpenInChrome: (String) -> Unit,
@@ -159,12 +178,15 @@ fun PlayerScreen(
     var resultCaptured by remember { mutableStateOf(false) }
     val gate = remember { CaptureGate(session.allowedHosts) }
     val latestResult by androidx.compose.runtime.rememberUpdatedState(result)
+    // "Save the result" pressed the game's own share button for us: whatever it copies next is the result.
+    var awaitingCapture by remember { mutableStateOf(false) }
     val openWith: (CaptureGate.Captured) -> Unit = { c ->
         val r = latestResult
         if (r != null && !resultOpen) {
             val log = r.state.optJSONObject("log") ?: org.json.JSONObject()
             // A Share press is always a result; a bare copy only when it reads as one (people copy links and words too).
-            if (c.kind == "share" || ResultDraft.evaluate(r.game, c.text, "", false, log, r.day).result != null) {
+            if (awaitingCapture || c.kind == "share" || ResultDraft.evaluate(r.game, c.text, "", false, log, r.day).result != null) {
+                awaitingCapture = false
                 resultText = c.text; resultCaptured = true; resultOpen = true
             }
         }
@@ -257,16 +279,88 @@ fun PlayerScreen(
     }
 
     val openResult: () -> Unit = { resultText = ""; resultCaptured = false; resultOpen = true }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    /**
+     * On a TV, "save the result" (1.9.7): presses the game's own share or copy button, as a finger would (see ResultWatch), so the game
+     * hands its result over the way it always does and the sheet opens with it. With no such button, or when nothing comes, the sheet
+     * opens to be filled in with the remote or the phone.
+     */
+    val saveNow: () -> Unit = saveNow@{
+        val view = webView
+        if (result == null || resultOpen) return@saveNow
+        if (tv == null || view == null) { openResult(); return@saveNow }
+        // A page that does not answer (hung, or busy) must not keep the sheet away: without an answer soon, it opens as it is.
+        var answered = false
+        scope.launch { delay(PAGE_ANSWER_MS); if (!answered && !resultOpen) { awaitingCapture = false; openResult() } }
+        view.evaluateJavascript(app.couch.alhasapa.results.ResultWatch.AT) { raw ->
+            if (answered) return@evaluateJavascript
+            answered = true
+            val at = app.couch.alhasapa.results.ResultWatch.at(raw)
+            if (at == null) { openResult(); return@evaluateJavascript }
+            awaitingCapture = true
+            app.couch.alhasapa.diag.Flight.log("result: pressing the game's own share button for us")
+            tv.pageNav.tap(at.first, at.second)
+            scope.launch { delay(CAPTURE_WAIT_MS); if (awaitingCapture && !resultOpen) { awaitingCapture = false; openResult() } }
+        }
+    }
+    val resultReady = tv?.resultReady == true
     val chrome = ChromeData(
         title = session.title, clock = clock, info = info, played = played,
         showPlayed = !session.loginMode, zoom = if (profile.mode != DisplayMode.NATIVE) profile.zoom else null,
-        portrait = profile.mode == DisplayMode.PORTRAIT_FIT,
+        portrait = profile.mode == DisplayMode.PORTRAIT_FIT, resultReady = resultReady,
     )
+    // Marked by hand (either way): it is not marked by itself any more in this visit.
+    var markedByHand by remember { mutableStateOf(false) }
     val actions = ChromeActions(
-        onMenu = { sheetOpen = true }, onBack = onClose, onResult = if (result != null) openResult else null,
-        onTogglePlayed = onTogglePlayed, onZoom = quickZoom, onToggleMode = toggleMode, onCycleUi = cycleUi,
+        onMenu = { sheetOpen = true }, onBack = onClose, onResult = if (result != null) (if (tv != null) saveNow else openResult) else null,
+        onTogglePlayed = { markedByHand = true; onTogglePlayed() }, onZoom = quickZoom, onToggleMode = toggleMode, onCycleUi = cycleUi,
         onHideFrame = { hideFrame(true) },
     )
+
+    // Entering a game and staying in it is playing it (1.9.7): after a while it is marked as played by itself, as a tick by hand
+    // would. Only for the games we play together, only once a visit, and never after it was ticked or unticked by hand.
+    val playedNow by androidx.compose.runtime.rememberUpdatedState(played)
+    val autoPlayed by androidx.compose.runtime.rememberUpdatedState(onAutoPlayed)
+    if (result != null && !result.game.isDuel && !session.loginMode) {
+        var resumed by remember { mutableStateOf(true) }
+        LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumed = true }
+        LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { resumed = false }
+        var inGameMs by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+        LaunchedEffect(resumed, markedByHand) {
+            while (resumed && !markedByHand && inGameMs < AUTO_PLAYED_MS) { delay(1_000); inGameMs += 1_000 }
+            if (inGameMs >= AUTO_PLAYED_MS && !markedByHand && !playedNow) {
+                markedByHand = true
+                autoPlayed()
+                tv?.playedByItself()
+            }
+        }
+    }
+
+    // On a TV: the game's end screen (its own share button on the screen) is looked for every few seconds once it has settled, and
+    // "save the result" offered when it is up (see ResultWatch); the phone that is the keyboard is told too.
+    if (tv != null && result != null) {
+        DisposableEffect(tv) {
+            tv.onSaveResult = { saveNow() }
+            onDispose { tv.onSaveResult = null; tv.resultScreen(false, null) }
+        }
+        val view = webView
+        LaunchedEffect(view) {
+            if (view == null) return@LaunchedEffect
+            delay(app.couch.alhasapa.results.ResultWatch.SETTLE_MS)
+            while (true) {
+                runCatching {
+                    view.evaluateJavascript(app.couch.alhasapa.results.ResultWatch.READY) { raw ->
+                        tv.resultScreen(app.couch.alhasapa.results.ResultWatch.ready(raw), RESULT_ID)
+                    }
+                }
+                delay(app.couch.alhasapa.results.ResultWatch.LOOK_MS)
+            }
+        }
+    }
+
+    // The little celebration when a result is saved on the TV: the points, a word about them, the evening so far.
+    var cheer by remember { mutableStateOf<app.couch.alhasapa.results.Cheer?>(null) }
+    LaunchedEffect(cheer) { if (cheer != null) { delay(CHEER_MS); cheer = null } }
 
     // On a TV the game's frame lives in the dock at the left edge.
     if (tv != null) {
@@ -345,7 +439,7 @@ fun PlayerScreen(
                                         injector = inj
                                         // On a TV a page that makes its own sound gets a longer buffer (see SoundScript), and its sound is counted.
                                         val sound = if (tv != null && !session.loginMode) SoundPolicy.mode(ctx, soundHost) else null
-                                        val soundAtStart = sound != null && SoundInjector.install(this, sound)
+                                        val soundAtStart = sound != null && SoundInjector.install(this, sound, withResultWatch = result != null)
                                         if (sound == SoundScript.Mode.LONG) app.couch.alhasapa.diag.Flight.log("player: $soundHost had gaps in its sound before: the longest buffer this time")
                                         if (result != null) CaptureInjector.install(this, session, gate) { c -> onCaptured(c) }
                                         webViewClient = PlayerWebViewClient(
@@ -379,7 +473,10 @@ fun PlayerScreen(
                                             onUrl = { currentUrl = it },
                                             onPageBegan = {
                                                 inj.onPageStarted()
-                                                if (sound != null && !soundAtStart) { evaluateJavascript(SoundScript.build(sound), null); evaluateJavascript(PageBusy.INSTALL, null) }
+                                                if (sound != null && !soundAtStart) {
+                                                    evaluateJavascript(SoundScript.build(sound), null); evaluateJavascript(PageBusy.INSTALL, null)
+                                                    if (result != null) evaluateJavascript(app.couch.alhasapa.results.ResultWatch.INSTALL, null)
+                                                }
                                             },
                                         )
                                         loadUrl(session.url)
@@ -474,13 +571,19 @@ fun PlayerScreen(
                         who = session.who,
                         initialText = resultText.ifEmpty { existingRaw(result, session.who) },
                         captured = resultCaptured,
-                        onSave = { onSaveResult(it); resultOpen = false },
+                        onSave = { markedByHand = true; cheer = onSaveResult(it); resultOpen = false },
                         onClear = { onClearResult(); resultOpen = false },
                         onCancel = { resultOpen = false },
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
                     )
                 }
             }
+        }
+
+        // A saved result on the TV: the points and a word about them, in the middle, for a moment.
+        AnimatedVisibility(visible = cheer != null && tv != null, modifier = Modifier.align(Alignment.Center), enter = enter, exit = exit) {
+            val c = cheer
+            if (c != null) CheerCard(c)
         }
 
         if (loadError != null) {
@@ -491,6 +594,18 @@ fun PlayerScreen(
                 onClose = onClose,
             )
         }
+    }
+}
+
+@Composable
+private fun CheerCard(c: app.couch.alhasapa.results.Cheer) {
+    Column(
+        Modifier.clip(RoundedCornerShape(28.dp)).background(Palette.Ink.copy(alpha = 0.95f)).padding(horizontal = 40.dp, vertical = 26.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(stringResource(R.string.cheer_points, c.points), fontSize = 46.sp, fontWeight = FontWeight.Bold, color = Palette.Cream)
+        Text(stringResource(c.line), fontSize = 30.sp, fontWeight = FontWeight.SemiBold, color = Palette.Cream)
+        Text(stringResource(R.string.cheer_evening, c.evening), fontSize = 22.sp, color = Palette.Pink)
     }
 }
 

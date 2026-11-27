@@ -587,7 +587,8 @@ const IMG={
    "מי פיצח?" is credit, not a win.  LinkedIn: each pastes their own result, the better one wins the duel. */
 const isDuel=g=>g.s==="li";
 const metricOf=g=>g.metric||"none";
-const KIND_LABEL={guesses:"ניסיונות",mistakes:"טעויות",hints:"רמזים",time:"זמן",words:"מילים",none:"תוצאה"};
+const KIND_LABEL={guesses:"ניסיונות",mistakes:"טעויות",hints:"רמזים",time:"זמן",words:"מילים",score:"נקודות",none:"תוצאה"};
+const scoreNum=s=>parseFloat(String(s).replace(/,/g,""));
 const fmtT=s=>{s=Math.round(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+":"+String(m).padStart(2,"0"):m)+":"+String(x).padStart(2,"0")};
 function parseResult(text,kind){
   const t=(text||"").trim(); if(!t) return null;
@@ -611,8 +612,15 @@ function parseResult(text,kind){
   }
   if(kind==="hints"){const n=(t.match(/💡/gu)||[]).length; if(/[🔵🟡]/u.test(t)||n) return {v:n,fail:false}; const m=t.match(/(\d+)\s*(?:hints?|רמזים)/i); return m?{v:+m[1],fail:false}:null}
   if(kind==="words"){const m=t.match(/(\d+)\s*(?:words?|מילים)/i); return m?{v:+m[1],fail:false}:null}
+  /* More is better (1.9.7): a quiz's "8/10", a score's "41.23/50" or "34,567/50,000"; or "12 points" with nothing to be out of. */
+  if(kind==="score"){
+    for(const m of t.matchAll(/(?<![A-Za-z0-9_])(\d[\d,]*(?:\.\d+)?)\s*\/\s*(\d[\d,]*(?:\.\d+)?)/g)){const a=scoreNum(m[1]),b=scoreNum(m[2]); if(b>0&&a<=b) return {v:a,max:Math.ceil(b),fail:false}}
+    const p=t.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:points?|pts|נקודות|נק׳|correct|נכונות|נכונים)/i); if(p) return {v:scoreNum(p[1]),fail:false};
+    return null;
+  }
   return null;
 }
+function bestScore(id,excludeKey){let b=null;for(const k in state.log){if(k===excludeKey)continue;const e=state.log[k][id];if(e&&e.r&&e.r.kind==="score"&&!e.r.fail&&!e.r.max){b=b===null?e.r.v:Math.max(b,e.r.v)}}return b}
 function bestTime(id,excludeKey){let b=null;for(const k in state.log){if(k===excludeKey)continue;const e=state.log[k][id];if(e&&e.r&&e.r.kind==="time"&&!e.r.fail){b=b===null?e.r.v:Math.min(b,e.r.v)}}return b}
 function resultPts(id,r,dayKey){
   if(!r||r.v===undefined||r.v===null||r.v==="") return 0;
@@ -622,6 +630,7 @@ function resultPts(id,r,dayKey){
   if(r.kind==="hints") return [10,7,5,3][Math.min(r.v,3)];
   if(r.kind==="time"){const b=bestTime(id,dayKey);return b===null||r.v<b?10:r.v<=b*1.25?7:5}
   if(r.kind==="words") return Math.min(10,Math.max(2,Math.round(14-r.v*2)));
+  if(r.kind==="score"){if(r.max) return Math.min(10,Math.max(1,Math.round(10*r.v/r.max))); const b=bestScore(id,dayKey); return b===null||r.v>=b?10:r.v>=b*0.8?7:5}
   return 5;
 }
 function entryPts(id,e,dayKey){if(!e||e.d) return 0; return 2+resultPts(id,e.r,dayKey)}
@@ -631,7 +640,7 @@ function duelWinner(e,kind){
   const sc=x=>x.fail?Infinity:x.v;
   if(sc(a)===sc(b)) return "t"; return sc(a)<sc(b)?"a":"b";
 }
-const fmtVal=(kind,r)=>!r?"":r.fail?"לא נפתר":kind==="time"?fmtT(r.v):kind==="guesses"?(r.v+(r.max?"/"+r.max:"")):r.v+" "+KIND_LABEL[kind];
+const fmtVal=(kind,r)=>!r?"":r.fail?"לא נפתר":kind==="time"?fmtT(r.v):kind==="guesses"||(kind==="score"&&r.max)?(r.v+(r.max?"/"+r.max:"")):r.v+" "+KIND_LABEL[kind];
 
 /* ================= helpers ================= */
 const nm=w=>w==="a"?state.names.a:state.names.b;
@@ -798,7 +807,7 @@ function renderStats(){
 
 
 /* ================= settings: our links, our own games, what the app says about itself ================= */
-const METRICS=[["none","בלי ניקוד"],["guesses","ניסיונות (פחות זה יותר טוב)"],["mistakes","טעויות"],["hints","רמזים"],["time","זמן"],["words","מילים"]];
+const METRICS=[["none","בלי ניקוד"],["guesses","ניסיונות (פחות זה יותר טוב)"],["score","נקודות (יותר זה יותר טוב)"],["mistakes","טעויות"],["hints","רמזים"],["time","זמן"],["words","מילים"]];
 const MAIN_PAGES=["https://www.haaretz.co.il/riddles","https://www.haaretz.co.il/riddles/"];
 const isCustom=g=>g.s==="my";
 const HTTPS=/^https:\/\/[^\s]+$/i;
@@ -909,12 +918,12 @@ window.__back=()=>document.getElementById("overlay").classList.contains("show")?
 document.getElementById("overlay").addEventListener("click",e=>{if(e.target.id==="overlay"||e.target.dataset.act==="close")closeSheet()});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
 
-const EXAMPLE={guesses:"Wordle 1,618 3/6",mistakes:"Connections\nPuzzle #512\n🟨🟨🟨🟨\n🟩🟩🟦🟩\n…",hints:"Strands #270\n💡🔵🔵🟡",time:"Queens #612 | 1:24",words:"12 words",none:""};
+const EXAMPLE={guesses:"Wordle 1,618 3/6",mistakes:"Connections\nPuzzle #512\n🟨🟨🟨🟨\n🟩🟩🟦🟩\n…",hints:"Strands #270\n💡🔵🔵🟡",time:"Queens #612 | 1:24",words:"12 words",score:"Catfishing #812 8/10",none:""};
 function manualField(kind,id,val){
   if(kind==="time") return `<input id="${id}" inputmode="numeric" placeholder="דקות:שניות, למשל 1:24" value="${val!==undefined?esc(fmtT(val)):""}">`;
   return `<input id="${id}" inputmode="numeric" placeholder="מספר ${KIND_LABEL[kind]}" value="${val!==undefined?esc(val):""}">`;
 }
-function readManual(kind,el){const v=el.value.trim(); if(!v) return null; if(kind==="time"){return parseResult(v,"time")} const n=parseFloat(v); return isNaN(n)?null:{v:n,fail:false,max:kind==="guesses"?6:undefined}}
+function readManual(kind,el){const v=el.value.trim(); if(!v) return null; if(kind==="time"){return parseResult(v,"time")} if(kind==="score"){const p=parseResult(v,"score"); if(p) return p} const n=parseFloat(v); return isNaN(n)?null:{v:n,fail:false,max:kind==="guesses"?6:undefined}}
 
 function openResult(id){
   const g=byId[id], t=TODAY(), e=state.log[t]&&state.log[t][id]; let kind=metricOf(g); if(kind==="none") kind="guesses";

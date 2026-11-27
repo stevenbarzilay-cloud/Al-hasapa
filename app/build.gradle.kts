@@ -16,8 +16,8 @@ android {
     defaultConfig {
         applicationId = "app.couch.alhasapa"
         targetSdk = 37
-        versionCode = 30
-        versionName = "1.9.6"
+        versionCode = 31
+        versionName = "1.9.7"
     }
 
     // Two builds from one codebase: the phone app, and the Android TV app (a Xiaomi Mi Box runs Android TV 8.1 or 9, so the TV

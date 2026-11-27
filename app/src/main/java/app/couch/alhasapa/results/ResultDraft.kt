@@ -28,6 +28,7 @@ object ResultDraft {
         val v = text.trim()
         if (v.isEmpty()) return null
         if (kind == "time") return Scoring.parseResult(v, "time")
+        if (kind == "score") Scoring.parseResult(v, "score")?.let { return it }
         val n = FLOAT.find(v)?.value?.toDoubleOrNull() ?: return null
         return Parsed(n, if (kind == "guesses") 6 else null, false)
     }

@@ -29,6 +29,8 @@ class KeyLinkTest {
             // From 1.9.4: each side says which version of the app it is, and a move says when the finger moved.
             Msg.Hi("tv1", "MiBOX4", "0f".repeat(16), 28, "1.9.4"), Msg.Hello("ph1", "Pixel 8", "", "ab".repeat(32), 28, "1.9.4"),
             Msg.Move(1f, 2f, 86_400_123L),
+            // From 1.9.7: a game's end screen, and "save the result" from the phone.
+            Msg.Screen("Catfishing", result = true), Msg.SaveResult,
         )
         for (m in all) {
             val line = KeyLink.encode(m)

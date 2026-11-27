@@ -125,7 +125,7 @@ class KeyServerClientTest {
     fun aReleaseThatChangesOnlyOneOfTheTwoDoesNotSendThePeopleToUpdateTheOther() {
         // What the two tell each other is the version at which they last had to be updated together, which this build did not raise:
         // a TV with the new home (1.9.5) and a phone still on 1.9.4 have nothing to say to each other about versions.
-        assertEquals("raised only by a release that needs both", 28, KeyLink.TOGETHER_SINCE)
+        assertEquals("raised only by a release that needs both", 31, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()
@@ -165,6 +165,17 @@ class KeyServerClientTest {
         waitFor("the newer phone is connected") { new.state.value is KeyClient.State.Connected }
         assertEquals("1.9.5", server.ui.value.newer); assertNull(server.ui.value.older)
         assertEquals(KeyClient.Versions.TvOlder, new.versions.value)
+    }
+
+    @Test
+    fun theEndOfAGameIsToldToThePhoneAndItsSavePressComesBack() {
+        val phone = pairedPhone()
+        server.resultReady = true
+        waitFor("the phone knows") { (phone.state.value as? KeyClient.State.Connected)?.result == true }
+        phone.send(Msg.SaveResult)
+        waitFor("the press reached the TV") { typed.contains(Msg.SaveResult) }
+        server.resultReady = false
+        waitFor("and it went away") { (phone.state.value as? KeyClient.State.Connected)?.result == false }
     }
 
     @Test

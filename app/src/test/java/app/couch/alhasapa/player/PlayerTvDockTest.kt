@@ -12,6 +12,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.R
 import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.tv.Delivery
+import app.couch.alhasapa.remote.TypedKeys
+import app.couch.alhasapa.results.SAVE_ID
 import java.time.LocalDate
 import org.junit.After
 import org.junit.Assert.assertFalse
@@ -145,6 +148,50 @@ class PlayerTvDockTest {
         val prefs = context.getSharedPreferences("tv", Context.MODE_PRIVATE)
         org.junit.Assert.assertEquals("mouse", prefs.getString("cursor", null))
         org.junit.Assert.assertEquals("s", prefs.getString("cursor_size", null))
+    }
+
+    @Test
+    fun theResultIsSavedWithTheRemoteOrThePhonesKeysAndCelebrated() {
+        launch("catfishing")
+        val today = CouchState.dayKey(LocalDate.now())
+        button(str(R.string.player_result)).performClick()
+        rule.mainClock.advanceTimeBy(2_000); rule.waitForIdle()
+        // No text came from the page here: the sheet asks for the number, with buttons; the focus is on "save".
+        rule.onNodeWithText(str(R.string.result_tv_no_text)).assertIsDisplayed()
+        scenario!!.onActivity { org.junit.Assert.assertEquals(SAVE_ID, it.remote.focusedId) }
+        // What the phone types goes into the number; Enter saves.
+        scenario!!.onActivity { it.remote.remoteInput(TypedKeys.deliveries("8/10")) }
+        rule.waitForIdle()
+        rule.onNodeWithText("8/10", substring = true).assertIsDisplayed()
+        scenario!!.onActivity { it.remote.remoteInput(listOf(Delivery.Code(android.view.KeyEvent.KEYCODE_ENTER))) }
+        rule.waitForIdle()
+        val r = CouchState.entry(app.repo.snapshot(), today, "catfishing")!!.getJSONObject("r")
+        org.junit.Assert.assertEquals(8.0, r.getDouble("v"), 0.0); org.junit.Assert.assertEquals(10, r.getInt("max")); org.junit.Assert.assertEquals("score", r.getString("kind"))
+        // The celebration: the points and a word about them.
+        rule.onNodeWithText(context.getString(R.string.cheer_points, 10)).assertIsDisplayed()
+        rule.onNodeWithText(str(R.string.cheer_great)).assertIsDisplayed()
+        scenario!!.onActivity { org.junit.Assert.assertNull("the sheet let go of the keys", it.remote.textSink) }
+    }
+
+    @Test
+    fun aGameStayedInIsMarkedAsPlayedByItself() {
+        launch("wordle")
+        val today = CouchState.dayKey(LocalDate.now())
+        rule.mainClock.advanceTimeBy(10_000); rule.waitForIdle()
+        assertNull("not after ten seconds", CouchState.entry(app.repo.snapshot(), today, "wordle"))
+        rule.mainClock.advanceTimeBy(25_000); rule.waitForIdle()
+        assertNotNull("after half a minute in it", CouchState.entry(app.repo.snapshot(), today, "wordle"))
+        rule.onNodeWithText("✓ ${str(R.string.player_played)}").assertIsDisplayed()
+    }
+
+    @Test
+    fun aTickByHandIsNotUndoneByTheGameMarkingItself() {
+        launch("wordle")
+        val today = CouchState.dayKey(LocalDate.now())
+        rule.onNodeWithText(str(R.string.player_played)).performClick(); rule.waitForIdle()
+        rule.onNodeWithText("✓ ${str(R.string.player_played)}").performClick(); rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(40_000); rule.waitForIdle()
+        assertNull("unticked by hand: it stays unticked", CouchState.entry(app.repo.snapshot(), today, "wordle"))
     }
 
     @Test

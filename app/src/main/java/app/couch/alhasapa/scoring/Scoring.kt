@@ -66,12 +66,19 @@ object Scoring {
     private val HINT_WORD = Regex("([0-9]+)${S}(?:hints?|רמזים)", RegexOption.IGNORE_CASE)
     private val WORDS_WORD = Regex("([0-9]+)${S}(?:words?|מילים)", RegexOption.IGNORE_CASE)
 
+    /** A score out of something ("8/10", "41.23/50", "34,567/50,000"): the first fraction in the text. */
+    private val SCORE_FRACTION = Regex("$NOT_AFTER_WORD([0-9][0-9,]*(?:\\.[0-9]+)?)$S/$S([0-9][0-9,]*(?:\\.[0-9]+)?)")
+    /** A score with no "out of" ("12 points", "9 correct"). */
+    private val SCORE_WORD = Regex("([0-9][0-9,]*(?:\\.[0-9]+)?)${S}(?:points?|pts|נקודות|נק׳|correct|נכונות|נכונים)", RegexOption.IGNORE_CASE)
+
+    private fun number(s: String): Double? = s.replace(",", "").toDoubleOrNull()
+
     private const val LIGHT_BULB = 0x1F4A1
     private val SQUARES = 0x1F7E6..0x1F7EB
 
     val KIND_LABEL = mapOf(
         "guesses" to "ניסיונות", "mistakes" to "טעויות", "hints" to "רמזים",
-        "time" to "זמן", "words" to "מילים", "none" to "תוצאה",
+        "time" to "זמן", "words" to "מילים", "score" to "נקודות", "none" to "תוצאה",
     )
 
     private fun jsTrim(s: String): String = s.trim { WS_ONE.matches(it.toString()) }
@@ -127,8 +134,31 @@ object Scoring {
                 WORDS_WORD.find(t)?.let { return Parsed(it.groupValues[1].toDouble(), null, false) }
                 return null
             }
+            // Not in the prototype (1.9.7): games where more is better, a quiz's "8/10" or a score's "41.23/50".
+            "score" -> {
+                SCORE_FRACTION.findAll(t).forEach { m ->
+                    val a = number(m.groupValues[1]); val b = number(m.groupValues[2])
+                    if (a != null && b != null && b > 0 && a <= b) return Parsed(a, b.toInt().takeIf { it.toDouble() == b } ?: kotlin.math.ceil(b).toInt(), false)
+                }
+                SCORE_WORD.find(t)?.let { m -> number(m.groupValues[1])?.let { return Parsed(it, null, false) } }
+                return null
+            }
         }
         return null
+    }
+
+    /** The best score for this game on any OTHER day, among scores with nothing to be out of (failed ones do not count). */
+    fun bestScore(log: JSONObject, id: String, excludeDay: String?): Double? {
+        var best: Double? = null
+        for (day in log.keys()) {
+            if (day == excludeDay) continue
+            val r = log.optJSONObject(day)?.optJSONObject(id)?.optJSONObject("r") ?: continue
+            if (r.optString("kind") == "score" && !r.optBoolean("fail", false) && !r.has("max") && r.has("v") && !r.isNull("v")) {
+                val v = r.optDouble("v")
+                best = if (best == null) v else maxOf(best, v)
+            }
+        }
+        return best
     }
 
     /** A personal best time for this game on any OTHER day (failed runs do not count). */
@@ -160,6 +190,12 @@ object Scoring {
                 if (b == null || r.v < b) 10 else if (r.v <= b * 1.25) 7 else 5
             }
             "words" -> minOf(10, maxOf(2, jsRound(14 - r.v * 2)))
+            // More is better: out of its whole, up to 10 (at least 1 for playing it through); with no whole, against our best.
+            "score" -> {
+                val m = r.max
+                if (m != null && m > 0) minOf(10, maxOf(1, jsRound(10.0 * r.v / m)))
+                else { val b = bestScore(log, id, day); if (b == null || r.v >= b) 10 else if (r.v >= b * 0.8) 7 else 5 }
+            }
             else -> 5
         }
     }
@@ -209,6 +245,7 @@ object Scoring {
         r.fail -> "לא נפתר"
         kind == "time" -> fmtT(r.v)
         kind == "guesses" -> jsNumber(r.v).toString() + (if ((r.max ?: 0) != 0) "/${r.max}" else "")
+        kind == "score" && (r.max ?: 0) != 0 -> jsNumber(r.v).toString() + "/${r.max}"
         else -> jsNumber(r.v).toString() + " " + KIND_LABEL[kind]
     }
 }

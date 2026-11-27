@@ -219,17 +219,21 @@ fun DockButton(
     selected: Boolean = false,
     wide: Boolean = false,
     height: Dp = 52.dp,
+    /** A fixed id, for a button the screen moves the focus to by itself (the result's, when a game ends); else one of its own. */
+    id: String? = null,
+    /** Asks to be pressed now (the result's, when the game's end screen is up): the interface's red. */
+    calling: Boolean = false,
     onClick: () -> Unit,
     content: @Composable (lit: Boolean) -> Unit,
 ) {
     val c = LocalTv.current
-    val id = remember { newTvId() }
+    val id = remember(id) { id ?: newTvId() }
     val lit = c?.isFocused(id) == true
     Box(
         modifier
             .height(height)
             .clip(RoundedCornerShape(16.dp))
-            .background(if (selected) Palette.Ink else Palette.Tint)
+            .background(if (selected) Palette.Ink else if (calling) Palette.Pink else Palette.Tint)
             .tvTarget(id, label, onClick)
             .semantics { role = if (selected) Role.Switch else Role.Button; this.selected = selected; contentDescription = label },
         contentAlignment = Alignment.Center,
@@ -363,6 +367,8 @@ private fun HintPill(c: TvController, modifier: Modifier) {
         TvHint.PHONE -> stringResource(R.string.tv_hint_phone)
         TvHint.PHONE_PAW -> stringResource(R.string.tv_hint_phone_paw)
         TvHint.FRAME_HIDDEN -> stringResource(R.string.tv_hint_frame_hidden)
+        TvHint.RESULT_READY -> stringResource(R.string.tv_hint_result_ready)
+        TvHint.PLAYED_AUTO -> stringResource(R.string.tv_hint_played_auto)
         null -> null
     }
     AnimatedVisibility(visible = text != null, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {

@@ -143,8 +143,11 @@ fun ColumnScope.PlayerTvDock(slim: Boolean, tv: TvController, data: ChromeData, 
     if (slim) InfoButton(tv)
     if (!slim) {
         actions.onResult?.let { onResult ->
-            val label = stringResource(R.string.player_result)
-            DockButton(label, Modifier.fillMaxWidth(), onClick = onResult) { l -> Text(label, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = if (l) lit else ink) }
+            // When the game's end screen is up it says so, and the focus comes to it (see ResultWatch): one OK saves the result.
+            val label = stringResource(if (data.resultReady) R.string.result_save_now else R.string.player_result)
+            DockButton(label, Modifier.fillMaxWidth(), id = RESULT_ID, calling = data.resultReady, onClick = onResult) { l ->
+                Text(label, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = if (l) lit else ink)
+            }
         }
         if (data.showPlayed) {
             val label = stringResource(R.string.player_played)

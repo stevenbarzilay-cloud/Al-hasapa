@@ -39,7 +39,8 @@ class KeyClient(
         data class Connecting(val where: String) : State
         /** The TV shows four digits; [left] tries remain after a wrong one. */
         data class NeedCode(val tv: String, val left: Int? = null) : State
-        data class Connected(val tv: String, val screen: String) : State
+        /** [result]: a game's end screen is up on the TV, and the phone offers to save the result. */
+        data class Connected(val tv: String, val screen: String, val result: Boolean = false) : State
         /** The TV closed pairing for a while (too many wrong codes). */
         data object Wait : State
     }
@@ -228,7 +229,7 @@ class KeyClient(
                         Flight.log("phone keyboard: connected to the TV at $address")
                         startPinging()
                     }
-                    is Msg.Screen -> (_state.value as? State.Connected)?.let { _state.value = it.copy(screen = m.screen) }
+                    is Msg.Screen -> (_state.value as? State.Connected)?.let { _state.value = it.copy(screen = m.screen, result = m.result) }
                     is Msg.Bye -> { if (m.why == "wait") _state.value = State.Wait; break }
                     else -> {}
                 }

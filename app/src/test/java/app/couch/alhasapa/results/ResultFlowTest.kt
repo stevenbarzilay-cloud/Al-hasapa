@@ -18,6 +18,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.couch.alhasapa.BuildConfig
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.player.PlayerActivity
@@ -55,6 +56,9 @@ class ResultFlowTest {
         scenario = ActivityScenario.launch<ShareReceiverActivity>(i); rule.waitForIdle()
     }
 
+    /** The phone's sheet (fields to paste and type into). On a TV the sheet is buttons and the phone's keys: see PlayerTvDockTest. */
+    private fun phoneOnly() = org.junit.Assume.assumeFalse(BuildConfig.TV)
+
     /** The strip and the panel both have a result button; either one will do. */
     private fun resultButton() = rule.onAllNodesWithText("תוצאה").onFirst().performClick()
 
@@ -65,6 +69,7 @@ class ResultFlowTest {
 
     @Test
     fun theResultButtonOpensTheSheetAndAManualNumberIsSavedAndScored() {
+        phoneOnly()
         player("wordle")
         resultButton()
         rule.onNodeWithText("Wordle: התוצאה שלנו").assertIsDisplayed()
@@ -79,6 +84,7 @@ class ResultFlowTest {
 
     @Test
     fun aPastedShareIsUnderstoodBeforeItIsSaved() {
+        phoneOnly()
         player("wordle")
         resultButton()
         type("להדביק את מה שהמשחק העתיק", "Wordle 1,618 3/6\n\n🟩🟩🟩🟩🟩")
@@ -88,6 +94,7 @@ class ResultFlowTest {
 
     @Test
     fun whoCrackedItIsCreditAndCanBeChosen() {
+        phoneOnly()
         player("wordle")
         resultButton()
         type("או ידנית: ניסיונות", "3")
@@ -97,6 +104,7 @@ class ResultFlowTest {
 
     @Test
     fun aCopyThatLooksLikeTheResultOpensTheSheetFilledIn() {
+        phoneOnly()
         player("wordle")
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("result", "Wordle 1,618 3/6\n\n🟩🟩🟩🟩🟩"))
@@ -107,6 +115,7 @@ class ResultFlowTest {
 
     @Test
     fun aCopyThatIsNotAResultIsLeftAlone() {
+        phoneOnly()
         player("wordle")
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("link", "https://example.org/some/article"))
@@ -116,6 +125,7 @@ class ResultFlowTest {
 
     @Test
     fun aHeadToHeadResultBelongsToWhoIsPlaying() {
+        phoneOnly()
         player("queens", who = "b")
         resultButton()
         rule.onNodeWithText("Queens: התוצאה של רוני").assertIsDisplayed()
@@ -129,6 +139,7 @@ class ResultFlowTest {
 
     @Test
     fun theSheetOpensOnWhatIsAlreadySavedAndCanClearIt() {
+        phoneOnly()
         app.repo.update { CouchState.setEntry(it, today, "wordle", org.json.JSONObject().put("w", "").put("r", org.json.JSONObject().put("v", 3).put("max", 6).put("kind", "guesses").put("fail", false).put("raw", "Wordle 9 3/6"))) }
         player("wordle")
         resultButton()

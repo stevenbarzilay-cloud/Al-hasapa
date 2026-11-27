@@ -49,6 +49,9 @@ object RemoteKeys {
     fun attach(c: TvController) {
         front = c
         server?.screen = c.screenTitle
+        server?.resultReady = c.resultReady
+        // The screen in front tells the phones when a game's end screen comes up or goes (see TvController.resultScreen).
+        c.onResultReady = { ready -> if (front === c) server?.resultReady = ready }
     }
 
     fun detach(c: TvController) { if (front === c) front = null }
@@ -86,6 +89,7 @@ object RemoteKeys {
             KeyLink.Msg.Click -> c.remoteClick()
             is KeyLink.Msg.Drag -> c.remoteDrag(m.on)
             is KeyLink.Msg.Scroll -> c.remoteScroll(m.dy)
+            KeyLink.Msg.SaveResult -> c.onSaveResult?.invoke().also { Flight.log("phone keyboard: save the result pressed on the phone") }
             else -> {}
         }
     }

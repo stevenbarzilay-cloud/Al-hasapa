@@ -157,10 +157,12 @@ object SoundPolicy {
  */
 object SoundInjector {
     /** True when the scripts are registered for document start; false when this WebView cannot do that (the caller then runs them as each page begins). */
-    fun install(view: WebView, mode: SoundScript.Mode): Boolean = runCatching {
+    fun install(view: WebView, mode: SoundScript.Mode, withResultWatch: Boolean = false): Boolean = runCatching {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
             WebViewCompat.addDocumentStartJavaScript(view, SoundScript.build(mode), setOf("*"))
             WebViewCompat.addDocumentStartJavaScript(view, PageBusy.INSTALL, setOf("*"))
+            // The end of a game (its own share button on the screen), for "save the result": see ResultWatch.
+            if (withResultWatch) WebViewCompat.addDocumentStartJavaScript(view, app.couch.alhasapa.results.ResultWatch.INSTALL, setOf("*"))
             true
         } else false
     }.getOrElse { Diag.log("sound: document-start script refused: ${it.javaClass.simpleName}"); false }

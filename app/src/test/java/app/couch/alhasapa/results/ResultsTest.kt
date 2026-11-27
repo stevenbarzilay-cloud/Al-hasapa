@@ -8,6 +8,7 @@ import java.io.File
 import java.time.LocalDate
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import app.couch.alhasapa.scoring.Scoring
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -55,8 +56,58 @@ class ResultsTest {
     }
 
     @Test
+    fun aGameWhereMoreIsBetterIsScoredOutOfItsWholeOrAgainstOurBest() {
+        // Until 1.9.7 these were read as guesses: a quiz's "8/10" was 8 tries out of 10, worth almost nothing.
+        assertEquals("score", ResultDraft.kindOf(g("catfishing")))
+        assertEquals("8 of 10 right is worth 8, and 2 for playing", 10, ResultDraft.evaluate(g("catfishing"), "Catfishing #812 8/10 🐟", "", false, JSONObject(), day).points)
+        assertEquals("all right: the full 10", 12, ResultDraft.evaluate(g("dozen"), "The Dozen Daily Trivia 12/12", "", false, JSONObject(), day).points)
+        assertEquals("a decimal score", 10, ResultDraft.evaluate(g("dialed"), "Dialed Daily #120\n🎨 41.23/50", "", false, JSONObject(), day).points)
+        assertEquals("thousands, with commas", 9, ResultDraft.evaluate(g("timeguessr"), "TimeGuessr #498 34,567/50,000 🌎", "", false, JSONObject(), day).points)
+        assertEquals("nothing right still counts the playing, and 1", 3, ResultDraft.evaluate(g("catfishing"), "0/10", "", false, JSONObject(), day).points)
+        assertEquals("not made: only the playing", 2, ResultDraft.evaluate(g("catfishing"), "3/10", "", true, JSONObject(), day).points)
+        // With nothing to be out of: our best so far is the measure (higher is better).
+        val log = JSONObject("""{"2026-11-20":{"thrice":{"w":"","r":{"v":12,"kind":"score","fail":false}}}}""")
+        assertEquals("a new best", 12, ResultDraft.evaluate(g("thrice"), "Thrice #44: 13 points", "", false, log, day).points)
+        assertEquals("near our best (80% or more)", 9, ResultDraft.evaluate(g("thrice"), "10 points", "", false, log, day).points)
+        assertEquals("further from it", 7, ResultDraft.evaluate(g("thrice"), "", "6", false, log, day).points)
+        assertEquals("typed by hand as a fraction", 7, ResultDraft.evaluate(g("dozen"), "", "6/12", false, log, day).points)
+        assertEquals("8/10", Scoring.fmtVal("score", ResultDraft.evaluate(g("catfishing"), "8/10", "", false, JSONObject(), day).result))
+        assertEquals("13 נקודות", Scoring.fmtVal("score", ResultDraft.evaluate(g("thrice"), "13 points", "", false, JSONObject(), day).result))
+        // A date or a number with nothing after it is not a score.
+        assertEquals(null, Scoring.parseResult("#812", "score"))
+    }
+
+    @Test
+    fun aSavedResultIsCelebratedWithAWordThatFitsIt() {
+        val k = "guesses"
+        assertEquals(app.couch.alhasapa.R.string.cheer_bullseye, app.couch.alhasapa.results.Cheers.line(10, k, false))
+        assertEquals(app.couch.alhasapa.R.string.cheer_best, app.couch.alhasapa.results.Cheers.line(10, "time", true))
+        assertEquals(app.couch.alhasapa.R.string.cheer_bullseye, app.couch.alhasapa.results.Cheers.line(10, "time", false))
+        assertEquals(app.couch.alhasapa.R.string.cheer_great, app.couch.alhasapa.results.Cheers.line(8, k, false))
+        assertEquals(app.couch.alhasapa.R.string.cheer_good, app.couch.alhasapa.results.Cheers.line(5, k, false))
+        assertEquals(app.couch.alhasapa.R.string.cheer_fun, app.couch.alhasapa.results.Cheers.line(2, k, false))
+        assertEquals(app.couch.alhasapa.R.string.cheer_tomorrow, app.couch.alhasapa.results.Cheers.line(0, k, false))
+        val c = app.couch.alhasapa.results.Cheers.of(ResultStore.Outcome.Saved(12), k, false, 30)!!
+        assertEquals(12, c.points); assertEquals(30, c.evening)
+        assertEquals(null, app.couch.alhasapa.results.Cheers.of(ResultStore.Outcome.DuelSide("a"), k, false, 30))
+    }
+
+    @Test
+    fun theEndScreenWatcherOnlyReportsWhereTheButtonIs() {
+        val js = app.couch.alhasapa.results.ResultWatch.INSTALL
+        for (banned in listOf("cookie", "localStorage", "sessionStorage", "fetch(", "XMLHttpRequest", "sendBeacon", "WebSocket", "eval(", ".click(", "dispatchEvent", "postMessage", ".value"))
+            assertFalse("the end-screen watcher must not use $banned", js.contains(banned))
+        assertTrue(app.couch.alhasapa.results.ResultWatch.ready("\"1\""))
+        assertFalse(app.couch.alhasapa.results.ResultWatch.ready("\"0\"")); assertFalse(app.couch.alhasapa.results.ResultWatch.ready(null))
+        assertEquals(410f to 922f, app.couch.alhasapa.results.ResultWatch.at("\"410,922\""))
+        assertEquals(null, app.couch.alhasapa.results.ResultWatch.at("\"\"")); assertEquals(null, app.couch.alhasapa.results.ResultWatch.at("\"-3,4\""))
+        val dir = File("build/display-scripts").apply { mkdirs() }
+        File(dir, "result-watch.js").writeText(js)
+    }
+
+    @Test
     fun aGameWithNoMetricIsEnteredAsGuessesAndATimeBeatsThePersonalBest() {
-        assertEquals("guesses", ResultDraft.kindOf(g("krillion")))
+        assertEquals("guesses", ResultDraft.kindOf(g("songless")))
         val log = JSONObject("""{"2026-11-20":{"mini":{"w":"","r":{"v":60,"kind":"time","fail":false}}}}""")
         assertEquals("a new best time is worth the full 10", 12, ResultDraft.evaluate(g("mini"), "", "0:50", false, log, day).points)
         assertEquals("within 25% of the best is 7", 9, ResultDraft.evaluate(g("mini"), "", "1:10", false, log, day).points)

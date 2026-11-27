@@ -22,7 +22,7 @@ enum class InputMode { NAV, PAW }
 enum class Zone { PAGE, NATIVE }
 
 /** A short message shown on screen when the way of controlling things changes or something is worth knowing. */
-enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW, FRAME_HIDDEN }
+enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW, FRAME_HIDDEN, RESULT_READY, PLAYED_AUTO }
 
 /**
  * A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up): the information for fixing a
@@ -122,6 +122,43 @@ class TvController(val enabled: Boolean, density: Float) {
     var frameHidden by mutableStateOf(false)
         private set
 
+    // ---- the end of a game (see ResultWatch) ----
+
+    /** The game's end screen is up (its own share or copy button is on the screen): the TV offers to save the result. */
+    var resultReady by mutableStateOf(false)
+        private set
+
+    /** What "save the result" does on this screen (the player sets it): from the dock's button, or from the phone. */
+    var onSaveResult: (() -> Unit)? = null
+
+    /**
+     * The game's end screen came up ([ready]) or went. When it comes: the game's frame is shown if it was put away (only for now), and
+     * the focus goes to "save the result", so one OK saves it; with the paw in use, only a word at the top says so.
+     */
+    fun resultScreen(ready: Boolean, saveId: String?) {
+        if (resultReady == ready) return
+        resultReady = ready
+        onResultReady(ready)
+        if (!ready) return
+        Flight.log("tv: the game's end screen is up; saving the result is offered")
+        if (frameHidden) frameHidden = false
+        if (mode == InputMode.NAV && panel == null && modalPrefix == null && saveId != null) { pageNav.blur(); zone = Zone.NATIVE; focusedId = saveId }
+        say(TvHint.RESULT_READY)
+    }
+
+    /** Told when [resultReady] changes (the phone that is the keyboard offers to save the result too). */
+    var onResultReady: (Boolean) -> Unit = {}
+
+    /** The game was marked as played by itself (after a while in it). */
+    fun playedByItself() = say(TvHint.PLAYED_AUTO)
+
+    /**
+     * A sheet of the app's own over the screen (the result sheet): while it is up, the arrows move only between the buttons whose ids
+     * begin with this, and what the phone types goes to [textSink] instead of the page.
+     */
+    var modalPrefix: String? by mutableStateOf(null)
+    var textSink: ((Delivery) -> Unit)? = null
+
     fun hideFrame(hidden: Boolean) {
         if (frameHidden == hidden) return
         frameHidden = hidden
@@ -207,6 +244,8 @@ class TvController(val enabled: Boolean, density: Float) {
      */
     fun remoteInput(list: List<Delivery>) {
         if (!enabled) return
+        // A sheet of the app's own is up (the result's): the keys are for it.
+        textSink?.let { sink -> list.forEach(sink); return }
         web?.let { w -> if (!w.hasFocus()) w.requestFocus() }
         // Typing begins (after a pause): if no field has the cursor, the one the highlight is on gets it, so the words land there.
         val now = SystemClock.uptimeMillis()
@@ -450,7 +489,7 @@ class TvController(val enabled: Boolean, density: Float) {
 
     /** Move the focus one step that way: through the app's buttons, into the page, and inside the page (which scrolls at its end). */
     fun navigate(dir: Dir) {
-        val page = if (panel == null) pageBox else null
+        val page = if (panel == null && modalPrefix == null) pageBox else null
         if (zone == Zone.PAGE && page != null) {
             if (busy) return
             askPage({ cb -> pageNav.move(dir, cb) }) { r ->
@@ -463,10 +502,11 @@ class TvController(val enabled: Boolean, density: Float) {
             }
             return
         }
-        // A panel: the arrows stay among its own buttons, nothing behind it can be reached. (The information has only one.)
-        if (panel != null) {
+        // A panel or a sheet: the arrows stay among its own buttons, nothing behind it can be reached. (The information has only one.)
+        val modal = modalPrefix
+        if (panel != null || modal != null) {
             val from = focusedId?.let { targets[it]?.box }
-            val own = onScreen().filter { it.id.startsWith(PANEL_PREFIX) || it.id == PANEL_CLOSE_ID }
+            val own = onScreen().filter { if (panel != null) it.id.startsWith(PANEL_PREFIX) || it.id == PANEL_CLOSE_ID else it.id.startsWith(modal!!) }
             val next = if (from == null) own.minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { -it.box.r }) else Spatial.next(from, own, dir, exclude = focusedId)
             if (next != null) { zone = Zone.NATIVE; focusedId = next.id }
             return

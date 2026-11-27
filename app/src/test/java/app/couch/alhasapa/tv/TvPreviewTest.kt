@@ -167,6 +167,30 @@ class TvPreviewTest {
         shot("tv-cursor-mouse.png")
     }
 
+    /** The result sheet on a TV: buttons only, the focus on "save". */
+    @Test
+    fun drawTheResultSheetOnATv() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val state = app.couch.alhasapa.data.CouchState.empty()
+        val support = app.couch.alhasapa.results.ResultSupport(catalog.game("catfishing")!!, state, "2026-11-27")
+        val couple = app.couch.alhasapa.results.Couple("סטיב", "רוני", pieces.styleFor(null, "a"), pieces.styleFor(null, "b"))
+        rule.setContent {
+            AlHasapaTheme {
+                TvLayer(c) {
+                    Box(Modifier.fillMaxSize().background(Palette.Ink.copy(alpha = 0.45f)), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                        app.couch.alhasapa.results.ResultSheet(support, couple, null, "Catfishing #812\n🐟 8/10", captured = true, onSave = {}, onClear = null, onCancel = {})
+                    }
+                }
+            }
+        }
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "tv-result-sheet.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
     /** The home with two other colours chosen (teal and mustard), at the end of the shelf, where the games played this evening are. */
     @Test
     fun drawTheHomeInOtherColours() {

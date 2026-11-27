@@ -63,7 +63,15 @@ class KeyServer(
     @Volatile var screen: String = ""
         set(value) {
             field = value
-            peers.forEach { if (it.ready) it.send(Msg.Screen(value)) }
+            peers.forEach { if (it.ready) it.send(Msg.Screen(value, resultReady)) }
+        }
+
+    /** A game's end screen is up on the TV: the phones offer to save the result. */
+    @Volatile var resultReady: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            peers.forEach { if (it.ready) it.send(Msg.Screen(screen, value)) }
         }
 
     /** What the TV shows about the link (the pairing code, the phones connected). */
@@ -200,7 +208,7 @@ class KeyServer(
             is Msg.LoginsKey -> { offerKey(m.key); true }
             is Msg.Logins -> { receiveLogins(m); true }
             is Msg.Pair -> checkCode(m.code)
-            is Msg.Text, is Msg.Press, is Msg.Pointer, is Msg.Move, Msg.Click, is Msg.Drag, is Msg.Scroll -> {
+            is Msg.Text, is Msg.Press, is Msg.Pointer, is Msg.Move, Msg.Click, is Msg.Drag, is Msg.Scroll, Msg.SaveResult -> {
                 if (ready && atHumanPace()) {
                     val at = SystemClock.uptimeMillis()
                     if (m is Msg.Move) pad.arrived(at, m.t)
@@ -223,6 +231,7 @@ class KeyServer(
         private fun welcome() {
             ready = true
             send(Msg.Ok(screen))
+            if (resultReady) send(Msg.Screen(screen, true))
             Flight.log(
                 "phone keyboard: $name connected" +
                     if (app != appCode) " (its app is ${if (app < appCode) "older" else "newer"}: ${ver.ifEmpty { "before 1.9.4" }}; this TV has $appVer)" else "",

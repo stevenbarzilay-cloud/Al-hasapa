@@ -47,6 +47,15 @@ server.listen(0, '127.0.0.1', async () => {
   await page.click('.tab[data-view="disc"]'); await page.waitForTimeout(200);
   ok(await page.evaluate(() => document.querySelector('#dcard').dataset.id === 'albumdle' && document.querySelector('#dcard').textContent.includes('מנחשים את האמן, האלבום ושנת היציאה לפי העטיפה.')), 'the first card under the cushions is Albumdle, with its sentence');
 
+  // The "score" kind (1.9.7): more is better, out of its whole or against our best; the same numbers as the app's own (ResultsTest).
+  const sc = await page.evaluate(() => {
+    const day = TODAY();
+    const pts = (id, text) => { const p = parseResult(text, "score"); return p ? resultPts(id, { ...p, kind: "score" }, day) : null; };
+    return [pts("catfishing", "Catfishing #812 8/10 🐟"), pts("dialed", "Dialed Daily #120\n🎨 41.23/50"), pts("timeguessr", "TimeGuessr #498 34,567/50,000"), pts("catfishing", "0/10"),
+      JSON.stringify(parseResult("Thrice #44: 13 points", "score")), parseResult("#812", "score"), fmtVal("score", { v: 8, max: 10, kind: "score" })];
+  });
+  ok(JSON.stringify(sc) === JSON.stringify([8, 8, 7, 1, '{"v":13,"fail":false}', null, '8/10']), `the hub counts "more is better" as the app does (${JSON.stringify(sc)})`);
+
   await page.click('.tab[data-view="settings"]'); await page.waitForTimeout(200);
   const rows = await page.evaluate(() => document.querySelectorAll('#ul .urlrow').length);
   ok(rows === total, `the settings tab lists every game's link (${rows} of ${total})`);

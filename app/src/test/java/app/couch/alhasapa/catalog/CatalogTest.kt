@@ -24,12 +24,12 @@ class CatalogTest {
 
     @Test
     fun metricsAreTheOnesTheScoringKnows() {
-        val ok = setOf("guesses", "mistakes", "hints", "time", "words", "none")
+        val ok = setOf("guesses", "mistakes", "hints", "time", "words", "score", "none")
         for (g in catalog.games) assertTrue("${g.id}: ${g.metric}", g.metric in ok)
         fun m(id: String) = catalog.game(id)!!.metric
         assertEquals("guesses", m("wordle")); assertEquals("mistakes", m("connections")); assertEquals("hints", m("strands"))
         assertEquals("time", m("queens")); assertEquals("guesses", m("pinpoint")); assertEquals("words", m("letterboxed"))
-        assertEquals("mistakes", m("hzconn")); assertEquals("none", m("krillion")); assertEquals("guesses", m("hz5"))
+        assertEquals("mistakes", m("hzconn")); assertEquals("score", m("krillion")); assertEquals("score", m("dialed")); assertEquals("score", m("dozen")); assertEquals("guesses", m("hz5"))
     }
 
     @Test

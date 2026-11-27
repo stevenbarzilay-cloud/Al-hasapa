@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.6.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.7.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -331,6 +331,32 @@ want to play on, starting with Krillion and NYT:
     phone; the button under the pad is still there. Two fingers scroll the page under the cursor directly (the wheel used to be
     handed to the window, and on its way through the app's layers did not always reach the page), at a gentler pace. With the
     remote, the cursor held against the top or the bottom of the screen scrolls the page on, faster the longer it is held.
+- **1.9.7: the score saved with one button, "played" by itself, and points that make sense.**
+  From the same evening:
+  - *A button for the score, when the score is on the screen.* When a game shows its end screen (its own "share" or "copy" button
+    is on the screen), the dock's "save the result" button turns pink and takes the remote's focus, the frame comes back if it was
+    put away, and a word at the top says what to do. One OK presses the game's own share button for us (a tap, as a finger would),
+    catches what the game copies, and opens the result sheet filled in; one more OK saves. The phone that is the TV's keyboard
+    shows a red "the game is over: save the result on the TV" button at the same moment, which does the same. The end is told by a
+    small script in the game's page that reads only the labels of buttons and links (share / copy, in English or Hebrew) and where
+    they are, never the game's content or its answers (`ResultWatch`). No screenshot, no pasting.
+  - *The result sheet on the TV* is made for the remote: what the game handed over is shown to read; the number by hand has − and +
+    (minutes and seconds apart for a time) and starts from what was read, so a wrong reading is mended with a press or two; digits
+    typed on the phone go into the number and Enter saves; the arrows stay inside the sheet while it is up, and the focus starts
+    on "save". It stands whole on the screen, in two columns.
+  - *Played, by itself.* A game we play together that stays open half a minute (counted only while the app is in front, never
+    while signing in) is marked as played this evening, with a word at the top. The "played" button still unmarks it, and a mark
+    or result given by hand is never touched.
+  - *Points that make sense.* A new kind of result, "points, more is better", for the games that end with a score. A score out of
+    a top (8/10, 4,230/5,000: commas and decimals are read) is worth its share of 10 couch points, rounded, never less than 1; a
+    score with no top is worth 10 when it is our best, 7 within a fifth of the best, 5 below. Krillion both ways, Dialed and its
+    sound game, Catfishing, the Daily Dozen, Magnitudle's two games, TimeGuessr, Thrice, Chrono Trivia, Cinematrix and More or
+    Less are scored this way now; until now they could only be marked as played. The hub on the phone counts the same way
+    (checked against the app's rules in a browser, `tools/hub_settings_check.cjs`).
+  - *A little celebration* on the TV after saving, for three seconds: the couch points the result brought, a word that fits (a
+    bullseye 🎯 for a full score, a new record for our fastest time, "tomorrow is ours" for a miss) and the evening's total so far.
+  - Phone and TV now tell each other about the end of a game (`KeyLink`: `result` in "screen", and "save-result"), so **both apps
+    must be updated together** this time (`TOGETHER_SINCE` 31); an older phone with the new TV, or the other way round, is told so.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

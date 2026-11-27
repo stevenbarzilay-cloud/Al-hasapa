@@ -55,6 +55,8 @@ data class ChromeData(
     val zoom: Int?,
     /** The page is shown phone-shaped (otherwise wide), for the button that swaps them. */
     val portrait: Boolean = true,
+    /** On a TV: the game's end screen is up, and "save the result" is offered (see ResultWatch). */
+    val resultReady: Boolean = false,
 )
 
 /** What they can do. [onResult] is null where there is no result to record (the sign-in screens). */

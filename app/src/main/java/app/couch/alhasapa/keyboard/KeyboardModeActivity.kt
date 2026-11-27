@@ -66,6 +66,8 @@ class KeyboardModeActivity : ComponentActivity() {
                 client.sendLogins(site, LoginHandoff.payload(site, cookies))
             }
 
+            override fun saveResult() = client.send(KeyLink.Msg.SaveResult)
+
             // The site's own sign-in page, here on the phone, in the same browser the login is then read from.
             override fun signIn(site: String) {
                 val s = (application as CouchApp).catalog.sites[site] ?: return

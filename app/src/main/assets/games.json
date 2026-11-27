@@ -386,7 +386,7 @@
    "m": "Kr",
    "u": "https://krillion.io",
    "d": "שבע שאלות פתוחות, התשובה הנדירה מנצחת.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1
   },
   {
@@ -397,7 +397,7 @@
    "m": "No",
    "u": "https://www.google.com/search?q=Noillirk%20daily%20game",
    "d": "ההפך: התשובה הכי צפויה מנצחת.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1,
    "placeholder": true
   },
@@ -409,7 +409,7 @@
    "m": "◐",
    "u": "https://dialed.gg/color",
    "d": "רואים צבע לרגע ומשחזרים אותו מהזיכרון.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1
   },
   {
@@ -420,7 +420,7 @@
    "m": "∿",
    "u": "https://dialed.gg/sound",
    "d": "שומעים טון ומשחזרים את התדר.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1
   },
   {
@@ -486,7 +486,7 @@
    "m": "±",
    "u": "https://www.google.com/search?q=More%2FLess%20lessgames%20daily",
    "d": "מה יותר: חיפושים, האזנות, דירוגים.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1,
    "placeholder": true
   },
@@ -510,7 +510,7 @@
    "m": "Ca",
    "u": "https://catfishing.net/",
    "d": "מנחשים ערך בוויקיפדיה לפי הקטגוריות שלו. עשרה ערכים ביום.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1
   },
   {
@@ -521,7 +521,7 @@
    "m": "12",
    "u": "https://dailydozentrivia.com/",
    "d": "סיבוב טריוויה יומי, בהשראת תחרות הטריוויה The Dozen.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1
   },
   {
@@ -543,7 +543,7 @@
    "m": "Sz",
    "u": "https://magnitudle.com/size-it-up",
    "d": "משנים את הגודל של עצם עד שהוא נראה נכון ליד עצם מוכר. חמישה סיבובים ביום.",
-   "metric": "none",
+   "metric": "score",
    "lib": 1
   },
   {
@@ -664,7 +664,7 @@
    "m": "TG",
    "u": "https://timeguessr.com/play?mode=daily",
    "d": "מנחשים איפה ובאיזו שנה צולם כל תצלום.",
-   "metric": "none",
+   "metric": "score",
    "why": "נראה מעולה על מסך גדול",
    "pick": 3
   },
@@ -688,7 +688,7 @@
    "m": "Ci",
    "u": "https://www.vulture.com/article/daily-movie-grid-trivia-game-cinematrix.html",
    "d": "ממלאים לוח 3×3 בסרטים שמתאימים גם לרמז של השורה וגם לרמז של העמודה.",
-   "metric": "none",
+   "metric": "score",
    "why": "דיונים טובים על הספה",
    "pick": 7,
    "cat": "cinema"
@@ -713,7 +713,7 @@
    "m": "Th",
    "u": "https://thrice.geekswhodrink.com/",
    "d": "בכל סיבוב יש שלוש שאלות שמובילות לאותה תשובה.",
-   "metric": "none",
+   "metric": "score",
    "pick": 4
   },
   {
@@ -736,7 +736,7 @@
    "m": "Ch",
    "u": "https://chronotrivia.com/",
    "d": "מסדרים אירועים לפי סדר כרונולוגי, עם קטגוריות כמו מוזיקה, בידור והיסטוריה.",
-   "metric": "none",
+   "metric": "score",
    "pick": 9
   },
   {
@@ -747,7 +747,7 @@
    "m": "Wg",
    "u": "https://magnitudle.com/weigh-it-up",
    "d": "מעריכים כמה פריטים צריך כדי לאזן את המאזניים.",
-   "metric": "none",
+   "metric": "score",
    "pick": 10
   },
   {

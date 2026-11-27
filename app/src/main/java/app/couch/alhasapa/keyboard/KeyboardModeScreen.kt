@@ -126,6 +126,9 @@ interface KeySink {
 
     /** Opens [site]'s sign-in page here on the phone (the list is read again when the person comes back). */
     fun signIn(site: String) {}
+
+    /** Presses "save the result" on the TV (offered while a game's end screen is up there). */
+    fun saveResult() {}
 }
 
 /**
@@ -157,6 +160,15 @@ fun KeyboardModeScreen(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         TopStrip(state, onGame, onLogins = { loginsOpen = true })
+        // A game's end screen is up on the TV: one press here saves its result there (the TV presses the game's own share for us).
+        if (state is KeyClient.State.Connected && state.result) {
+            val label = stringResource(R.string.kb_save_result)
+            Box(
+                Modifier.fillMaxWidth().padding(end = 12.dp).height(44.dp).clip(RoundedCornerShape(22.dp)).background(Palette.Red)
+                    .clickable { sink.saveResult() }.semantics { role = Role.Button; contentDescription = label },
+                contentAlignment = Alignment.Center,
+            ) { Text(label, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Palette.Cream) }
+        }
         if (state is KeyClient.State.Connected && versions != null) {
             val note = when (versions) {
                 is KeyClient.Versions.TvNewer -> stringResource(R.string.kb_tv_newer, versions.ver)

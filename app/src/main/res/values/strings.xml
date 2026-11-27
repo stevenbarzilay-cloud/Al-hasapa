@@ -238,4 +238,24 @@
     <string name="home_tv_settings">התאמה לטלוויזיה</string>
     <string name="home_about_tv_settings">גודל התמונה אם הקצוות נחתכים, גודל הכתב, וצורת הסמן וגודלו.</string>
     <string name="clock_desc">השעה %1$s</string>
+    <string name="result_tv_no_text">המשחק לא מסר תוצאה כתובה. אפשר לסמן כאן בכפתורים, או להקליד מהטלפון.</string>
+    <string name="result_tv_phone">אפשר גם להקליד את המספר בטלפון (מקלדת לטלוויזיה), ו-Enter שומר.</string>
+    <string name="result_tv_min_less">דקה פחות</string>
+    <string name="result_tv_min_more">דקה יותר</string>
+    <string name="result_tv_sec_less">שנייה פחות</string>
+    <string name="result_tv_sec_more">שנייה יותר</string>
+    <string name="result_save_now">שמירת התוצאה</string>
+    <string name="tv_hint_result_ready">המשחק נגמר? OK על ״שמירת התוצאה״, בצד</string>
+    <string name="tv_hint_played_auto">סימנו ששיחקנו ✓</string>
+    <string name="played_auto_toast">סימנו ששיחקנו</string>
+    <string name="cheer_bullseye">בול! 🎯</string>
+    <string name="cheer_great">יפה מאוד!</string>
+    <string name="cheer_good">לא רע בכלל</string>
+    <string name="cheer_fun">העיקר שהיה כיף</string>
+    <string name="cheer_tomorrow">מחר זה שלנו 💪</string>
+    <string name="cheer_best">שיא חדש! ⏱️</string>
+    <string name="cheer_points">+%1$d נקודות ספה</string>
+    <string name="cheer_evening">הערב: %1$d</string>
+    <string name="cheer_marked">סימנו ששיחקנו</string>
+    <string name="kb_save_result">🏁 המשחק נגמר: לשמור את התוצאה בטלוויזיה</string>
 </resources>

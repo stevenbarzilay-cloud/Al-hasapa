@@ -239,6 +239,42 @@ class TvControllerTest {
     }
 
     @Test
+    fun whenAGamesEndScreenComesUpTheFocusGoesToSavingTheResult() {
+        val (c, page) = screen()
+        c.register("dock:result", Box(0f, 400f, 80f, 450f)) { page.calls += "save pressed" }
+        var told = ArrayList<Boolean>(); c.onResultReady = { told += it }
+        c.hideFrame(true)
+        c.resultScreen(true, "dock:result")
+        assertTrue(c.resultReady); assertEquals(listOf(true), told)
+        assertFalse("the frame comes back for it", c.frameHidden)
+        assertEquals("dock:result", c.focusedId); assertEquals(TvHint.RESULT_READY, c.hint)
+        press(c, KeyEvent.KEYCODE_DPAD_CENTER)
+        assertTrue("one OK", page.calls.contains("save pressed"))
+        c.resultScreen(false, null); assertEquals(listOf(true, false), told)
+        // With the paw in use the focus is left alone: only the word at the top.
+        c.togglePaw(); c.focus("menu")
+        c.resultScreen(true, "dock:result")
+        assertEquals("menu", c.focusedId)
+    }
+
+    @Test
+    fun aSheetKeepsTheArrowsAndThePhonesKeysToItself() {
+        val (c, page) = screen()
+        val got = ArrayList<Delivery>()
+        c.register("sheet:save", Box(300f, 300f, 400f, 350f)) {}
+        c.register("sheet:cancel", Box(450f, 300f, 550f, 350f)) {}
+        c.modalPrefix = "sheet:"; c.textSink = { got += it }
+        c.focus("sheet:save")
+        press(c, KeyEvent.KEYCODE_DPAD_RIGHT); assertEquals("sheet:cancel", c.focusedId)
+        press(c, KeyEvent.KEYCODE_DPAD_UP); press(c, KeyEvent.KEYCODE_DPAD_UP)
+        assertEquals("nothing outside the sheet", "sheet:cancel", c.focusedId)
+        assertTrue(page.calls.none { it.startsWith("move") })
+        var typedIntoPage = 0; c.typer = { typedIntoPage++ }
+        c.remoteInput(listOf(Delivery.Text("7")))
+        assertEquals(listOf<Delivery>(Delivery.Text("7")), got); assertEquals(0, typedIntoPage)
+    }
+
+    @Test
     fun aGameCanPutItsFrameAwayAndSaysHowToGetItBack() {
         val (c, _) = screen()
         c.focus("menu")

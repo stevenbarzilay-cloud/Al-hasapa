@@ -52,6 +52,7 @@ class KeyboardModeScreenTest {
         )
         override fun sendLogin(site: String) { sent += "login:$site" }
         override fun signIn(site: String) { sent += "signin:$site" }
+        override fun saveResult() { sent += "save-result" }
     }
     private var versions by mutableStateOf<KeyClient.Versions?>(null)
     private var openLogins = false
@@ -228,6 +229,17 @@ class KeyboardModeScreenTest {
         rule.onNodeWithText("סגירה").performClick()
         rule.onNodeWithText("להעביר התחברות לטלוויזיה").assertDoesNotExist()
         key("q").assertIsDisplayed()                                                 // and under it, the keyboard as always
+    }
+
+    @Test
+    fun whenAGameEndsOnTheTvThePhoneOffersToSaveTheResultThere() {
+        state = KeyClient.State.Connected("MiTV", "Catfishing")
+        show()
+        rule.onNodeWithText("לשמור את התוצאה", substring = true).assertDoesNotExist()
+        state = KeyClient.State.Connected("MiTV", "Catfishing", result = true)
+        rule.onNodeWithText("לשמור את התוצאה", substring = true).assertIsDisplayed().performClick()
+        assertEquals(listOf("save-result"), sent)
+        key("q").assertIsDisplayed()
     }
 
     @Test

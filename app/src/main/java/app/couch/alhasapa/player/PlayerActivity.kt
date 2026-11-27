@@ -21,6 +21,11 @@ import app.couch.alhasapa.data.CouchState
 import app.couch.alhasapa.data.PiecesConfig
 import app.couch.alhasapa.display.DisplayStore
 import app.couch.alhasapa.results.ResultStore
+import app.couch.alhasapa.diag.Flight
+import app.couch.alhasapa.scoring.Scoring
+import app.couch.alhasapa.results.ResultDraft
+import app.couch.alhasapa.results.Cheers
+import app.couch.alhasapa.results.Cheer
 import app.couch.alhasapa.results.ResultSupport
 import android.widget.Toast
 import app.couch.alhasapa.R
@@ -38,6 +43,9 @@ import org.json.JSONObject
 class PlayerActivity : ComponentActivity() {
     private lateinit var session: PlaySession
     private lateinit var tv: TvHost
+
+    /** For the tests: the remote of this screen. */
+    internal val remote get() = tv.controller
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -83,6 +91,7 @@ class PlayerActivity : ComponentActivity() {
                         ?.takeIf { !(it.isDuel && session.who == null) }
                         ?.let { ResultSupport(it, state, today()) },
                     onSaveResult = { input -> saveResult(app, input) },
+                    onAutoPlayed = { markPlayed(app) },
                     onClearResult = { clearResult(app) },
                     onTogglePlayed = { togglePlayed(app) },
                     reduceMotion = reduceMotion,
@@ -118,10 +127,22 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    private fun saveResult(app: CouchApp, input: app.couch.alhasapa.results.ResultInput) {
-        val game = session.gameId?.let { app.catalog.game(it) } ?: return
-        val names = CouchState.names(app.repo.snapshot())
-        val msg = when (val o = ResultStore.save(app.repo, game, today(), session.who, input)) {
+    /**
+     * Saves a result. On a TV a saved result is celebrated on the screen (what this returns); everywhere else, and for a head-to-head
+     * side, a short message says how it went.
+     */
+    private fun saveResult(app: CouchApp, input: app.couch.alhasapa.results.ResultInput): Cheer? {
+        val game = session.gameId?.let { app.catalog.game(it) } ?: return null
+        val before = app.repo.snapshot()
+        val names = CouchState.names(before)
+        val kind = ResultDraft.kindOf(game)
+        val hadBest = Scoring.bestTime(before.optJSONObject("log") ?: JSONObject(), game.id, today()) != null
+        val o = ResultStore.save(app.repo, game, today(), session.who, input)
+        if (tv.enabled) {
+            val evening = Scoring.dayPts(app.repo.snapshot().optJSONObject("log") ?: JSONObject(), today())
+            Cheers.of(o, kind, hadBest, evening)?.let { return it }
+        }
+        val msg = when (o) {
             is ResultStore.Outcome.Saved -> getString(R.string.result_saved_pts, o.points)
             ResultStore.Outcome.MarkedOnly -> getString(R.string.result_marked)
             ResultStore.Outcome.Nothing -> getString(R.string.result_nothing)
@@ -132,6 +153,19 @@ class PlayerActivity : ComponentActivity() {
             }
         }
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        return null
+    }
+
+    /** Marks today's "we played" by itself (after a while in the game); a tick that is already there stays as it is. */
+    private fun markPlayed(app: CouchApp) {
+        val id = session.gameId ?: return
+        val day = today()
+        var marked = false
+        app.repo.update { s -> if (CouchState.entry(s, day, id) == null) { CouchState.setEntry(s, day, id, JSONObject().put("w", "").put("t", System.currentTimeMillis())); marked = true } }
+        if (marked) {
+            Flight.log("played: ${session.title} marked by itself")
+            if (!tv.enabled) Toast.makeText(this, R.string.played_auto_toast, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun clearResult(app: CouchApp) {
