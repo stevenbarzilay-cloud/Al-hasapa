@@ -43,8 +43,10 @@ import org.json.JSONObject
  *                                                         of the page's width and height
  *
  *     each of us on our own phone (from 1.9.9)
- *     both ways      couple {who, a, b}                   both of us as the sender knows us: name, shape, colour, and when each last
- *                                                         changed (the newer wins, person by person); who: whose phone sent it
+ *     both ways      couple {who, a, b, more}             both of us as the sender knows us: name, shape, colour, and when each last
+ *                                                         changed (the newer wins, person by person); who: whose phone sent it;
+ *                                                         more: the others (1.10), each with its id, guests with their evening, and
+ *                                                         the removed ones as marks
  *     phone → TV     note {note}                          a note for the other one: words and a drawing, tied to a game or none
  *     TV    → phone  note-ok {id}                         the TV keeps it (the phone stops keeping it to send)
  *
@@ -75,7 +77,7 @@ object KeyLink {
      * Not simply the app's own version number: a release that changes only one of the two (the TV's home got a new look in 1.9.5)
      * must not send the people to update the other for nothing. It is raised only when a release needs both.
      */
-    const val TOGETHER_SINCE = 33
+    const val TOGETHER_SINCE = 34
 
     /** A line longer than this is not one of ours (a site's cookies, encrypted, fit well within it). */
     const val MAX_LINE = 65_536
@@ -85,6 +87,9 @@ object KeyLink {
      * A picture is a JPEG of at most [MAX_FRAME_WIDTH] pixels across, usually 30 to 100 KB.
      */
     const val MAX_FRAME_LINE = 2_000_000
+
+    /** The most others (beside the two of us) one message carries. */
+    const val MAX_OTHERS = 40
 
     /** The widest picture the TV sends, in pixels (wider costs the box more to make than it adds on a phone's screen). */
     const val MAX_FRAME_WIDTH = 960
@@ -232,7 +237,11 @@ object KeyLink {
         is Msg.FrameOk -> JSONObject().put("t", "frame-ok").put("n", m.n)
         is Msg.FrameNone -> JSONObject().put("t", "frame-none").put("why", m.why)
         is Msg.Touch -> JSONObject().put("t", "touch").put("a", m.a.name.lowercase()).put("x", round4(m.x)).put("y", round4(m.y))
-        is Msg.CoupleMsg -> JSONObject().put("t", "couple").put("who", m.who).apply { for (p in m.people) put(p.who, p.toJson()) }
+        is Msg.CoupleMsg -> JSONObject().put("t", "couple").put("who", m.who).apply {
+            val more = org.json.JSONArray()
+            for (p in m.people) if (p.other) more.put(p.toJson().put("id", p.who)) else put(p.who, p.toJson())
+            if (more.length() > 0) put("more", more)
+        }
         is Msg.NoteMsg -> JSONObject().put("t", "note").put("note", m.note.toJson())
         is Msg.NoteOk -> JSONObject().put("t", "note-ok").put("id", m.id)
     }
@@ -292,8 +301,9 @@ object KeyLink {
                 Msg.Touch(a, x.coerceIn(0.0, 1.0).toFloat(), y.coerceIn(0.0, 1.0).toFloat())
             }
             "couple" -> Msg.CoupleMsg(
-                s("who").takeIf { it in app.couch.alhasapa.data.Couple.WHO }.orEmpty(),
-                app.couch.alhasapa.data.Couple.WHO.mapNotNull { Person.fromJson(it, o.optJSONObject(it)) },
+                s("who").takeIf { app.couch.alhasapa.data.Couple.isId(it) }.orEmpty(),
+                app.couch.alhasapa.data.Couple.WHO.mapNotNull { Person.fromJson(it, o.optJSONObject(it)) } +
+                    (o.optJSONArray("more")?.let { a -> (0 until minOf(a.length(), MAX_OTHERS)).mapNotNull { i -> a.optJSONObject(i)?.let { p -> Person.fromJson(p.optString("id"), p) } } } ?: emptyList()),
             )
             "note" -> Note.fromJson(o.optJSONObject("note"))?.let { Msg.NoteMsg(it) }
             "note-ok" -> s("id").takeIf { it.isNotEmpty() }?.let { Msg.NoteOk(it) }

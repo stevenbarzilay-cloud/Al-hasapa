@@ -87,10 +87,16 @@ class KeyboardModeActivity : ComponentActivity() {
                 Flight.log("me: this phone is ${if (p.who == "a") "the first" else "the second"} of us")
             }
 
-            override fun sendNote(game: String?, text: String, doodle: List<IntArray>) {
+            override fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>) {
                 val who = store.me ?: return
-                client.sendNote(app.couch.alhasapa.data.Note(app.couch.alhasapa.remote.RemoteStore.randomHex(8), who, game, text, doodle, System.currentTimeMillis()))
+                client.sendNote(app.couch.alhasapa.data.Note(app.couch.alhasapa.remote.RemoteStore.randomHex(8), who, game, text, doodle, System.currentTimeMillis(), to = to))
                 Flight.log("notes: one written${if (game != null) " for a game" else " for the home"}")
+            }
+
+            override fun removePerson(who: String) {
+                couch.repo.update { app.couch.alhasapa.data.Couple.remove(it, who, System.currentTimeMillis()) }
+                if (store.me == who) { store.me = null; me.value = null }
+                client.sendCouple()
             }
 
             // The site's own sign-in page, here on the phone, in the same browser the login is then read from.
@@ -110,7 +116,7 @@ class KeyboardModeActivity : ComponentActivity() {
                 val frameNone by client.frameNone.collectAsState()
                 val revision by couch.repo.revision.collectAsState()
                 val people = androidx.compose.runtime.remember(revision) {
-                    val s = couch.repo.snapshot(); app.couch.alhasapa.data.Couple.WHO.map { app.couch.alhasapa.data.Couple.person(s, it) }
+                    app.couch.alhasapa.data.Couple.everyone(couch.repo.snapshot(), app.couch.alhasapa.data.Couple.evening())
                 }
                 val noteGames = androidx.compose.runtime.remember(revision) {
                     val s = couch.repo.snapshot(); couch.catalog.games.filter { couch.catalog.inLib(it, s) }.map { NoteGame(it.id, it.n) }

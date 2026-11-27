@@ -118,14 +118,18 @@ internal fun MirrorPad(frame: KeyClient.MirrorFrame?, none: String?, sink: KeySi
         val latestGeo by rememberUpdatedState(geo)
 
         fun clampTo(c: Float, z: Float) = if (z <= 1f) 0.5f else c.coerceIn(0.5f / z, 1f - 0.5f / z)
-        /** Zoomed by [factor] around [at] (a point of this view), and moved by [pan]. */
+        /**
+         * Zoomed by [factor] around [at] (a point of this view), and moved by [pan]. From the zoom as it is this moment, not as the last
+         * drawing had it: the fingers of a pinch move several times between two drawings, and each step builds on the one before.
+         */
         fun transform(at: Offset, pan: Offset, factor: Float) {
             val g = latestGeo
-            val nz = (g.zoom * factor).coerceIn(1f, MAX_MIRROR_ZOOM)
+            val z0 = zoom
+            val nz = (z0 * factor).coerceIn(1f, MAX_MIRROR_ZOOM)
             val ux = (at.x - g.left - g.drawW / 2) / g.drawW
             val uy = (at.y - g.top - g.drawH / 2) / g.drawH
-            val ncx = g.cx + ux / g.zoom - ux / nz - pan.x / (g.drawW * nz)
-            val ncy = g.cy + uy / g.zoom - uy / nz - pan.y / (g.drawH * nz)
+            val ncx = cx + ux / z0 - ux / nz - pan.x / (g.drawW * nz)
+            val ncy = cy + uy / z0 - uy / nz - pan.y / (g.drawH * nz)
             zoom = nz; cx = clampTo(ncx, nz); cy = clampTo(ncy, nz)
         }
 
@@ -136,9 +140,13 @@ internal fun MirrorPad(frame: KeyClient.MirrorFrame?, none: String?, sink: KeySi
             latestSink.mirror(true, constraints.maxWidth, null)
             onDispose { latestSink.mirror(false, 0, null) }
         }
+        // (The part last asked for: the first request, of all of it, went as the view came.)
+        var asked by remember { mutableStateOf<KeyLink.Crop?>(null) }
         LaunchedEffect(crop) {
+            if (crop == asked) return@LaunchedEffect
             delay(120)
             latestSink.mirror(true, constraints.maxWidth, crop)
+            asked = crop
         }
 
         var finger by remember { mutableStateOf<Offset?>(null) }

@@ -18,9 +18,11 @@ data class PlayerInfo(
     val pieceB: PieceStyle,
     /** "a" or "b" when a head-to-head game is being played by one of them. */
     val who: String?,
+    /** The others here this evening (1.10), for "who cracked it". */
+    val others: List<app.couch.alhasapa.results.CreditOther> = emptyList(),
 ) {
     companion object {
-        fun from(state: JSONObject, catalog: Catalog, pieces: PiecesConfig, day: String, who: String?): PlayerInfo {
+        fun from(state: JSONObject, catalog: Catalog, pieces: PiecesConfig, day: String, who: String?, evening: String = app.couch.alhasapa.data.Couple.evening()): PlayerInfo {
             val lib = catalog.games.filter { catalog.inLib(it, state) }
             val (a, b) = CouchState.names(state)
             return PlayerInfo(
@@ -30,6 +32,8 @@ data class PlayerInfo(
                 nameA = a, nameB = b,
                 pieceA = pieces.styleFor(state, "a"), pieceB = pieces.styleFor(state, "b"),
                 who = who,
+                others = app.couch.alhasapa.data.Couple.everyone(state, evening).filter { it.other }
+                    .map { app.couch.alhasapa.results.CreditOther(it.who, it.name, pieces.styleOf(it)) },
             )
         }
     }

@@ -142,9 +142,15 @@ interface KeySink {
     /** Who holds this phone and how they look (1.9.9): kept here and told to the TV. */
     fun saveMe(p: app.couch.alhasapa.data.Person) {}
 
-    /** A note for the other one: kept here until the TV has it. */
-    fun sendNote(game: String?, text: String, doodle: List<IntArray>) {}
+    /** A note for [to]: kept here until the TV has it. */
+    fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>) {}
+
+    /** One of the others removed (1.10): here, and on the TV and the other phones at the next connection. */
+    fun removePerson(who: String) {}
 }
+
+/** Who a note is for to begin with: the other of the two of us (for anyone else, the first of us). */
+fun noteFor(me: String?): String = if (me == "a") "b" else "a"
 
 /**
  * Keyboard mode, sideways: the whole phone is the TV app's keyboard (what is typed shows on the TV, not here). A thin strip on top holds
@@ -194,15 +200,18 @@ fun KeyboardModeScreen(
         var meOpen by rememberSaveable { mutableStateOf(false) }
         var noteOpen by rememberSaveable { mutableStateOf(false) }
         var askedWho by rememberSaveable { mutableStateOf(false) }
-        val couple = people.size == 2 && pieces != null
+        val couple = people.size >= 2 && pieces != null
+        val today = remember { app.couch.alhasapa.data.Couple.evening() }
         LaunchedEffect(connected != null, me, couple) { if (connected != null && couple && me == null && !askedWho) { askedWho = true; meOpen = true } }
-        if (meOpen && couple) IdentityDialog(people, me, pieces!!, onSave = { sink.saveMe(it); meOpen = false }, onDismiss = { meOpen = false })
+        if (meOpen && couple) IdentityDialog(
+            people, me, pieces!!, onSave = { sink.saveMe(it); meOpen = false }, onDismiss = { meOpen = false },
+            onRemove = { sink.removePerson(it); meOpen = false }, today = today,
+        )
         val mine = people.firstOrNull { it.who == me }
-        val other = people.firstOrNull { it.who != me }
-        if (noteOpen && couple && mine != null && other != null) NoteDialog(
-            toName = other.name, color = pieces!!.styleOf(mine).accent, games = noteGames,
-            initialGame = noteGames.firstOrNull { it.name == connected?.screen }?.id,
-            onSend = { game, text, doodle -> sink.sendNote(game, text, doodle); noteOpen = false }, onDismiss = { noteOpen = false },
+        if (noteOpen && couple && mine != null) NoteDialog(
+            recipients = people.filter { it.who != me }, initialTo = noteFor(me), pieces = pieces!!, color = pieces.styleOf(mine).accent,
+            games = noteGames, initialGame = noteGames.firstOrNull { it.name == connected?.screen }?.id,
+            onSend = { to, game, text, doodle -> sink.sendNote(to, game, text, doodle); noteOpen = false }, onDismiss = { noteOpen = false },
         )
         TopStrip(
             state, onGame, onLogins = { loginsOpen = true }, touch = if (connected != null) touchView else null, onTouch = { touchView = it },

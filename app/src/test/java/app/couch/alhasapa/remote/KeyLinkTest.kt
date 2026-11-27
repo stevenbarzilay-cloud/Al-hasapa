@@ -43,6 +43,14 @@ class KeyLinkTest {
             Msg.NoteMsg(app.couch.alhasapa.data.Note("n1", "a", "krillion", "כל הכבוד 🎉", listOf(intArrayOf(0, 0, 1000, 1000), intArrayOf(5, 5)), 99L)),
             Msg.NoteMsg(app.couch.alhasapa.data.Note("n2", "b", null, "", listOf(intArrayOf(1, 2)), 100L)),
             Msg.NoteOk("n1"),
+            // From 1.10: the others, and notes for anyone.
+            Msg.CoupleMsg("u1a2b3c4", listOf(
+                app.couch.alhasapa.data.Person("a", "סטיב", "", "", 1), app.couch.alhasapa.data.Person("b", "רוני", "", "", 1),
+                app.couch.alhasapa.data.Person("u1a2b3c4", "דני", "star", "green", 5),
+                app.couch.alhasapa.data.Person("u5d6e7f8", "מיה", "", "", 6, guest = true, day = "2026-11-27"),
+                app.couch.alhasapa.data.Person("u9a9a9a9", "", "", "", 7, removed = true),
+            )),
+            Msg.NoteMsg(app.couch.alhasapa.data.Note("n3", "u1a2b3c4", null, "לרוני", emptyList(), 5L, to = "b")),
         )
         for (m in all) {
             val line = KeyLink.encode(m)

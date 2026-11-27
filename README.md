@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.10.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.10.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -431,6 +431,28 @@ want to play on, starting with Krillion and NYT:
   - *A grey box behind one cushion*: Android puts its own focus on some button when a screen opens, which the remote never moves (the
     app takes the keys first), and drew its grey mark behind it. On the TV the app's buttons no longer wear Android's mark; the
     remote's focus (the red, a cushion's threads) is the only one (`tvTarget`, `TvPreviewTest.aCushionWithAndroidsOwnFocusLooksLikeAnyOther`).
+- **1.10: who holds the phone and the notes on the phone's home, and more of us: friends who come often and guests of the evening.**
+  From a remark on 1.9.10 (who holds the phone, and the notes, belong on the home, not only in keyboard mode):
+  - *On the phone's home*, beside our pieces at the top: a user's mark by the piece of whoever holds this phone ("מי אני?" until it
+    is said), which opens the same dialog keyboard mode has; and ✉️, which writes a note (with how many wait for the TV). On a phone
+    the play/keyboard switch now has a row of its own under them, with its whole name again, and the logo no longer squeezes on a
+    narrow phone (`tools/hub_modes_check.cjs` measures the header from 360 to 914 wide: everything fits, nothing overlaps).
+  - *Notes written away from the TV*: a note waits on the phone, and the next time the app comes to the front on the phone it
+    quietly reaches the TV it last knew, hands over what waits (notes, a changed look, someone added or removed), and lets go: at most
+    20 seconds, nothing on the screen, nothing when the TV is off (`PhoneSync`). Keyboard mode still hands them over at once. A note
+    can be for anyone here now, not only the other one of us: its sheet starts with who it is for.
+  - *More of us.* In the who-holds-it dialog, "+ משתמש" adds someone who comes often (kept until removed) and "+ אורח" a guest of the
+    evening (gone after it; the evening lasts till five in the morning, so a guest stays through a late game). Each has a name, a
+    shape and a colour; the colour marks their piece only and never changes the app's look. They are in "מי פיצח?" (on the phone's
+    home and on the result sheet, the TV's too), counted on the stats page, and named on the TV's notes; they can hold a phone, and
+    be removed from the same dialog (the removal travels to the other devices like any change). Every device keeps them and the
+    newest change wins, as for the two of us (`Couple.everyone`, `Couple.evening`, `couple.more` in `KeyLink`).
+  - Both apps must be updated together again (`TOGETHER_SINCE` 34).
+  - *Tried here:* the home's buttons in Chromium at five sizes, each opening its own dialog; a guest added from the home and saved as
+    the one holding the phone; a note written with the TV nowhere, kept on the phone, and delivered over a real socket when the app
+    came to the front, without keyboard mode; the others in "מי פיצח?" (the phone's home, the TV's sheet) and in the stats; a guest of
+    another evening left out; the evening's end at five; a removal travelling. **Not tried on the devices:** the quiet hand-over when
+    the app opens (how soon our Wi-Fi finds the box), and two phones held by a guest and one of us at once.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

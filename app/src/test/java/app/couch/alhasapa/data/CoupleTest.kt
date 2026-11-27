@@ -93,3 +93,58 @@ class CoupleTest {
         assertTrue(Notes.all(tv).any { it.id == "new" })
     }
 }
+
+/** The others (1.10): someone who comes often, kept until removed; a guest, for the evening they came only. */
+class OthersTest {
+    @Test
+    fun othersAndGuestsAreHereOnTheirEveningsAndARemovalTravels() {
+        val s = CouchState.empty()
+        val dani = Person(Couple.newId(), "דני", "star", "green", 10)
+        val maya = Person(Couple.newId(), "מיה", "", "", 11, guest = true, day = "2026-11-27")
+        assertTrue(Couple.isId(dani.who) && dani.other)
+        Couple.put(s, dani); Couple.put(s, maya)
+        assertEquals(listOf("סטיב", "רוני", "דני", "מיה"), Couple.everyone(s, "2026-11-27").map { it.name })
+        assertEquals("the guest is gone the next evening", listOf("סטיב", "רוני", "דני"), Couple.everyone(s, "2026-11-28").map { it.name })
+        assertEquals("but the devices still tell each other of them", 4, Couple.all(s).size)
+        // Removed: gone from the evening, kept as a mark that is newer than what any other device has.
+        Couple.remove(s, dani.who, now = 5)
+        assertFalse(Couple.everyone(s, "2026-11-27").any { it.who == dani.who })
+        val mark = Couple.others(s).first { it.who == dani.who }
+        assertTrue(mark.removed); assertEquals(11L, mark.at)
+        val tv = CouchState.empty()
+        Couple.offer(tv, dani)
+        assertTrue("the removal reaches a device that still has them", Couple.offer(tv, mark))
+        assertFalse(Couple.everyone(tv, "2026-11-27").any { it.who == dani.who })
+        assertFalse("an older word does not bring them back", Couple.offer(tv, dani))
+        // The two of us cannot be removed; someone unknown has an honest name.
+        Couple.remove(s, "a", now = 99)
+        assertEquals("סטיב", Couple.person(s, "a").name)
+        assertEquals("אורח", Couple.name(s, "u000000"))
+    }
+
+    @Test
+    fun theEveningLastsTillFiveInTheMorningSoAGuestStaysThroughALateGame() {
+        val at = { d: Int, h: Int, m: Int -> java.time.LocalDateTime.of(2026, 11, d, h, m) }
+        assertEquals("2026-11-27", Couple.evening(at(27, 21, 0)))
+        assertEquals("2026-11-27", Couple.evening(at(27, 23, 59)))
+        assertEquals("still the evening after midnight", "2026-11-27", Couple.evening(at(28, 0, 40)))
+        assertEquals("2026-11-27", Couple.evening(at(28, 4, 59)))
+        assertEquals("the next morning is the next evening's", "2026-11-28", Couple.evening(at(28, 5, 0)))
+        // A guest who came at ten is still here for the game after midnight, and gone by the next evening.
+        val s = CouchState.empty()
+        Couple.put(s, Person(Couple.newId(), "מיה", "", "", 11, guest = true, day = Couple.evening(at(27, 22, 0))))
+        assertTrue(Couple.everyone(s, Couple.evening(at(28, 1, 15))).any { it.name == "מיה" })
+        assertFalse(Couple.everyone(s, Couple.evening(at(28, 20, 0))).any { it.name == "מיה" })
+    }
+
+    @Test
+    fun aPersonFromTheNetworkMustBeOneOfOurs() {
+        assertNull(Person.fromJson("x1", org.json.JSONObject().put("name", "x")))
+        assertNull(Person.fromJson("uZZZZZZ", org.json.JSONObject().put("name", "x")))
+        assertFalse("the two of us are never guests", Person.fromJson("a", org.json.JSONObject().put("name", "x").put("guest", true))!!.guest)
+        assertTrue(Person.fromJson("u1234567", org.json.JSONObject().put("removed", true))!!.removed)
+        val n = Note.fromJson(org.json.JSONObject().put("id", "n").put("from", "u1234567").put("to", "a").put("text", "היי"))!!
+        assertEquals("a", n.to)
+        assertNull("not for the writer", Note.fromJson(org.json.JSONObject().put("id", "n").put("from", "a").put("to", "a").put("text", "x"))!!.to)
+    }
+}

@@ -29,9 +29,10 @@ class PiecesConfig private constructor(private val doc: JSONObject) {
     fun style(shape: String, color: String): PieceStyle =
         styleFor(JSONObject().put("pieces", JSONObject().put("a", JSONObject().put("shape", shape).put("color", color))), "a")
 
-    /** How [p] looks: their own choices, or their defaults. */
+    /** How [p] looks: their own choices, or their defaults (the others: a teal circle until they choose). */
     fun styleOf(p: Person): PieceStyle =
-        styleFor(JSONObject().put("pieces", JSONObject().put(p.who, JSONObject().put("shape", p.shape).put("color", p.color))), p.who)
+        if (p.other) style(p.shape.ifEmpty { "circle" }, p.color.ifEmpty { "teal" })
+        else styleFor(JSONObject().put("pieces", JSONObject().put(p.who, JSONObject().put("shape", p.shape).put("color", p.color))), p.who)
 
     /** [who] is "a" (the first person: red circle by default) or "b" (the second: pink triangle). */
     fun styleFor(state: JSONObject?, who: String): PieceStyle {

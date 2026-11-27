@@ -135,7 +135,7 @@ img{max-width:100%;height:auto;display:block}
 /* ---------- masthead ---------- */
 .mast .wrap{display:flex;align-items:center;gap:16px;padding-top:14px;padding-bottom:10px}
 .logo{margin:0;line-height:0}
-.logo img{height:64px;width:auto;aspect-ratio:900/444}
+.logo img{height:64px;width:auto;aspect-ratio:900/444;object-fit:contain;object-position:100% 50%}
 .mast .spacer{flex:1}
 /* On the phone: the switch between playing here and being the TV's keyboard. */
 .modes{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--tint);border:1px solid var(--line-2);flex:none}
@@ -144,10 +144,18 @@ img{max-width:100%;height:auto;display:block}
 .mode[aria-selected="true"]{background:var(--ink);color:var(--cream)}
 .mode svg{width:18px;height:18px;flex:none}
 @media (max-width:460px){.mode .long{display:none}.mode{padding:0 11px}}
+/* In a row of its own the switch has room for its whole name again. */
+@media (max-width:720px){.mast.people .mode .long{display:inline}}
 .mast .date{color:var(--ink-2);font-size:.9em;white-space:nowrap}
 .who{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:999px;padding:0 14px;min-height:44px;font-weight:500;font-size:.9em}
 .who:hover{background:var(--tint)}
 .who .gap{width:6px}
+/* Who holds this phone (a user's mark beside their piece), and a note for one of us: on a phone, in the app (1.10) */
+.me{display:flex;align-items:center;gap:5px;border:1px solid var(--line-2);border-radius:999px;padding:0 12px;min-height:44px;font-size:.9em;font-weight:500}
+.me:hover{background:var(--tint)}
+.me .user{width:18px;height:18px;flex:none}
+.me .cnt{font-size:.8em;background:var(--red);color:#F2EBDD;border-radius:999px;padding:0 6px;min-width:18px;text-align:center}
+.me[hidden]{display:none}
 
 /* ---------- pieces: Steve = red circle, Roni = pink triangle ---------- */
 .pc{display:inline-block;flex:none;width:16px;height:16px;vertical-align:-3px}
@@ -323,7 +331,15 @@ footer .joke{font-style:italic}
 @media (max-width:720px){
   .mast .wrap{padding-top:10px;padding-bottom:6px;gap:10px}
   .logo img{height:50px}
-  .mast .date,.who .nmz{display:none}
+  .mast .date,.who .nmz,.me .nmz{display:none}
+  /* With who holds the phone and the note beside our pieces, the switch gets a row of its own under them (1.10). */
+  .mast.people .wrap{flex-wrap:wrap;gap:6px 8px}
+  .mast.people .logo img{height:44px}
+  .mast.people .modes{order:5;flex:1 1 100%}
+  .mast.people .modes[hidden]{display:none}
+  .mast.people .mode{flex:1;justify-content:center;min-height:36px}
+  .mast.people .who{padding:0 11px}
+  .mast.people .me{padding:0 10px}
   .navbar{order:4;background:var(--cream);border-top:1px solid var(--line-2)}
   .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
   .navbar .wrap{padding:0 0 env(safe-area-inset-bottom);border:0}
@@ -426,6 +442,8 @@ footer .joke{font-style:italic}
     </div>
     <span class="date" id="date"></span>
     <button class="who" id="who" type="button" aria-label="מי על הספה, והבדיחות שלנו"></button>
+    <button class="me" id="me" type="button" hidden></button>
+    <button class="me" id="noteBtn" type="button" hidden aria-label="השארת פתק"></button>
   </div>
 </header>
 <nav class="navbar">
@@ -509,6 +527,8 @@ const pad=n=>String(n).padStart(2,"0");
 const key=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const daysAgo=n=>{const d=new Date();d.setHours(12,0,0,0);d.setDate(d.getDate()-n);return d};
 const TODAY=()=>key(new Date());
+/* The evening it is: till five in the morning still the evening before, so a guest stays through a late game (as in the app). */
+const EVENING=()=>{const d=new Date();if(d.getHours()<5)d.setDate(d.getDate()-1);return key(d)};
 const inLib=g=>state.prefs[g.id]?state.prefs[g.id]==="yes":!!g.lib;
 const playedOn=(id,k)=>!!(state.log[k]&&state.log[k][id]);
 const dayCount=k=>state.log[k]?Object.keys(state.log[k]).length:0;
@@ -643,7 +663,12 @@ function duelWinner(e,kind){
 const fmtVal=(kind,r)=>!r?"":r.fail?"לא נפתר":kind==="time"?fmtT(r.v):kind==="guesses"||(kind==="score"&&r.max)?(r.v+(r.max?"/"+r.max:"")):r.v+" "+KIND_LABEL[kind];
 
 /* ================= helpers ================= */
-const nm=w=>w==="a"?state.names.a:state.names.b;
+/* The others (1.10): someone who comes often, or a guest of this evening; their colour marks them and nothing else. */
+const others=()=>Object.entries(state.people||{}).filter(([id,p])=>p&&!p.removed&&p.name&&(!p.guest||p.day===EVENING())).map(([id,p])=>({id,...p}))
+  .sort((x,y)=>(!!x.guest-!!y.guest)||String(x.name).localeCompare(String(y.name),"he"));
+const otherPiece=(p,c="pc")=>svgPiece(shapeOf(p.shape||"circle").d,colorOf(p.color||"teal").base,c);
+const pieceOfId=(w,c="pc")=>w==="a"?pcS(c):w==="b"?pcR(c):(state.people&&state.people[w]?otherPiece(state.people[w],c):"");
+const nm=w=>w==="a"?state.names.a:w==="b"?state.names.b:((state.people&&state.people[w]&&state.people[w].name)||"אורח");
 const hash=s=>{let h=0;for(const c of s)h=(h*31+c.charCodeAt(0))|0;return Math.abs(h)};
 let featOffset=0;
 function featured(){const pool=GAMES.filter(g=>inLib(g)&&!isDuel(g)&&!playedOn(g.id,TODAY()));return pool.length?pool[(hash(TODAY())+featOffset)%pool.length]:null}
@@ -656,6 +681,22 @@ const ordinal=n=>["","ראשון","שני","שלישי","רביעי","חמישי
 function renderMast(){
   document.getElementById("date").textContent=new Date().toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"});
   document.getElementById("who").innerHTML=`${PIECE.s}<span class="nmz">${esc(state.names.a)}</span><span class="gap"></span>${PIECE.r}<span class="nmz">${esc(state.names.b)}</span>`;
+  // On a phone, in the app: who holds it (a user's mark by their piece; "מי אני?" until it is said), and a note for one of us.
+  const meBtn=document.getElementById("me"), noteBtn=document.getElementById("noteBtn");
+  const canMe=!!(NATIVE&&NATIVE.openMe&&NATIVE.me), canNote=!!(NATIVE&&NATIVE.openNote);
+  meBtn.hidden=!canMe; noteBtn.hidden=!canNote;
+  document.querySelector(".mast").classList.toggle("people",canMe||canNote);
+  if(canMe){
+    let me=""; try{me=String(NATIVE.me()||"")}catch(e){}
+    const USER='<svg class="user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
+    meBtn.innerHTML=me?`${USER}${pieceOfId(me)}<span class="nmz">${esc(nm(me))}</span>`:`${USER}<span>מי אני?</span>`;
+    meBtn.setAttribute("aria-label",me?`אני: ${nm(me)}. להחלפה, לשינוי, או להוספת משתמש או אורח`:"מי מחזיק את הטלפון הזה?");
+  }
+  if(canNote){
+    let n=0; try{n=Number(NATIVE.notesWaiting&&NATIVE.notesWaiting())||0}catch(e){}
+    noteBtn.innerHTML=`✉️${n?`<span class="cnt">${n}</span>`:""}`;
+    noteBtn.setAttribute("aria-label",n?`השארת פתק. ${n} מחכים לטלוויזיה`:"השארת פתק");
+  }
   document.getElementById("footnote").textContent=noteOfDay();
 }
 
@@ -664,6 +705,7 @@ function crackHTML(g,w){
   return `<span class="win" role="group" aria-label="מי פיצח את ${esc(g.n)}"><span class="q">מי פיצח?</span>
       <button data-act="win" data-w="a" aria-pressed="${w==="a"}" aria-label="${esc(state.names.a)}" title="${esc(state.names.a)}">${PIECE.s}</button>
       <button data-act="win" data-w="b" aria-pressed="${w==="b"}" aria-label="${esc(state.names.b)}" title="${esc(state.names.b)}">${PIECE.r}</button>
+      ${others().map(p=>`<button data-act="win" data-w="${esc(p.id)}" aria-pressed="${w===p.id}" aria-label="${esc(p.name)}" title="${esc(p.name)}">${otherPiece(p)}</button>`).join("")}
       <button data-act="win" data-w="t" aria-pressed="${w==="t"}" aria-label="ביחד" title="ביחד">${bothHTML()}</button></span>`;
 }
 function rowHTML(g){
@@ -760,12 +802,12 @@ function renderDisc(){
 
 /* ================= the dent in the couch ================= */
 function renderStats(){
-  let ca=0,cb=0,ct=0,total=0,teamPts=0,da=0,db_=0,dt=0; const per={}, best={}, duels=[];
+  let ca=0,cb=0,ct=0,total=0,teamPts=0,da=0,db_=0,dt=0; const per={}, best={}, duels=[], co={};
   for(const k of Object.keys(state.log).sort()) for(const id in state.log[k]){
     const g=byId[id], e=state.log[k][id]; total++; per[id]=(per[id]||0)+1;
     if(g&&isDuel(g)){const w=duelWinner(e,metricOf(g)); if(w==="a")da++; else if(w==="b")db_++; else if(w==="t")dt++; if(w) duels.push({k,g,e,w}); continue}
     teamPts+=entryPts(id,e,k);
-    if(e.w==="a")ca++; else if(e.w==="b")cb++; else if(e.w==="t")ct++;
+    if(e.w==="a")ca++; else if(e.w==="b")cb++; else if(e.w==="t")ct++; else if(e.w) co[e.w]=(co[e.w]||0)+1;
     if(e.r&&!e.r.fail&&g){const kind=e.r.kind; const cur=best[id]; if(!cur||e.r.v<cur.v) best[id]={v:e.r.v,kind,r:e.r}}
   }
   let best_=0,run=0; const ks=Object.keys(state.log).filter(k=>dayCount(k)).sort();
@@ -774,7 +816,8 @@ function renderStats(){
   const weekPts=bars.reduce((s,b)=>s+b.p,0);
   const shade=c=>!c?"":c<3?"var(--pink)":c<6?"var(--red)":"#30232D";
   let heat=""; for(let i=104;i>=0;i--){const c=dayCount(key(daysAgo(i)));heat+=`<i title="${key(daysAgo(i))}: ${c}"${c?` style="background:${shade(c)};border-color:transparent"`:""}></i>`}
-  const csum=Math.max(1,ca+cb+ct), dsum=Math.max(1,da+db_+dt);
+  const coSum=Object.values(co).reduce((x,y)=>x+y,0), csum=Math.max(1,ca+cb+ct+coSum), dsum=Math.max(1,da+db_+dt);
+  const coHTML=Object.entries(co).map(([w,n])=>`<div>${pieceOfId(w)||""}<b>${n}</b><span>${esc(nm(w))}</span></div>`).join("");
   const lead=da===db_?"שוויון. כרגיל.":(da>db_?state.names.a:state.names.b)+" מוביל. בינתיים.";
   const bestList=Object.entries(best).filter(([id])=>byId[id]).slice(0,8);
   document.getElementById("v-stats").innerHTML=`<div class="stats">
@@ -784,7 +827,7 @@ function renderStats(){
       <div class="week">${bars.map(b=>`<div class="b ${b.p?"has":""} ${b.i===0?"today":""}"><em>${b.p||""}</em><i style="height:${Math.max(4,b.p/max*80)}px"></i><small>${b.d.toLocaleDateString("he-IL",{weekday:"short"})}</small></div>`).join("")}</div>
       <p class="help" style="margin:8px 0 0">${weekPts} נקודות השבוע</p></div>
     <div class="panel"><h3>מי פיצח</h3>
-      <div class="crack"><div>${PIECE.s}<b>${ca}</b><span>${esc(state.names.a)}</span></div><div>${bothHTML()}<b>${ct}</b><span>ביחד</span></div><div>${PIECE.r}<b>${cb}</b><span>${esc(state.names.b)}</span></div></div>
+      <div class="crack"><div>${PIECE.s}<b>${ca}</b><span>${esc(state.names.a)}</span></div><div>${bothHTML()}<b>${ct}</b><span>ביחד</span></div><div>${PIECE.r}<b>${cb}</b><span>${esc(state.names.b)}</span></div>${coHTML}</div>
       <div class="sbar" aria-hidden="true"><i style="width:${ca/csum*100}%;background:var(--red)"></i><i style="width:${ct/csum*100}%;background:var(--ink-2)"></i><i style="width:${cb/csum*100}%;background:var(--pink)"></i></div>
       <p class="help" style="margin:8px 0 0">קרדיט, לא תחרות. אף אחד לא מפסיד פה.</p></div>
     <div class="score-wrap">
@@ -986,6 +1029,8 @@ function openDuel(id){
     const w=duelWinner(state.log[t][id],kind); toast(w?(w==="t"?"תיקו. נדיר.":nm(w)+" לקח את "+g.n+"."):"נשמר. מחכים לצד השני.");};
   const c=document.getElementById("clearD"); if(c) c.onclick=()=>{delete state.log[t][id]; if(!Object.keys(state.log[t]).length) delete state.log[t]; save();closeSheet();render()};
 }
+document.getElementById("me").addEventListener("click",()=>{if(NATIVE&&NATIVE.openMe)NATIVE.openMe()});
+document.getElementById("noteBtn").addEventListener("click",()=>{if(NATIVE&&NATIVE.openNote)NATIVE.openNote()});
 document.getElementById("who").addEventListener("click",()=>{
   const before=state.pieces?JSON.stringify(state.pieces):null; let saved=false;
   const cur=()=>{if(!state.pieces||!state.pieces.a||!state.pieces.b) state.pieces=JSON.parse(JSON.stringify(PCFG.defaults)); return state.pieces};
@@ -1062,7 +1107,7 @@ document.querySelector("main").addEventListener("click",e=>{
   } else if(act==="win"){
     const cur=state.log[t]&&state.log[t][id]; if(!cur) return;
     cur.w=cur.w===a.dataset.w?"":a.dataset.w; cur.t=Date.now(); save(); render();
-    if(cur.w) toast(cur.w==="t"?"פיצחנו ביחד.":nm(cur.w)+" פיצח את "+byId[id].n+".");
+    if(cur.w) toast(cur.w==="t"?"פיצחנו ביחד.":cur.w==="a"||cur.w==="b"?nm(cur.w)+" פיצח את "+byId[id].n+".":byId[id].n+" פוצח. כל הכבוד, "+nm(cur.w)+"!");
   } else if(act==="remove"){state.prefs[id]="no"; save(); render(); toast(byId[id].n+" ירד מהספה.")}
   else if(act==="restore"){delete state.prefs[id]; save(); render(); toast(byId[id].n+" חזר מתחת לכריות.")}
   else if(act==="yes"||act==="no"||act==="later"){state.prefs[id]=act; save(); render(); toast(act==="yes"?byId[id].n+" נוסף לערב.":act==="no"?"דילגנו.":"נשמר להמשך.")}

@@ -39,6 +39,12 @@ class HubBridge(
 
         /** Open keyboard mode: the phone becomes the TV app's keyboard. */
         fun openKeyboardMode() {}
+
+        /** Who holds this phone (1.10): choose, change, add someone, add a guest. */
+        fun openMe() {}
+
+        /** A note for one of us, written here (sent to the TV when it is reached). */
+        fun openNote() {}
     }
 
     /** `{rev, fresh, state}`: `fresh` is true on the very first run, when the page may bring over what it stored itself. */
@@ -75,6 +81,28 @@ class HubBridge(
 
     @JavascriptInterface
     fun openKeyboardMode() { if (!TvMode.isTelevision(context)) actions.openKeyboardMode() }
+
+    /**
+     * Who holds this phone ("a", "b", one of the others' ids), or "" when it was never said, or on a TV (1.10). A guest whose evening is
+     * over, or someone removed, holds it no longer: the home asks again.
+     */
+    @JavascriptInterface
+    fun me(): String {
+        if (TvMode.isTelevision(context)) return ""
+        val me = app.couch.alhasapa.remote.RemoteStore(context).me ?: return ""
+        val here = app.couch.alhasapa.data.Couple.everyone(repo.snapshot(), app.couch.alhasapa.data.Couple.evening()).any { it.who == me }
+        return if (here) me else ""
+    }
+
+    @JavascriptInterface
+    fun openMe() { if (!TvMode.isTelevision(context)) actions.openMe() }
+
+    @JavascriptInterface
+    fun openNote() { if (!TvMode.isTelevision(context)) actions.openNote() }
+
+    /** How many notes written on this phone wait for the TV. */
+    @JavascriptInterface
+    fun notesWaiting(): String = if (TvMode.isTelevision(context)) "0" else app.couch.alhasapa.remote.RemoteStore(context).pendingNotes().size.toString()
 
     /** What the settings page shows about the app: versions, device, how long the last start took, and the last crash if there was one. */
     @JavascriptInterface

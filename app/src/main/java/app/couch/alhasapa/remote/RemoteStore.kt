@@ -64,10 +64,15 @@ class RemoteStore(context: Context) {
         get() = prefs.getString("last_address", null)
         set(value) { prefs.edit { putString("last_address", value) } }
 
-    /** Which of us holds this phone ("a", "b"), once said (1.9.9); null until then. */
+    /** Which of us holds this phone ("a", "b", or one of the others since 1.10), once said (1.9.9); null until then. */
     var me: String?
-        get() = prefs.getString("me", null)?.takeIf { it in app.couch.alhasapa.data.Couple.WHO }
+        get() = prefs.getString("me", null)?.takeIf { app.couch.alhasapa.data.Couple.isId(it) }
         set(value) { prefs.edit { if (value == null) remove("me") else putString("me", value) } }
+
+    /** The newest change to how any of us looks that the TV has been told of (see PhoneSync). */
+    var syncedAt: Long
+        get() = prefs.getLong("synced_at", 0L)
+        set(value) { prefs.edit { putLong("synced_at", value) } }
 
     /** The notes written on this phone that the TV has not said it keeps yet (they go again at the next connection). */
     fun pendingNotes(): List<app.couch.alhasapa.data.Note> {

@@ -51,8 +51,11 @@ data class NoteView(val note: Note, val fromName: String, val toName: String, va
     companion object {
         fun of(n: Note, state: org.json.JSONObject, pieces: app.couch.alhasapa.data.PiecesConfig, catalog: app.couch.alhasapa.catalog.Catalog): NoteView {
             val from = app.couch.alhasapa.data.Couple.person(state, n.from)
-            val to = app.couch.alhasapa.data.Couple.person(state, if (n.from == "a") "b" else "a")
-            return NoteView(n, from.name, to.name, pieces.styleOf(from), n.game?.let { catalog.game(it)?.n })
+            val to = n.to ?: if (n.from == "a") "b" else "a"
+            return NoteView(
+                n, app.couch.alhasapa.data.Couple.name(state, n.from), app.couch.alhasapa.data.Couple.name(state, to),
+                pieces.styleOf(from), n.game?.let { catalog.game(it)?.n },
+            )
         }
     }
 }

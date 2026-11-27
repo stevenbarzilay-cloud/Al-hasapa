@@ -157,4 +157,22 @@ class HubBridgeTest {
         if (app.couch.alhasapa.BuildConfig.TV) { assertEquals("no", b.keyboardMode()); assertEquals("the TV is the one being typed into", 0, opened) }
         else { assertEquals("yes", b.keyboardMode()); assertEquals(1, opened) }
     }
+
+    /** 1.10: who holds the phone, as the home shows it; a guest holds it for their evening only. */
+    @Test
+    fun aGuestHoldsThePhoneForTheirEveningOnly() {
+        val store = app.couch.alhasapa.remote.RemoteStore(context)
+        try {
+            repo.update { st ->
+                app.couch.alhasapa.data.Couple.put(st, app.couch.alhasapa.data.Person("u5d6e7f8", "מיה", "", "", 5, guest = true, day = app.couch.alhasapa.data.Couple.evening()))
+                app.couch.alhasapa.data.Couple.put(st, app.couch.alhasapa.data.Person("u9a9a9a9", "של אתמול", "", "", 6, guest = true, day = "2001-01-01"))
+            }
+            store.me = "u5d6e7f8"
+            assertEquals(if (app.couch.alhasapa.BuildConfig.TV) "" else "u5d6e7f8", bridge.me())
+            store.me = "u9a9a9a9"
+            assertEquals("a guest of another evening holds it no longer: the home asks again", "", bridge.me())
+            store.me = "b"
+            assertEquals(if (app.couch.alhasapa.BuildConfig.TV) "" else "b", bridge.me())
+        } finally { store.me = null }
+    }
 }

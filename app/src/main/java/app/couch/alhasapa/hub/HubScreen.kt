@@ -98,6 +98,8 @@ fun HubScreen(
     onExit: () -> Unit,
     reduceMotion: Boolean = false,
     bridge: HubBridge? = null,
+    /** Raised when something over the page changed the state (the phone's who-am-I or a note, 1.10): the page reads it again. */
+    reloads: Int = 0,
     onReady: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -172,6 +174,7 @@ fun HubScreen(
         val view = webView
         if (view == null) onExit() else closeSheetOrExit(view, onExit)
     }
+    LaunchedEffect(reloads) { if (reloads > 0) webView?.evaluateJavascript("window.__reloadState && window.__reloadState()", null) }
     LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { webView?.onPause() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         webView?.let { v ->

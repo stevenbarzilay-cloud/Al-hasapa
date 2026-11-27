@@ -14,7 +14,7 @@ const server = http.createServer((req, res) => {
   res.writeHead(200, { 'content-type': MIME[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
 });
 
-const MOCK = ({ catalog, kb }) => {
+const MOCK = ({ catalog, kb, people }) => {
   let rev = 0, st = null; window.__calls = [];
   window.couchNative = {
     loadState() { return JSON.stringify({ rev, fresh: st === null, state: st }) },
@@ -24,15 +24,19 @@ const MOCK = ({ catalog, kb }) => {
     exportBackup() { return '{}' }, copyText() { return 'ok' }, importBackup() { return '{}' }, diagnostics() { return '' },
     keyboardMode() { return kb }, openKeyboardMode() { window.__calls.push('keyboard') },
   };
+  // 1.10: who holds the phone, and the note button, beside our pieces.
+  if (people) Object.assign(window.couchNative, {
+    me() { return 'b' }, openMe() { window.__calls.push('me') }, openNote() { window.__calls.push('note') }, notesWaiting() { return '2' },
+  });
 };
 
 server.listen(0, '127.0.0.1', async () => {
   const port = server.address().port;
   const catalog = fs.readFileSync(path.join(ROOT, 'games.json'), 'utf8');
   const browser = await chromium.launch();
-  const open = async (kb, query, size) => {
+  const open = async (kb, query, size, people = false) => {
     const ctx = await browser.newContext({ viewport: size, locale: 'he-IL', deviceScaleFactor: 2 });
-    if (kb !== null) await ctx.addInitScript(MOCK, { catalog, kb });
+    if (kb !== null) await ctx.addInitScript(MOCK, { catalog, kb, people });
     const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(String(e)));
     await page.goto(`http://127.0.0.1:${port}/hub/index.html${query}`); await page.waitForTimeout(700);
     return { page, errs, ctx };
@@ -48,6 +52,32 @@ server.listen(0, '127.0.0.1', async () => {
     ok(sel[0] === 'true' && sel[1] === 'false', 'playing on the phone is the mode it is in');
     await page.click('#modes [data-act="kbmode"]'); await page.waitForTimeout(100);
     ok((await page.evaluate(() => window.__calls)).includes('keyboard'), 'the keyboard side opens keyboard mode');
+    ok(await page.evaluate(() => ['me', 'noteBtn'].every(id => getComputedStyle(document.getElementById(id)).display === 'none')),
+      'without who-holds-it in the app, no empty buttons in the header');
+    ok(errs.length === 0, 'no JavaScript errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+    await ctx.close();
+  }
+
+  // 1.10: who holds the phone and the note button beside our pieces; everything in the header fits, nothing overlaps, the logo keeps its shape.
+  for (const size of [{ width: 360, height: 760 }, { width: 393, height: 873 }, { width: 411, height: 914 }, { width: 914, height: 411 }]) {
+    const { page, errs, ctx } = await open('yes', '', size, true);
+    const m = await page.evaluate(() => {
+      const box = s => { const r = document.querySelector(s).getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: r.width, h: r.height }; };
+      const parts = { modes: box('#modes'), who: box('#who'), me: box('#me'), note: box('#noteBtn'), logo: box('.logo img') };
+      return { parts, w: innerWidth, sw: document.documentElement.scrollWidth, mast: box('.mast').h,
+        me: document.getElementById('me').innerHTML, note: document.getElementById('noteBtn').textContent };
+    });
+    const tag = `${size.width}x${size.height}`, P = Object.entries(m.parts);
+    ok(P.every(([, b]) => b.w > 0 && b.l >= 0 && b.r <= m.w) && m.sw <= m.w, `${tag}: logo, switch, pieces, who holds it and the note all fit the width`);
+    const over = []; for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const [na, a] = P[i], [nb, b] = P[j]; if (a.l < b.r - 1 && b.l < a.r - 1 && a.t < b.b - 1 && b.t < a.b - 1) over.push(na + '/' + nb); }
+    ok(over.length === 0, `${tag}: nothing in the header overlaps` + (over.length ? ': ' + over.join(', ') : ''));
+    ok(Math.abs(m.parts.logo.w / m.parts.logo.h - 900 / 444) < 0.08, `${tag}: the logo keeps its shape (${(m.parts.logo.w / m.parts.logo.h).toFixed(2)})`);
+    ok(m.mast <= 120, `${tag}: the header stays low (${Math.round(m.mast)}px)`);
+    ok(m.me.includes('class="user"') && m.me.includes('<svg') && m.note.includes('2'), `${tag}: a user's mark beside the piece, and the notes waiting`);
+    await page.click('#me'); await page.click('#noteBtn'); await page.click('#modes [data-act="kbmode"]'); await page.waitForTimeout(100);
+    const calls = await page.evaluate(() => window.__calls);
+    ok(['me', 'note', 'keyboard'].every(c => calls.includes(c)), `${tag}: who holds it, the note and the switch each open their own`);
     ok(errs.length === 0, 'no JavaScript errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
     await ctx.close();
   }

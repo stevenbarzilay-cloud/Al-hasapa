@@ -64,7 +64,7 @@ class KeyboardModeScreenTest {
         override fun frameShown(n: Int) { sent += "shown:$n" }
         override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) { sent += "touch:${a.name.lowercase()}"; touches += Offset(x, y) }
         override fun saveMe(p: app.couch.alhasapa.data.Person) { sent += "me:${p.who}:${p.name}:${p.shape}:${p.color}" }
-        override fun sendNote(game: String?, text: String, doodle: List<IntArray>) { sent += "note:$game:$text:${doodle.size}" }
+        override fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>) { sent += "note:$to:$game:$text:${doodle.size}" }
     }
     private val pieces = app.couch.alhasapa.data.PiecesConfig.parse(java.io.File("src/main/assets/hub/pieces.json").readText())
     private val people = listOf(app.couch.alhasapa.data.Person("a", "סטיב", "", "", 0), app.couch.alhasapa.data.Person("b", "רוני", "", "", 0))
@@ -141,7 +141,7 @@ class KeyboardModeScreenTest {
         rule.onNodeWithTag(MIRROR_TAG).performTouchInput {
             pinch(center - Offset(40f, 0f), center - Offset(160f, 0f), center + Offset(40f, 0f), center + Offset(160f, 0f))
         }
-        rule.mainClock.advanceTimeBy(300); rule.waitForIdle()
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(300); rule.waitForIdle()
         assertTrue("no touch on the game: $sent", sent.none { it.startsWith("touch:") })
         assertTrue("a part of the page asked for: $sent", sent.any { it == "mirror:true:w:part" })
         val zoomed = lastCrop!!
@@ -202,7 +202,7 @@ class KeyboardModeScreenTest {
         rule.onNodeWithTag(DOODLE_TAG).performTouchInput { down(Offset(20f, 20f)); moveBy(Offset(60f, 10f)); moveBy(Offset(40f, 40f)); up() }
         rule.onNodeWithText("שליחה לטלוויזיה").performClick()
         // The game on the TV is the one it waits for, unless another is chosen; one stroke drawn.
-        assertEquals(listOf("note:krillion:כל הכבוד לנו:1"), sent.filter { it.startsWith("note:") })
+        assertEquals(listOf("note:b:krillion:כל הכבוד לנו:1"), sent.filter { it.startsWith("note:") })
     }
 
     @Test

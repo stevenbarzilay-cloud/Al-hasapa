@@ -46,6 +46,15 @@ import app.couch.alhasapa.ui.theme.AlHasapaTheme
 import app.couch.alhasapa.tv.NoteCard
 import app.couch.alhasapa.tv.NoteView
 import app.couch.alhasapa.data.Notes
+import app.couch.alhasapa.tv.TvMode
+import app.couch.alhasapa.keyboard.noteFor
+import app.couch.alhasapa.keyboard.NoteGame
+import app.couch.alhasapa.keyboard.NoteDialog
+import app.couch.alhasapa.keyboard.IdentityDialog
+import app.couch.alhasapa.data.Note
+import app.couch.alhasapa.data.Couple
+import app.couch.alhasapa.remote.PhoneSync
+import app.couch.alhasapa.remote.RemoteStore
 
 class MainActivity : ComponentActivity() {
     private lateinit var tv: TvHost
@@ -53,6 +62,14 @@ class MainActivity : ComponentActivity() {
 
     /** The head-to-head game waiting for "who plays?" to be answered. */
     private var whoPlaysFor by mutableStateOf<String?>(null)
+
+    /** On a phone (1.10): the who-am-I and note dialogs over the home, and a nudge for the hub to read the state again after them. */
+    private var meOpen by mutableStateOf(false)
+    private var noteOpen by mutableStateOf(false)
+    private var hubReloads by androidx.compose.runtime.mutableIntStateOf(0)
+
+    /** Notes and changes waiting for the TV are handed over when the app comes to the front (see PhoneSync). */
+    private val phoneSync by lazy { PhoneSync(this, onDone = { hubReloads++ }) }
 
     /** On a TV: the full web hub, opened from the native home ("הגדרות ועוד"); Back from it returns to the home. */
     private var webHub by mutableStateOf(false)
@@ -85,6 +102,71 @@ class MainActivity : ComponentActivity() {
 
         override fun openKeyboardMode() {
             runOnUiThread { startActivity(Intent(this@MainActivity, KeyboardModeActivity::class.java)) }
+        }
+
+        override fun openMe() { runOnUiThread { meOpen = true } }
+
+        // A note needs a writer: who holds the phone is asked first when it is not known.
+        override fun openNote() { runOnUiThread { if (RemoteStore(this@MainActivity).me == null) meOpen = true else noteOpen = true } }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        if (!TvMode.isTelevision(this)) phoneSync.start()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        phoneSync.stop()
+    }
+
+    /**
+     * Who holds this phone, and a note for one of us (1.10), over the phone's home: the same dialogs keyboard mode has. A change is kept
+     * here at once, and handed to the TV now if it can be reached, or the next time the app comes to the front (PhoneSync).
+     */
+    @androidx.compose.runtime.Composable
+    private fun PhoneHomeDialogs(couch: CouchApp, pieces: PiecesConfig) {
+        val store = RemoteStore(this)
+        val day = Couple.evening()
+        if (meOpen) {
+            val people = Couple.everyone(couch.repo.snapshot(), day)
+            IdentityDialog(
+                people, store.me, pieces, today = day,
+                onSave = { p ->
+                    store.me = p.who
+                    couch.repo.update { Couple.put(it, p) }
+                    meOpen = false; hubReloads++
+                    Flight.log("me: this phone is held by ${if (p.who in Couple.WHO) "one of the two of us" else if (p.guest) "a guest" else "someone else"}")
+                    phoneSync.start()
+                },
+                onRemove = { w ->
+                    couch.repo.update { Couple.remove(it, w, System.currentTimeMillis()) }
+                    if (store.me == w) store.me = null
+                    meOpen = false; hubReloads++
+                    phoneSync.start()
+                },
+                onDismiss = { meOpen = false },
+            )
+        }
+        if (noteOpen) {
+            val me = store.me
+            val state = couch.repo.snapshot()
+            val people = Couple.everyone(state, day)
+            val mine = people.firstOrNull { it.who == me }
+            if (mine == null) { noteOpen = false; meOpen = true; return }
+            val games = couch.catalog.games.filter { couch.catalog.inLib(it, state) }.map { NoteGame(it.id, it.n) }
+            NoteDialog(
+                recipients = people.filter { it.who != me }, initialTo = noteFor(me), pieces = pieces,
+                color = pieces.styleOf(mine).accent, games = games, initialGame = null,
+                onSend = { to, game, text, doodle ->
+                    store.keepNote(Note(RemoteStore.randomHex(8), mine.who, game, text, doodle, System.currentTimeMillis(), to = to))
+                    noteOpen = false; hubReloads++
+                    android.widget.Toast.makeText(this, R.string.note_kept, android.widget.Toast.LENGTH_LONG).show()
+                    Flight.log("notes: one written on the home${if (game != null) " for a game" else ""}; it goes to the TV when it is reached")
+                    phoneSync.start()
+                },
+                onDismiss = { noteOpen = false },
+            )
         }
     }
 
@@ -169,9 +251,10 @@ class MainActivity : ComponentActivity() {
                     // back to the home.
                     AppRoot(
                         playSplash = if (tv.enabled) true else playSplash, reduceMotion = reduceMotion,
-                        onExit = { if (tv.enabled) webHub = false else finish() }, bridge = bridge,
+                        onExit = { if (tv.enabled) webHub = false else finish() }, bridge = bridge, reloads = hubReloads,
                     )
                 }
+                if (!tv.enabled) PhoneHomeDialogs(app, pieces)
                 whoPlaysFor?.let { id ->
                     val game = app.catalog.game(id)
                     if (game != null) {

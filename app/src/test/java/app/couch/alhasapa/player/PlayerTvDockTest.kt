@@ -28,6 +28,8 @@ import org.robolectric.annotation.Config
 import app.couch.alhasapa.tv.NOTE_OK_ID
 import app.couch.alhasapa.data.Notes
 import app.couch.alhasapa.data.Note
+import app.couch.alhasapa.data.Person
+import app.couch.alhasapa.data.Couple
 
 /** The game's frame on a television: ONE dock at the left edge (clock, score, zoom, shape, frame, paw, keyboard, menu, back, result, "we played"). */
 @RunWith(AndroidJUnit4::class)
@@ -200,6 +202,26 @@ class PlayerTvDockTest {
         rule.onNodeWithText("ידעתי שתנצחו את הדגים").assertDoesNotExist()
         assertTrue(Notes.all(app.repo.snapshot()).single().seen > 0)
         app.repo.update { st -> st.remove("notes") }
+    }
+
+    @Test
+    fun aGuestOfTheEveningCanBeTheOneWhoCrackedIt() {
+        val day = CouchState.dayKey(LocalDate.now())
+        app.repo.update { st ->
+            Couple.put(st, Person("u5d6e7f8", "מיה", "heart", "mustard", 5, guest = true, day = Couple.evening()))
+            Couple.put(st, Person("u9a9a9a9", "של אתמול", "", "", 6, guest = true, day = "2001-01-01"))
+        }
+        launch("catfishing")
+        button(str(R.string.player_result)).performClick()
+        rule.mainClock.advanceTimeBy(2_000); rule.waitForIdle()
+        button("מיה").assertIsDisplayed()
+        button("של אתמול").assertDoesNotExist()
+        button("מיה").performClick()
+        scenario!!.onActivity { it.remote.remoteInput(TypedKeys.deliveries("7/10")) }
+        scenario!!.onActivity { it.remote.remoteInput(listOf(Delivery.Code(android.view.KeyEvent.KEYCODE_ENTER))) }
+        rule.waitForIdle()
+        org.junit.Assert.assertEquals("u5d6e7f8", CouchState.entry(app.repo.snapshot(), day, "catfishing")!!.getString("w"))
+        app.repo.update { st -> st.remove("people") }
     }
 
     @Test

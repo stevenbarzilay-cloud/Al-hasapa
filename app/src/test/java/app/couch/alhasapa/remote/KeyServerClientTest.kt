@@ -34,7 +34,7 @@ class KeyServerClientTest {
     private class Book(vararg people: app.couch.alhasapa.data.Person) : CoupleBook {
         val state: org.json.JSONObject = app.couch.alhasapa.data.CouchState.empty().also { s -> people.forEach { app.couch.alhasapa.data.Couple.put(s, it) } }
         val notes = CopyOnWriteArrayList<app.couch.alhasapa.data.Note>()
-        @Synchronized override fun couple() = app.couch.alhasapa.data.Couple.WHO.map { app.couch.alhasapa.data.Couple.person(state, it) }
+        @Synchronized override fun couple() = app.couch.alhasapa.data.Couple.all(state)
         @Synchronized override fun offer(people: List<app.couch.alhasapa.data.Person>) = people.map { app.couch.alhasapa.data.Couple.offer(state, it) }.any { it }
         override fun note(n: app.couch.alhasapa.data.Note): Boolean = if (notes.any { it.id == n.id }) false else { notes += n; true }
     }
@@ -182,6 +182,35 @@ class KeyServerClientTest {
     }
 
     @Test
+    fun aNoteWrittenOnThePhonesHomeReachesTheTvWhenTheAppNextOpensWithoutKeyboardMode() {
+        // A phone that has met the TV before (it knows where it is and is paired), now away from keyboard mode. (Android 17 asks the
+        // person once to let the app reach devices at home; here it was allowed.)
+        org.robolectric.Shadows.shadowOf(context as android.app.Application).grantPermissions(PhoneSync.LOCAL_NETWORK)
+        val first = paired(Book())
+        first.stop()
+        waitFor("the phone left") { server.ui.value.phones.isEmpty() }
+        val store = RemoteStore(context)
+        store.me = "u1a2b3c4"
+        store.pendingNotes().forEach { store.noteKept(it.id) }
+        store.keepNote(app.couch.alhasapa.data.Note("h1", "u1a2b3c4", null, "ערב טוב לכולם", emptyList(), 1_000, to = "a"))
+        val guest = app.couch.alhasapa.data.Person("u1a2b3c4", "דני", "star", "green", 500)
+        val phoneBook = Book(guest)
+        var done = 0
+        val sync = PhoneSync(context, newClient = {
+            KeyClient(context, phoneName = "Pixel 8", find = { "127.0.0.1:${server.port}" }, appCode = 28, appVer = "1.9.4", book = phoneBook).also { clients += it }
+        }, newest = { 500 }, onDone = { done++ })
+        assertTrue("something waits", sync.waiting())
+        sync.start()
+        waitFor("the note reached the TV") { tvBook.notes.any { it.id == "h1" } }
+        assertEquals("from the one who holds the phone", "u1a2b3c4", tvBook.notes.first { it.id == "h1" }.from)
+        assertEquals("a", tvBook.notes.first { it.id == "h1" }.to)
+        waitFor("and who they are, too") { tvBook.couple().any { it.who == "u1a2b3c4" && it.name == "דני" } }
+        waitTicking("the phone lets go once it is handed over") { !sync.waiting() && server.ui.value.phones.isEmpty() }
+        assertEquals("and the home is told, once (its ✉️ count goes)", 1, done)
+        store.me = null
+    }
+
+    @Test
     fun aNewPhonePairsWithTheCodeShownOnTheTvThenTypesAndComesBackWithoutIt() {
         RemoteStore(context).forgetPhones()
         server.start()
@@ -257,7 +286,7 @@ class KeyServerClientTest {
         // What the two tell each other is the version at which they last had to be updated together (raised by 1.9.7, the end of a
         // game, by 1.9.8, touch mode, and by 1.9.9, each of us on our own phone): two apps of releases after it that changed only one
         // of the two have nothing to say to each other about versions.
-        assertEquals("raised only by a release that needs both", 33, KeyLink.TOGETHER_SINCE)
+        assertEquals("raised only by a release that needs both", 34, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()

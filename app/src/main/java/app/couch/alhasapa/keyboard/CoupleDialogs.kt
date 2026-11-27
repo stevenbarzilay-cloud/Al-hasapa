@@ -11,6 +11,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -73,75 +74,106 @@ import kotlin.math.roundToInt
 const val DOODLE_TAG = "doodle"
 
 /**
- * Who holds this phone, and how they look everywhere (1.9.9): one of the two of us, their name, their shape and their colour. Saved here
- * and sent to the TV, which hands it on to the other phone.
+ * Who holds this phone, and how they look everywhere (1.9.9): one of us, their name, their shape and their colour. Saved here and sent
+ * to the TV, which hands it on to the other phones. From 1.10 also the others: someone who comes often ("+ משתמש", kept until removed)
+ * or a guest ("+ אורח", for this evening only); their colour marks them and nothing else.
  */
 @Composable
-internal fun IdentityDialog(people: List<Person>, me: String?, pieces: PiecesConfig, onSave: (Person) -> Unit, onDismiss: () -> Unit) {
-    var who by remember { mutableStateOf(me ?: "") }
-    val current = people.firstOrNull { it.who == who }
+internal fun IdentityDialog(
+    people: List<Person>, me: String?, pieces: PiecesConfig, onSave: (Person) -> Unit, onDismiss: () -> Unit,
+    onRemove: (String) -> Unit = {}, today: String = "",
+) {
+    var who by remember { mutableStateOf(me?.takeIf { w -> people.any { it.who == w } } ?: "") }
+    // A new one being added: its id, and whether it is a guest.
+    var draft by remember { mutableStateOf<Person?>(null) }
+    val current = draft?.takeIf { it.who == who } ?: people.firstOrNull { it.who == who }
     var name by remember(who) { mutableStateOf(current?.name.orEmpty()) }
     var shape by remember(who) { mutableStateOf(current?.let { pieces.styleOf(it).shapeId }.orEmpty()) }
     var color by remember(who) { mutableStateOf(current?.let { pieces.styleOf(it).colorId }.orEmpty()) }
+    fun add(guest: Boolean) {
+        val p = Person(Couple.newId(), "", "circle", if (guest) "mustard" else "teal", 0L, guest = guest, day = if (guest) today else null)
+        draft = p; who = p.who
+    }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
-            Modifier.padding(16.dp).widthIn(max = 820.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Cream)
+            Modifier.padding(12.dp).widthIn(max = 820.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Cream)
                 .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(20.dp)).padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+          // What is chosen scrolls when the screen is short; the buttons stay at the foot, always in reach.
+          Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.me_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (p in people) {
-                            val chosen = p.who == who
-                            Row(
-                                Modifier.weight(1f).heightIn(min = 52.dp).clip(RoundedCornerShape(14.dp)).background(if (chosen) Palette.Ink else Palette.Tint)
-                                    .clickable { who = p.who }.semantics { role = Role.RadioButton; selected = chosen; contentDescription = p.name }
-                                    .padding(horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                            ) {
-                                PieceIcon(pieces.styleOf(p), 28.dp, label = "")
-                                Text(p.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = if (chosen) Palette.Cream else Palette.Ink, maxLines = 1)
-                            }
-                        }
-                    }
-                    if (who.isNotEmpty()) OutlinedTextField(
-                        value = name, onValueChange = { name = it.take(Couple.MAX_NAME) }, singleLine = true,
-                        label = { Text(stringResource(R.string.me_name)) },
-                        textStyle = TextStyle(fontSize = 18.sp, color = Palette.Ink),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Palette.Ink, unfocusedBorderColor = Palette.Line2, cursorColor = Palette.Ink),
-                    ) else Text(stringResource(R.string.me_pick_first), fontSize = 16.sp, color = Palette.Ink2)
-                }
-                if (who.isNotEmpty()) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(R.string.me_shape), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (s in pieces.shapeIds) {
-                            val style = pieces.style(s, color)
-                            Pick(s == shape, style.shapeName, onClick = { shape = s }) { PieceIcon(style, 28.dp, label = "") }
-                        }
-                    }
-                    Text(stringResource(R.string.me_color), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (c in pieces.colorIds) {
-                            val style = pieces.style(shape, c)
-                            Pick(c == color, style.colorName, onClick = { color = c }) {
-                                Box(Modifier.size(26.dp).clip(CircleShape).background(style.base).border(BorderStroke(1.dp, Palette.Ink), CircleShape))
-                            }
-                        }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (p in people + listOfNotNull(draft?.takeIf { d -> people.none { it.who == d.who } })) {
+                    val chosen = p.who == who
+                    val label = p.name.ifEmpty { stringResource(if (p.guest) R.string.me_new_guest else R.string.me_new_user) }
+                    Row(
+                        Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(if (chosen) Palette.Ink else Palette.Tint)
+                            .clickable { who = p.who }.semantics { role = Role.RadioButton; selected = chosen; contentDescription = label }
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        PieceIcon(pieces.styleOf(p), 26.dp, label = "")
+                        Text(label + if (p.guest) " · " + stringResource(R.string.me_guest) else "", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                            color = if (chosen) Palette.Cream else Palette.Ink, maxLines = 1)
                     }
                 }
+                AddChip(stringResource(R.string.me_add_user)) { add(guest = false) }
+                AddChip(stringResource(R.string.me_add_guest)) { add(guest = true) }
             }
+            if (current == null) Text(stringResource(R.string.me_pick_first), fontSize = 16.sp, color = Palette.Ink2)
+            else {
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it.take(Couple.MAX_NAME) }, singleLine = true,
+                    label = { Text(stringResource(R.string.me_name)) },
+                    textStyle = TextStyle(fontSize = 18.sp, color = Palette.Ink),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Palette.Ink, unfocusedBorderColor = Palette.Line2, cursorColor = Palette.Ink),
+                )
+                Text(stringResource(R.string.me_shape), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (sh in pieces.shapeIds) {
+                        val style = pieces.style(sh, color)
+                        Pick(sh == shape, style.shapeName, onClick = { shape = sh }) { PieceIcon(style, 28.dp, label = "") }
+                    }
+                }
+                Text(stringResource(R.string.me_color), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (c in pieces.colorIds) {
+                        val style = pieces.style(shape, c)
+                        Pick(c == color, style.colorName, onClick = { color = c }) {
+                            Box(Modifier.size(26.dp).clip(CircleShape).background(style.base).border(BorderStroke(1.dp, Palette.Ink), CircleShape))
+                        }
+                    }
+                }
+                if (current.other) Text(
+                    stringResource(if (current.guest) R.string.me_guest_help else R.string.me_other_help), fontSize = 15.sp, color = Palette.Ink2,
+                )
+            }
+          }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Action(stringResource(R.string.me_save), primary = true, enabled = who.isNotEmpty() && name.isNotBlank(), modifier = Modifier.weight(2f)) {
-                    onSave(Person(who, name.trim(), shape, color, System.currentTimeMillis()))
+                Action(stringResource(R.string.me_save), primary = true, enabled = current != null && name.isNotBlank(), modifier = Modifier.weight(2f)) {
+                    val c = current ?: return@Action
+                    onSave(c.copy(name = name.trim(), shape = shape, color = color, at = System.currentTimeMillis()))
+                }
+                // One of the others, already kept: it can be removed (the two of us cannot).
+                if (current != null && current.other && people.any { it.who == current.who }) {
+                    Action(stringResource(R.string.me_remove), modifier = Modifier.weight(1f)) { onRemove(current.who) }
                 }
                 Action(stringResource(R.string.result_cancel), modifier = Modifier.weight(1f), onClick = onDismiss)
             }
         }
     }
+}
+
+@Composable
+private fun AddChip(label: String, onClick: () -> Unit) {
+    Box(
+        Modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).border(BorderStroke(1.5.dp, Palette.Ink), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick).semantics { role = Role.Button; contentDescription = label }.padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, maxLines = 1) }
 }
 
 /** One choice of a row (a shape, a colour): the chosen one wears a dark ring. */
@@ -173,13 +205,18 @@ data class NoteGame(val id: String, val name: String)
  */
 @Composable
 internal fun NoteDialog(
-    toName: String,
+    /** Who it can be for (everyone but the writer), and who to begin with. */
+    recipients: List<Person>,
+    initialTo: String?,
+    pieces: PiecesConfig,
     color: androidx.compose.ui.graphics.Color,
     games: List<NoteGame>,
     initialGame: String?,
-    onSend: (game: String?, text: String, doodle: List<IntArray>) -> Unit,
+    onSend: (to: String, game: String?, text: String, doodle: List<IntArray>) -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var to by remember { mutableStateOf(initialTo?.takeIf { w -> recipients.any { it.who == w } } ?: recipients.firstOrNull()?.who.orEmpty()) }
+    val toName = recipients.firstOrNull { it.who == to }?.name.orEmpty()
     var game by remember { mutableStateOf(initialGame) }
     var text by remember { mutableStateOf("") }
     val strokes = remember { mutableStateListOf<List<Offset>>() }
@@ -190,9 +227,15 @@ internal fun NoteDialog(
                 .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(20.dp)).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+          Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.note_title, toName), fontSize = 21.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // For whom (when there are more than one to choose from).
+            if (recipients.size > 1) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                for (p in recipients) Chip(p.name, to == p.who, piece = { PieceIcon(pieces.styleOf(p), 20.dp, label = "") }) { to = p.who }
+            }
+            // Side by side on a phone held sideways (keyboard mode), one under the other on one held upright (the home).
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp), maxItemsInEachRow = 2) {
+                Column(Modifier.widthIn(min = 280.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.note_when), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Chip(stringResource(R.string.note_no_game), game == null) { game = null }
@@ -205,7 +248,7 @@ internal fun NoteDialog(
                         colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Palette.Ink, unfocusedBorderColor = Palette.Line2, cursorColor = Palette.Ink),
                     )
                 }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.widthIn(min = 280.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.note_doodle), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.weight(1f))
                         if (strokes.isNotEmpty()) Text(
@@ -246,11 +289,12 @@ internal fun NoteDialog(
                     }
                 }
             }
+          }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Action(stringResource(R.string.note_send), primary = true, enabled = text.isNotBlank() || strokes.isNotEmpty(), modifier = Modifier.weight(2f)) {
+                Action(stringResource(R.string.note_send), primary = true, enabled = to.isNotEmpty() && (text.isNotBlank() || strokes.isNotEmpty()), modifier = Modifier.weight(2f)) {
                     val w = size.width.coerceAtLeast(1f); val h = size.height.coerceAtLeast(1f)
                     val doodle = strokes.map { s -> IntArray(s.size * 2) { i -> val o = s[i / 2]; ((if (i % 2 == 0) o.x / w else o.y / h) * 1000f).roundToInt().coerceIn(0, 1000) } }
-                    onSend(game, text.trim(), doodle)
+                    onSend(to, game, text.trim(), doodle)
                 }
                 Action(stringResource(R.string.result_cancel), modifier = Modifier.weight(1f), onClick = onDismiss)
             }
@@ -259,10 +303,13 @@ internal fun NoteDialog(
 }
 
 @Composable
-private fun Chip(label: String, chosen: Boolean, onClick: () -> Unit) {
-    Box(
+private fun Chip(label: String, chosen: Boolean, piece: (@Composable () -> Unit)? = null, onClick: () -> Unit) {
+    Row(
         Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(20.dp)).background(if (chosen) Palette.Ink else Palette.Tint)
-            .clickable(onClick = onClick).semantics { role = Role.RadioButton; selected = chosen }.padding(horizontal = 14.dp),
-        contentAlignment = Alignment.Center,
-    ) { Text(label, fontSize = 16.sp, color = if (chosen) Palette.Cream else Palette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            .clickable(onClick = onClick).semantics(mergeDescendants = true) { role = Role.RadioButton; selected = chosen; contentDescription = label }.padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        piece?.invoke()
+        Text(label, fontSize = 16.sp, color = if (chosen) Palette.Cream else Palette.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
 }

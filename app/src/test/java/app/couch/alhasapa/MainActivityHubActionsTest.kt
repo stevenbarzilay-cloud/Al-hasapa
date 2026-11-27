@@ -7,6 +7,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -107,5 +108,38 @@ class MainActivityHubActionsTest {
             shadowOf(Looper.getMainLooper()).idle()
             assertEquals(KeyboardModeActivity::class.java.name, shadowOf(a).nextStartedActivity.component!!.className)
         }
+    }
+
+    /** On the phone's home (1.10): who holds the phone, a guest added for the evening, and a note left from there for the TV. */
+    @Test
+    fun whoHoldsThePhoneAndANoteAreOnTheHomeToo() {
+        val store = app.couch.alhasapa.remote.RemoteStore(context)
+        store.me = null
+        store.pendingNotes().forEach { store.noteKept(it.id) }
+        val scenario = launch()
+        // A note with nobody holding the phone yet: who holds it is asked first.
+        scenario.onActivity { it.hubActions.openNote() }
+        shadowOf(Looper.getMainLooper()).idle(); rule.waitForIdle()
+        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertIsDisplayed()
+        // A guest for this evening: named, and saved as the one who holds this phone.
+        rule.onNodeWithText("+ אורח").performClick()
+        rule.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("מיה")
+        rule.onNodeWithText("שמירה").performClick(); rule.waitForIdle()
+        val me = store.me!!
+        val repo = (context as CouchApp).repo
+        val maya = app.couch.alhasapa.data.Couple.person(repo.snapshot(), me)
+        assertEquals("מיה", maya.name); assertTrue(maya.guest)
+        assertEquals(app.couch.alhasapa.data.Couple.evening(), maya.day)
+        // Now the note: for one of the two of us, kept on the phone until the TV is reached.
+        scenario.onActivity { it.hubActions.openNote() }
+        shadowOf(Looper.getMainLooper()).idle(); rule.waitForIdle()
+        rule.onNodeWithText("פתק לסטיב").assertIsDisplayed()
+        rule.onNode(hasContentDescription("רוני")).performClick()
+        rule.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("תודה על הערב")
+        rule.onNodeWithText("שליחה לטלוויזיה").performClick(); rule.waitForIdle()
+        val kept = store.pendingNotes().single()
+        assertEquals(me, kept.from); assertEquals("b", kept.to); assertEquals("תודה על הערב", kept.text)
+        store.pendingNotes().forEach { store.noteKept(it.id) }
+        store.me = null
     }
 }

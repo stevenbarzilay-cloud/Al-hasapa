@@ -11,7 +11,7 @@ import app.couch.alhasapa.data.StateRepository
  * (on the TV) the notes the phones send.
  */
 interface CoupleBook {
-    /** Both of us, the first then the second. */
+    /** Both of us, the first then the second, then the others (removed ones and past guests too, as the other devices need them). */
     fun couple(): List<Person>
 
     /** What the other side knows of us: kept where newer, person by person. True when anything changed here. */
@@ -25,7 +25,7 @@ interface CoupleBook {
 class RepoCoupleBook(private val repo: () -> StateRepository?) : CoupleBook {
     override fun couple(): List<Person> {
         val s = repo()?.snapshot() ?: return emptyList()
-        return Couple.WHO.map { Couple.person(s, it) }
+        return Couple.all(s)
     }
 
     override fun offer(people: List<Person>): Boolean {

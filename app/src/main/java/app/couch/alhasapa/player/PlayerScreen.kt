@@ -619,7 +619,7 @@ fun PlayerScreen(
                     // The sheet is right to left, like the rest of the app, whatever the player does with left and right.
                     ResultSheet(
                         support = result,
-                        couple = Couple(info.nameA, info.nameB, info.pieceA, info.pieceB),
+                        couple = Couple(info.nameA, info.nameB, info.pieceA, info.pieceB, info.others),
                         who = session.who,
                         initialText = resultText.ifEmpty { existingRaw(result, session.who) },
                         captured = resultCaptured,

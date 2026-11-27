@@ -30,7 +30,7 @@ import app.couch.alhasapa.hub.HubScreen
  * lifts when the hub reports ready.
  */
 @Composable
-fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, bridge: HubBridge? = null, dndSignals: DndSignals? = null) {
+fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, bridge: HubBridge? = null, dndSignals: DndSignals? = null, reloads: Int = 0) {
     var hubReady by remember { mutableStateOf(false) }
     var splashDone by remember { mutableStateOf(!playSplash) }
     var resumes by remember { mutableIntStateOf(0) }
@@ -40,7 +40,7 @@ fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, brid
     val tv = LocalTv.current
     val context = LocalContext.current
     Box(Modifier.fillMaxSize()) {
-        HubScreen(onExit = onExit, reduceMotion = reduceMotion, bridge = bridge, onReady = {
+        HubScreen(onExit = onExit, reduceMotion = reduceMotion, bridge = bridge, reloads = reloads, onReady = {
             if (!hubReady) { Startup.mark("hub ready"); app.couch.alhasapa.diag.Flight.background { Startup.save(context) }; app.couch.alhasapa.diag.Flight.log("start: " + Startup.summary().replace("\n", "; ")) }
             hubReady = true
         })

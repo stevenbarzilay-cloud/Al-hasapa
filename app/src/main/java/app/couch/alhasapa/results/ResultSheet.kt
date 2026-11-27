@@ -69,9 +69,16 @@ data class ResultSupport(
 )
 
 /** The two people, for the sheet's labels and the "who cracked it" buttons. */
-data class Couple(val nameA: String, val nameB: String, val pieceA: PieceStyle, val pieceB: PieceStyle) {
+data class Couple(
+    val nameA: String, val nameB: String, val pieceA: PieceStyle, val pieceB: PieceStyle,
+    /** The others who are here this evening (1.10): they can be the ones who cracked it too. */
+    val others: List<CreditOther> = emptyList(),
+) {
     fun name(who: String?) = if (who == "b") nameB else nameA
 }
+
+/** One of the others, for the "who cracked it" buttons: their id, name and piece. */
+data class CreditOther(val id: String, val name: String, val piece: PieceStyle)
 
 private val SheetText = 20.sp
 
@@ -201,8 +208,13 @@ fun ResultSheet(
 
         if (!duel) {
             Text(stringResource(R.string.result_credit), fontSize = SheetText, fontWeight = FontWeight.Bold, color = Palette.Ink)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            // The two of us and "together" share the row; with others here too (1.10), the buttons wrap to as many rows as they need.
+            if (couple.others.isEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 CreditChips(couple, credit, Modifier.weight(1f)) { credit = if (credit == it) "" else it }
+            } else androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth(),
+            ) {
+                CreditChips(couple, credit, Modifier) { credit = if (credit == it) "" else it }
             }
         }
 
@@ -231,6 +243,7 @@ private fun FailRow(duel: Boolean, fail: Boolean, onTv: Boolean, onChange: (Bool
 private fun androidx.compose.foundation.layout.RowScope.CreditChips(couple: Couple, credit: String, each: Modifier, onPick: (String) -> Unit) {
     CreditChip("a", couple.nameA, couple.pieceA, credit == "a", each) { onPick("a") }
     CreditChip("b", couple.nameB, couple.pieceB, credit == "b", each) { onPick("b") }
+    for (o in couple.others) CreditChip(o.id, o.name, o.piece, credit == o.id, each) { onPick(o.id) }
     CreditChip("t", stringResource(R.string.result_credit_both), null, credit == "t", each) { onPick("t") }
 }
 

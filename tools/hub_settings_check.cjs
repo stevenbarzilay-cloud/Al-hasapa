@@ -115,6 +115,41 @@ server.listen(0, '127.0.0.1', async () => {
   await page.click('[data-act="copydiag"]'); await page.waitForTimeout(100);
   ok((await page.evaluate(() => window.__calls)).some(c => c.startsWith('copy:')), 'the diagnostics can be copied');
   ok(errs.length === 0, 'no JavaScript errors ' + errs.join('|'));
+  // Each of us on our own phone, and the others (1.10): on a phone, in the app, the hub says who holds it (a user's mark beside their
+  // piece) and offers a note; the others (someone who comes often, this evening's guest) can be the ones who cracked it.
+  {
+    const ctx2 = await browser.newContext({ viewport: { width: 400, height: 780 }, locale: 'he-IL' });
+    await ctx2.addInitScript(MOCK, { catalog, diag: '' });
+    await ctx2.addInitScript(() => {
+      const add = () => Object.assign(window.couchNative, { me() { return 'b' }, openMe() { window.__calls.push('me') }, openNote() { window.__calls.push('note') }, notesWaiting() { return '2' } });
+      if (window.couchNative) add(); else { let v; Object.defineProperty(window, 'couchNative', { configurable: true, get() { return v }, set(x) { v = x; add() } }) }
+    });
+    const p2 = await ctx2.newPage();
+    const errs = []; p2.on('pageerror', e => errs.push(String(e)));
+    await p2.goto(`http://127.0.0.1:${port}/hub/index.html`); await p2.waitForTimeout(700);
+    const head = await p2.evaluate(() => ({ me: !document.getElementById('me').hidden, meText: document.getElementById('me').textContent, svgs: document.getElementById('me').querySelectorAll('svg').length, note: document.getElementById('noteBtn').textContent }));
+    ok(head.me && head.svgs === 2, `who holds the phone shows, with a user's mark beside their piece (${JSON.stringify(head)})`);
+    ok(head.note.includes('2'), 'the note button says two notes wait for the TV');
+    await p2.click('#me'); await p2.click('#noteBtn');
+    ok(JSON.stringify(await p2.evaluate(() => window.__calls.filter(c => c === 'me' || c === 'note'))) === '["me","note"]', 'both open the app\'s own dialogs');
+    const crack = await p2.evaluate(() => {
+      const t = TODAY();
+      state.people = { u1a2b3c4: { name: 'דני', shape: 'star', color: 'green', at: 5 }, u5d6e7f8: { name: 'מיה', guest: true, day: EVENING(), color: 'mustard', at: 6 },
+        u9a9a9a9: { name: 'אורחת של אתמול', guest: true, day: '2001-01-01', at: 7 }, ubbbbbbbb: { name: 'שהלך', removed: true, at: 8 } };
+      const g = GAMES.find(x => x.id === 'wordle'); state.log[t] = state.log[t] || {}; state.log[t].wordle = { w: '', t: Date.now() }; save(); render();
+      return [...document.querySelectorAll('[data-act="win"]')].filter(b => b.closest('.win') && b.closest('.win').getAttribute('aria-label').includes('Wordle')).map(b => b.dataset.w);
+    });
+    ok(JSON.stringify(crack) === '["a","b","u1a2b3c4","u5d6e7f8","t"]', `who cracked it: the two of us, the one who comes often, this evening's guest, together (${JSON.stringify(crack)})`);
+    await p2.evaluate(() => { const b = [...document.querySelectorAll('[data-act="win"][data-w="u5d6e7f8"]')].find(x => x.closest('.win').getAttribute('aria-label').includes('Wordle')); b.click() });
+    await p2.waitForTimeout(200);
+    const after = await p2.evaluate(() => ({ w: state.log[TODAY()].wordle.w, toast: document.getElementById('toast').textContent }));
+    ok(after.w === 'u5d6e7f8' && after.toast.includes('מיה'), `the guest is credited, and said so (${JSON.stringify(after)})`);
+    await p2.click('.tab[data-view="stats"]'); await p2.waitForTimeout(200);
+    ok(await p2.evaluate(() => document.querySelector('.crack').textContent.includes('מיה')), 'and counted among who cracked it');
+    ok(errs.length === 0, 'no errors with the others (' + (errs.join(' | ') || 'none') + ')');
+    await ctx2.close();
+  }
+
   await browser.close(); server.close();
   console.log(bad ? `\n${bad} FAILED` : '\nall passed'); process.exit(bad ? 1 : 0);
 });
