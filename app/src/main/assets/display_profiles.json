@@ -7,6 +7,7 @@
  },
  "profiles": [
   { "match": "haaretz.co.il/riddles", "mode": "portrait-fit", "vw": 430, "vh": 800 },
+  { "match": "haaretz.co.il/magazine/20questions", "mode": "portrait-fit", "vw": 430, "vh": 800, "_note": "20 שאלות: a weekly quiz column, read like the riddles, a phone's width" },
   { "match": "nytimes.com/games/wordle", "mode": "portrait-fit" },
   { "match": "nytimes.com/games/connections", "mode": "portrait-fit" },
   { "match": "nytimes.com/games/strands", "mode": "portrait-fit" },
@@ -15,6 +16,7 @@
   { "match": "nytimes.com/crosswords/game/mini", "mode": "portrait-fit", "_note": "my guess, not in the brief: the Mini is a phone-shaped board" },
   { "match": "nytimes.com/puzzles", "mode": "portrait-fit", "_note": "my guess, not in the brief: Spelling Bee, Letter Boxed, Tiles, Sudoku are phone-shaped" },
   { "match": "linkedin.com/games", "mode": "portrait-fit", "vw": 430, "vh": 800 },
+  { "match": "dialed.gg", "tvLight": true, "_note": "On a TV only: the site's blurs and frosted glass are taken out (see DisplayScript). In November 2026 its second game froze the box's picture for seconds and the app closed it; the site blurs dozens of things, one by 70 px over more than the screen." },
   { "match": "krillion.io", "tvStorage": { "krillion-low-power": "1" }, "_note": "On a TV only: Krillion's own 'Low-power mode' (its settings page keeps it under this name) is on unless the people chose otherwise. Measured with the processor slowed six-fold at the TV's page size: about 10 frames a second with the page's thread saturated at full graphics; about 49, and a key on the screen within 50 ms, in low-power mode." }
  ]
 }

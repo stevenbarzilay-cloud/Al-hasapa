@@ -79,8 +79,8 @@ class KeyClient(
     private val _versions = MutableStateFlow<Versions?>(null)
     val versions: StateFlow<Versions?> get() = _versions
 
-    /** Touch mode: a picture of the TV's game, opened ([jpeg] as the TV made it), [w] by [h] pixels. */
-    class MirrorFrame(val n: Int, val w: Int, val h: Int, val jpeg: ByteArray)
+    /** Touch mode: a picture of the TV's game, opened ([jpeg] as the TV made it), [w] by [h] pixels, of the part [crop] of the page (null: all). */
+    class MirrorFrame(val n: Int, val w: Int, val h: Int, val jpeg: ByteArray, val crop: KeyLink.Crop? = null)
 
     private val _frame = MutableStateFlow<MirrorFrame?>(null)
     /** The latest picture of the TV's game while touch mode is on the screen (null: none yet, or touch mode is off). */
@@ -90,18 +90,20 @@ class KeyClient(
     /** Why there is no picture ([KeyLink.NONE_HOME], [KeyLink.NONE_CAPTURE]), when the TV said so. */
     val frameNone: StateFlow<String?> get() = _frameNone
 
-    /** Touch mode is on the screen, drawing pictures this wide (0: it is not). Asked for again whenever the connection comes back. */
+    /** Touch mode is on the screen, drawing pictures this wide (0: it is not), of this part of the page. Asked for again whenever the connection comes back. */
     @Volatile private var mirrorWidth = 0
+    @Volatile private var mirrorCrop: KeyLink.Crop? = null
     /** The connection's picture key (see [FrameCrypto]): from the pairing token and the TV's nonce of this connection. */
     @Volatile private var frameKey: ByteArray? = null
     @Volatile private var nonce = ""
     @Volatile private var badFrames = 0
 
-    /** Touch mode came on the screen ([on], drawing pictures [width] pixels wide) or left it. */
-    fun mirror(on: Boolean, width: Int) {
+    /** Touch mode came on the screen ([on], drawing pictures [width] pixels wide, of the part [crop] of the page when zoomed in) or left it. */
+    fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop? = null) {
         mirrorWidth = if (on) width.coerceAtLeast(1) else 0
+        mirrorCrop = if (on) crop else null
         if (!on) { _frame.value = null; _frameNone.value = null }
-        send(Msg.Mirror(on, mirrorWidth))
+        send(Msg.Mirror(on, mirrorWidth, mirrorCrop))
     }
 
     /** Picture [n] is on the screen: the TV may send the next. */
@@ -285,7 +287,7 @@ class KeyClient(
                         Flight.log("phone keyboard: connected to the TV at $address")
                         startPinging()
                         // Touch mode was on the screen when the connection dropped: the pictures are asked for again.
-                        if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth))
+                        if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth, mirrorCrop))
                         // Both of us as this phone knows us, and the notes still waiting for the TV.
                         sendCouple()
                         for (n in store.pendingNotes()) write(Msg.NoteMsg(n))
@@ -299,7 +301,7 @@ class KeyClient(
                             if (badFrames++ == 0) Flight.log("touch mode: a picture from the TV could not be opened; not shown")
                         } else if (mirrorWidth > 0) {
                             _frameNone.value = null
-                            _frame.value = MirrorFrame(m.n, m.w, m.h, jpeg)
+                            _frame.value = MirrorFrame(m.n, m.w, m.h, jpeg, m.crop)
                         }
                     }
                     is Msg.FrameNone -> if (mirrorWidth > 0) { _frame.value = null; _frameNone.value = m.why }

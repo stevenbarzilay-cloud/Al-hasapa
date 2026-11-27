@@ -59,7 +59,12 @@ server.listen(0, '127.0.0.1', async () => {
   await page.click('.tab[data-view="settings"]'); await page.waitForTimeout(200);
   const rows = await page.evaluate(() => document.querySelectorAll('#ul .urlrow').length);
   ok(rows === total, `the settings tab lists every game's link (${rows} of ${total})`);
-  ok(await page.evaluate(() => [...document.querySelectorAll('#ul .urlrow')].filter(r => r.querySelector('.tag') && /עמוד ראשי/.test(r.textContent)).length) >= 5, 'games that lead only to the Haaretz main page are marked so');
+  // Since 1.9.10 every Haaretz game has a page of its own; a link set back to the main page by hand is still marked as one.
+  const mainOnly = () => page.evaluate(() => [...document.querySelectorAll('#ul .urlrow')].filter(r => r.querySelector('.tag') && /עמוד ראשי/.test(r.textContent)).length);
+  ok(await mainOnly() === 0, 'no Haaretz game leads only to the main page any more');
+  await page.evaluate(() => { state.urls = state.urls || {}; state.urls.hzconn = 'https://www.haaretz.co.il/riddles'; renderSettings(); });
+  ok(await mainOnly() === 1, 'a link set back to the main page is marked so');
+  await page.evaluate(() => { delete state.urls.hzconn; renderSettings(); });
   ok(await page.evaluate(() => document.getElementById('diag').textContent.includes('hub ready: 5300 ms')), 'the diagnostics show what the app says about its last start');
 
   // 1) editing a link

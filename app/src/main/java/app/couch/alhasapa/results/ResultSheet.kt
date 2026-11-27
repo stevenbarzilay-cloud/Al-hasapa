@@ -92,6 +92,8 @@ fun ResultSheet(
     onClear: (() -> Unit)?,
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The text was read off the game's end screen rather than copied by the game (1.9.10). */
+    fromScreen: Boolean = false,
 ) {
     val game = support.game
     val kind = ResultDraft.kindOf(game)
@@ -148,7 +150,7 @@ fun ResultSheet(
             Text(title, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (captured) Text(stringResource(R.string.result_captured), fontSize = 16.sp, color = Palette.Ink2)
+                    if (captured) Text(stringResource(if (fromScreen) R.string.result_read_screen else R.string.result_captured), fontSize = 16.sp, color = Palette.Ink2)
                     if (text.isNotBlank()) {
                         // What the game handed over, to read (a TV has nothing to paste with).
                         Text(

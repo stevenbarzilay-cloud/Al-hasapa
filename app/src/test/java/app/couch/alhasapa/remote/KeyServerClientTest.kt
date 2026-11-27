@@ -100,8 +100,10 @@ class KeyServerClientTest {
         // A game: pictures of its page, a little different each time (as a page that moves is).
         val asked = CopyOnWriteArrayList<Int>()
         var shade = 0
-        source = FrameSource { w, done ->
+        val crops = CopyOnWriteArrayList<String>()
+        source = FrameSource { w, crop, done ->
             asked += w
+            crops += crop?.toString() ?: "all"
             shade = (shade + 50) % 250
             done(android.graphics.Bitmap.createBitmap(64, 36, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.rgb(shade, 90, 40)) })
         }
@@ -118,6 +120,12 @@ class KeyServerClientTest {
         assertEquals(first.n, phone.frame.value!!.n)
         phone.frameShown(first.n)
         waitTicking("the next picture") { phone.frame.value!!.n > first.n }
+
+        // Zoomed in on the phone: the next picture is of that part of the page, and says so.
+        val part = KeyLink.Crop(0.25f, 0.25f, 0.75f, 0.75f)
+        phone.mirror(true, 480, part)
+        waitTicking("a picture of the part in view") { phone.frame.value?.crop == part }
+        assertTrue("the TV was asked for that part", crops.contains(part.toString()))
 
         // The finger on the picture comes back to the TV as it was.
         phone.send(Msg.Touch(KeyLink.TouchAction.DOWN, 0.5f, 0.25f))

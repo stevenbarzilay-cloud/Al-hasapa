@@ -45,12 +45,15 @@ object ResultDraft {
     )
 
     fun evaluate(game: Game, text: String, manual: String, fail: Boolean, log: JSONObject, day: String): Draft {
-        val kind = kindOf(game)
+        var kind = kindOf(game)
         var p = Scoring.parseResult(text, kind) ?: readManual(kind, manual)
+        // Nothing in the game's own kind, but the end screen said how we did against the others (HebrewResult, 1.9.10): that is the
+        // result then, out of a hundred (better than 82% of the players is 8 points of 10).
+        if (p == null) HebrewResult.beatIn(text)?.let { b -> p = Parsed(b.toDouble(), 100, false); kind = "score" }
         if (fail) p = Parsed(v = p?.v?.takeIf { !it.isNaN() && it != 0.0 } ?: 0.0, max = p?.max, fail = true)
-        if (p == null) return Draft(null, null, 0)
-        val r = Result(v = p.v, max = p.max, fail = p.fail, kind = kind, raw = text.trim().take(MAX_RAW))
-        return Draft(p, r, 2 + Scoring.resultPts(log, game.id, r, day))
+        val parsed = p ?: return Draft(null, null, 0)
+        val r = Result(v = parsed.v, max = parsed.max, fail = parsed.fail, kind = kind, raw = text.trim().take(MAX_RAW))
+        return Draft(parsed, r, 2 + Scoring.resultPts(log, game.id, r, day))
     }
 
     const val MAX_RAW = 400

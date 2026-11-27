@@ -1,5 +1,7 @@
 package app.couch.alhasapa.player
 
+import androidx.core.net.toUri
+
 import android.widget.Toast
 import android.webkit.WebView
 import androidx.activity.compose.BackHandler
@@ -179,6 +181,8 @@ fun PlayerScreen(
     var resultOpen by remember { mutableStateOf(false) }
     var resultText by remember { mutableStateOf("") }
     var resultCaptured by remember { mutableStateOf(false) }
+    // The text was read off the end screen (1.9.10), not copied by the game.
+    var resultFromScreen by remember { mutableStateOf(false) }
     val gate = remember { CaptureGate(session.allowedHosts) }
     val latestResult by androidx.compose.runtime.rememberUpdatedState(result)
     // "Save the result" pressed the game's own share button for us: whatever it copies next is the result.
@@ -219,7 +223,7 @@ fun PlayerScreen(
 
     // On a TV a game can have the whole screen: its frame put away (Back brings it back), remembered for this game.
     val framePrefs = remember { context.getSharedPreferences("tv", Context.MODE_PRIVATE) }
-    val frameKey = remember { "frame-hidden:" + (session.gameId ?: android.net.Uri.parse(session.url).host.orEmpty()) }
+    val frameKey = remember { "frame-hidden:" + (session.gameId ?: session.url.toUri().host.orEmpty()) }
     if (tv != null && !session.loginMode) {
         DisposableEffect(tv) {
             if (framePrefs.getBoolean(frameKey, false)) tv.hideFrame(true)
@@ -230,7 +234,7 @@ fun PlayerScreen(
 
     // On a TV: what the page's sound was given and whether it had gaps, to the report every so often and when the game closes.
     // A site where gaps were counted gets the longest buffer from the next time it opens.
-    val soundHost = remember { android.net.Uri.parse(session.url).host.orEmpty() }
+    val soundHost = remember { session.url.toUri().host.orEmpty() }
     if (tv != null && !session.loginMode) {
         val view = webView
         val watch = remember(view) { SoundProbe.Watch(soundHost) }
@@ -281,12 +285,34 @@ fun PlayerScreen(
         keep(profile.copy(ui = order[(order.indexOf(profile.place) + 1).mod(order.size)]))
     }
 
-    val openResult: () -> Unit = { resultText = ""; resultCaptured = false; resultOpen = true }
+    val openResult: () -> Unit = { resultText = ""; resultCaptured = false; resultFromScreen = false; resultOpen = true }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    // Nothing to press, or nothing came of pressing it: what the end screen says in words (Haaretz's games copy nothing), read once
+    // and turned into numbers at once (HebrewResult); the sheet opens with them, or empty when the screen said nothing of a result.
+    val fromScreen: () -> Unit = fromScreen@{
+        val view = webView
+        val support = result
+        if (view == null || support == null) { openResult(); return@fromScreen }
+        var done = false
+        scope.launch { delay(PAGE_ANSWER_MS); if (!done && !resultOpen) { done = true; openResult() } }
+        view.evaluateJavascript(app.couch.alhasapa.results.ResultWatch.LINES) { raw ->
+            if (done || resultOpen) return@evaluateJavascript
+            done = true
+            val lines = app.couch.alhasapa.results.ResultWatch.lines(raw)
+            val reading = app.couch.alhasapa.results.HebrewResult.read(lines)
+            val kind = app.couch.alhasapa.results.ResultDraft.kindOf(support.game)
+            val text = if (reading.any) app.couch.alhasapa.results.HebrewResult.summary(reading, kind, if (kind == "guesses") 6 else null) else ""
+            app.couch.alhasapa.diag.Flight.log(
+                "result: ${lines.lines().count { it.isNotBlank() }} short lines of the end screen read; " + if (text.isEmpty()) "no result in them" else "a result in them",
+            )
+            if (text.isEmpty()) openResult() else { resultText = text; resultCaptured = true; resultFromScreen = true; resultOpen = true }
+        }
+    }
     /**
      * On a TV, "save the result" (1.9.7): presses the game's own share or copy button, as a finger would (see ResultWatch), so the game
-     * hands its result over the way it always does and the sheet opens with it. With no such button, or when nothing comes, the sheet
-     * opens to be filled in with the remote or the phone.
+     * hands its result over the way it always does and the sheet opens with it. With no such button, or when nothing comes, the end
+     * screen's words are read (1.9.10, see fromScreen), and the sheet opens with what they said, or to be filled in with the remote or
+     * the phone.
      */
     val saveNow: () -> Unit = saveNow@{
         val view = webView
@@ -299,11 +325,11 @@ fun PlayerScreen(
             if (answered) return@evaluateJavascript
             answered = true
             val at = app.couch.alhasapa.results.ResultWatch.at(raw)
-            if (at == null) { openResult(); return@evaluateJavascript }
+            if (at == null) { fromScreen(); return@evaluateJavascript }
             awaitingCapture = true
             app.couch.alhasapa.diag.Flight.log("result: pressing the game's own share button for us")
             tv.pageNav.tap(at.first, at.second)
-            scope.launch { delay(CAPTURE_WAIT_MS); if (awaitingCapture && !resultOpen) { awaitingCapture = false; openResult() } }
+            scope.launch { delay(CAPTURE_WAIT_MS); if (awaitingCapture && !resultOpen) { awaitingCapture = false; fromScreen() } }
         }
     }
     val resultReady = tv?.resultReady == true
@@ -363,6 +389,8 @@ fun PlayerScreen(
 
     // The little celebration when a result is saved on the TV: the points, a word about them, the evening so far.
     var cheer by remember { mutableStateOf<app.couch.alhasapa.results.Cheer?>(null) }
+    // Whether the report already says where the game's link led (see onUrl).
+    var movedTold by remember { mutableStateOf(false) }
     // After the celebration, the notes left for this game, one by one.
     var notes by remember { mutableStateOf<List<app.couch.alhasapa.tv.NoteView>>(emptyList()) }
     val latestNotesFor by androidx.compose.runtime.rememberUpdatedState(notesFor)
@@ -460,10 +488,16 @@ fun PlayerScreen(
                                             onStarted = { loadError = null },
                                             onFinished = { url ->
                                                 if (tv != null) PageProbe.later(this)
+                                                // A site drawn lighter on the TV: how many of its blurs and frosted glass went, in the report.
+                                                if (tv != null && profile.tvLight) postDelayed({
+                                                    evaluateJavascript("window.__couchLightCount?String(window.__couchLightCount()):'-'") { n ->
+                                                        app.couch.alhasapa.diag.Flight.log("player: ${url.toUri().host} drawn lighter on the TV: ${n?.trim('"')} blurs taken out so far")
+                                                    }
+                                                }, 8_000)
                                                 if (loadTold.compareAndSet(false, true)) {
                                                     val s = (android.os.SystemClock.uptimeMillis() - openedAt) / 1000.0
                                                     app.couch.alhasapa.diag.Flight.log(
-                                                        "player: ${android.net.Uri.parse(url).host} ready " + String.format(java.util.Locale.US, "%.1f", s) + " s after it was chosen",
+                                                        "player: ${url.toUri().host} ready " + String.format(java.util.Locale.US, "%.1f", s) + " s after it was chosen",
                                                     )
                                                 }
                                             },
@@ -476,7 +510,19 @@ fun PlayerScreen(
                                                 // (The panel's "try again" builds the new WebView; a new one started here would clear the panel.)
                                                 if (pageDeaths.size >= 2) loadError = ctx.getString(R.string.player_page_died) else generation++
                                             },
-                                            onUrl = { currentUrl = it },
+                                            onUrl = { u ->
+                                                currentUrl = u
+                                                // The game's own link led somewhere else (a site that sends its games to its main page): said
+                                                // once, as host and path only, so a link that went stale shows in the report.
+                                                if (!movedTold) {
+                                                    val asked = session.url.toUri()
+                                                    val got = u.toUri()
+                                                    if (got.host != null && (got.host?.removePrefix("www.") != asked.host?.removePrefix("www.") || got.path?.trimEnd('/') != asked.path?.trimEnd('/'))) {
+                                                        movedTold = true
+                                                        app.couch.alhasapa.diag.Flight.log("player: ${asked.host}${asked.path} led to ${got.host}${got.path}")
+                                                    }
+                                                }
+                                            },
                                             onPageBegan = {
                                                 inj.onPageStarted()
                                                 if (sound != null && !soundAtStart) {
@@ -577,6 +623,7 @@ fun PlayerScreen(
                         who = session.who,
                         initialText = resultText.ifEmpty { existingRaw(result, session.who) },
                         captured = resultCaptured,
+                        fromScreen = resultFromScreen,
                         onSave = { markedByHand = true; cheer = onSaveResult(it); resultOpen = false },
                         onClear = { onClearResult(); resultOpen = false },
                         onCancel = { resultOpen = false },

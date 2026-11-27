@@ -40,6 +40,21 @@ const page = body => `<!doctype html><meta charset=utf-8><style>body{margin:0;fo
   await p.evaluate(script); await p.evaluate(READY);
   ok(before === await p.evaluate(() => document.documentElement.outerHTML), 'the page is left exactly as it was');
   ok(errors.length === 0, 'no errors in the page (' + (errors.join(' | ') || 'none') + ')');
+
+  // The end screen in words (1.9.10, ResultWatch.LINES), for a game that copies nothing: its short result lines, from the page and
+  // a frame of the same site inside it; not the article around the game, not a line with no result in it.
+  const LINES = fs.readFileSync(process.argv[2] + '/result-lines.js', 'utf8');
+  const article = 'במחקר שפורסם השבוע נמצא כי יותר מ-50% מהשחקנים משחקים בבוקר, לפני העבודה, ושהם נוטים לחזור למשחק גם למחרת, כך לפי הסקר המלא.';
+  await p.route('**/*', r => r.request().url().endsWith('/frame')
+    ? r.fulfill({ contentType: 'text/html', body: page('<p>17 מתוך 20 תשובות נכונות</p>') })
+    : r.fulfill({ contentType: 'text/html', body: page(`<p>${article}</p><h2>כל הכבוד!</h2><p>פתרתם ב-3 ניסיונות</p><p>טובים יותר מ-82% מהשחקנים</p><p>המילה הייתה: שלום</p><p style="display:none">5 טעויות</p><iframe src="/frame"></iframe>`) }));
+  await p.goto('https://game.test/end'); await p.waitForTimeout(300);
+  const lines = (await p.evaluate(LINES)).split('\n');
+  ok(lines.includes('פתרתם ב-3 ניסיונות') && lines.includes('טובים יותר מ-82% מהשחקנים'), `the result lines are read (${JSON.stringify(lines)})`);
+  ok(lines.includes('17 מתוך 20 תשובות נכונות'), 'and a frame of the same site');
+  ok(!lines.some(l => l.includes('שלום')), 'not the line with the answer in it');
+  ok(!lines.some(l => l.includes('במחקר')), 'not the article around the game');
+  ok(!lines.some(l => l.includes('5 טעויות')), 'not what is hidden on the page');
   await browser.close();
   console.log(bad ? `\n${bad} FAILED` : '\nall good');
   process.exit(bad ? 1 : 0);

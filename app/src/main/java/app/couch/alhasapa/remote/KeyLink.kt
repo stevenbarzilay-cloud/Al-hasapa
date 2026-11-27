@@ -31,9 +31,12 @@ import org.json.JSONObject
  *     TV    → phone  pong | bye {why}
  *
  *     touch mode (from 1.9.8): the phone pictures the TV's game and is touched as if the game were on it
- *     phone → TV     mirror {on, w}                       pictures wanted (w: how wide the phone draws them, in pixels), or no more
- *     TV    → phone  frame {n, w, h, iv, data}            picture n of the game's page: a JPEG, AES-GCM under the connection's
- *                                                         picture key (see FrameCrypto); only to a phone that proved its pairing
+ *     phone → TV     mirror {on, w, c}                    pictures wanted (w: how wide the phone draws them, in pixels), or no more;
+ *                                                         c: the part of the page the phone shows, zoomed in (x0, y0, x1, y1 as shares
+ *                                                         of the page; from 1.9.10, the whole page when absent)
+ *     TV    → phone  frame {n, w, h, iv, data, c}         picture n of the game's page: a JPEG, AES-GCM under the connection's
+ *                                                         picture key (see FrameCrypto); only to a phone that proved its pairing;
+ *                                                         c: the part of the page it shows (the whole page when absent)
  *     phone → TV     frame-ok {n}                         picture n is on the phone's screen: the next one may come (one at a time)
  *     TV    → phone  frame-none {why}                     nothing to picture: "home" (no game is open), "capture" (the TV could not)
  *     phone → TV     touch {a, x, y}                      a finger on the picture: down / move / up / cancel, at shares (0 to 1)
@@ -93,6 +96,29 @@ object KeyLink {
     /** A finger on the phone's picture of the game: put down, moved, lifted, or taken away (another gesture took over). */
     enum class TouchAction { DOWN, MOVE, UP, CANCEL }
 
+    /** A part of the game's page, as shares of its width and height (touch mode zoomed in, from 1.9.10). */
+    data class Crop(val x0: Float, val y0: Float, val x1: Float, val y1: Float) {
+        val w: Float get() = x1 - x0
+        val h: Float get() = y1 - y0
+        fun toJson(): org.json.JSONArray = org.json.JSONArray().put(round4(x0)).put(round4(y0)).put(round4(x1)).put(round4(y1))
+
+        companion object {
+            /** Null for anything that is not a part of the page at least a twentieth of it across and down (or for all of it). */
+            fun of(a: org.json.JSONArray?): Crop? {
+                if (a == null || a.length() != 4) return null
+                val v = (0 until 4).map { a.optDouble(it, Double.NaN) }
+                if (v.any { it.isNaN() }) return null
+                val c = Crop(v[0].coerceIn(0.0, 1.0).toFloat(), v[1].coerceIn(0.0, 1.0).toFloat(), v[2].coerceIn(0.0, 1.0).toFloat(), v[3].coerceIn(0.0, 1.0).toFloat())
+                if (c.w < 0.05f || c.h < 0.05f) return null
+                return if (c.x0 <= 0f && c.y0 <= 0f && c.x1 >= 1f && c.y1 >= 1f) null else c
+            }
+
+            /** The smallest part that holds both (for two phones zoomed in on different parts); null (all of it) if either is. */
+            fun union(a: Crop?, b: Crop?): Crop? =
+                if (a == null || b == null) null else Crop(minOf(a.x0, b.x0), minOf(a.y0, b.y0), maxOf(a.x1, b.x1), maxOf(a.y1, b.y1))
+        }
+    }
+
     /** The keys the phone sends besides text. */
     enum class Key(val code: Int) {
         ENTER(KeyEvent.KEYCODE_ENTER),
@@ -141,10 +167,10 @@ object KeyLink {
         data object Pong : Msg
         data class Bye(val why: String) : Msg
 
-        /** Touch mode: pictures of the game are wanted ([on]), [w] pixels wide, or no more. */
-        data class Mirror(val on: Boolean, val w: Int = 0) : Msg
-        /** Picture [n] of the game's page, [w] by [h] pixels: a JPEG sealed with the connection's picture key ([FrameCrypto]). */
-        data class Frame(val n: Int, val w: Int, val h: Int, val iv: String, val data: String) : Msg
+        /** Touch mode: pictures of the game are wanted ([on]), [w] pixels wide, of the part [crop] of the page (null: all of it), or no more. */
+        data class Mirror(val on: Boolean, val w: Int = 0, val crop: Crop? = null) : Msg
+        /** Picture [n] of the game's page, [w] by [h] pixels, of the part [crop] (null: all of it): a JPEG sealed with the connection's picture key ([FrameCrypto]). */
+        data class Frame(val n: Int, val w: Int, val h: Int, val iv: String, val data: String, val crop: Crop? = null) : Msg
         /** Picture [n] is on the phone's screen: the next one may come. */
         data class FrameOk(val n: Int) : Msg
         /** There is nothing to picture ([NONE_HOME], [NONE_CAPTURE]). */
@@ -200,8 +226,9 @@ object KeyLink {
         is Msg.Logins -> JSONObject().put("t", "logins").put("iv", m.iv).put("data", m.data)
         is Msg.LoginsDone -> JSONObject().put("t", "logins-done").put("site", m.site).put("n", m.n)
         is Msg.LoginsNo -> JSONObject().put("t", "logins-no").put("why", m.why)
-        is Msg.Mirror -> JSONObject().put("t", "mirror").put("on", m.on).put("w", m.w)
+        is Msg.Mirror -> JSONObject().put("t", "mirror").put("on", m.on).put("w", m.w).apply { m.crop?.let { put("c", it.toJson()) } }
         is Msg.Frame -> JSONObject().put("t", "frame").put("n", m.n).put("w", m.w).put("h", m.h).put("iv", m.iv).put("data", m.data)
+            .apply { m.crop?.let { put("c", it.toJson()) } }
         is Msg.FrameOk -> JSONObject().put("t", "frame-ok").put("n", m.n)
         is Msg.FrameNone -> JSONObject().put("t", "frame-none").put("why", m.why)
         is Msg.Touch -> JSONObject().put("t", "touch").put("a", m.a.name.lowercase()).put("x", round4(m.x)).put("y", round4(m.y))
@@ -210,8 +237,9 @@ object KeyLink {
         is Msg.NoteOk -> JSONObject().put("t", "note-ok").put("id", m.id)
     }
 
-    private fun frameLine(m: Msg.Frame): String = StringBuilder(m.data.length + 96)
+    private fun frameLine(m: Msg.Frame): String = StringBuilder(m.data.length + 140)
         .append("{\"t\":\"frame\",\"n\":").append(m.n).append(",\"w\":").append(m.w).append(",\"h\":").append(m.h)
+        .apply { m.crop?.let { append(",\"c\":").append(it.toJson().toString()) } }
         .append(",\"iv\":\"").append(m.iv).append("\",\"data\":\"").append(m.data).append("\"}").toString()
 
     private fun isBase64(s: String): Boolean = s.all { it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it == '+' || it == '/' || it == '=' }
@@ -250,9 +278,9 @@ object KeyLink {
             "logins" -> o.optString("data", "").takeIf { it.isNotEmpty() }?.let { Msg.Logins(s("iv"), it) }
             "logins-done" -> Msg.LoginsDone(s("site"), o.optInt("n", 0))
             "logins-no" -> Msg.LoginsNo(s("why"))
-            "mirror" -> Msg.Mirror(o.optBoolean("on"), o.optInt("w", 0).coerceIn(0, 8_192))
+            "mirror" -> Msg.Mirror(o.optBoolean("on"), o.optInt("w", 0).coerceIn(0, 8_192), Crop.of(o.optJSONArray("c")))
             "frame" -> o.optString("data", "").takeIf { it.isNotEmpty() }?.let {
-                Msg.Frame(o.optInt("n", 0), o.optInt("w", 0).coerceIn(0, 8_192), o.optInt("h", 0).coerceIn(0, 8_192), s("iv"), it)
+                Msg.Frame(o.optInt("n", 0), o.optInt("w", 0).coerceIn(0, 8_192), o.optInt("h", 0).coerceIn(0, 8_192), s("iv"), it, Crop.of(o.optJSONArray("c")))
             }
             "frame-ok" -> Msg.FrameOk(o.optInt("n", -1))
             "frame-none" -> Msg.FrameNone(s("why"))
@@ -279,7 +307,7 @@ object KeyLink {
     private fun round2(v: Float): Double = Math.round(v * 100.0) / 100.0
 
     /** A touch's place to a ten-thousandth of the page: a fifth of a pixel on the TV's screen. */
-    private fun round4(v: Float): Double = Math.round(v * 10_000.0) / 10_000.0
+    internal fun round4(v: Float): Double = Math.round(v * 10_000.0) / 10_000.0
 
     /** Only devices in the home itself may connect: private, link-local and loopback addresses. */
     fun isHomeAddress(a: InetAddress): Boolean {

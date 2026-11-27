@@ -264,7 +264,7 @@
    "s": "hz",
    "k": "מילים",
    "m": "5",
-   "u": "https://www.haaretz.co.il/riddles/5-letters",
+   "u": "https://www.haaretz.co.il/riddles/2026-04-26/ty-article-static/.premium/0000019a-20bc-daf2-a7fb-3cbf2d680000",
    "d": "וורדעל בעברית.",
    "metric": "guesses",
    "lib": 1
@@ -275,7 +275,7 @@
    "s": "hz",
    "k": "מילים",
    "m": "מה",
-   "u": "https://www.haaretz.co.il/riddles",
+   "u": "https://www.haaretz.co.il/riddles/2024-03-20/ty-article-static/.premium/0000018d-9705-d57f-a1ef-bf1d5b3d0000",
    "d": "ארבע קבוצות של ארבע מילים.",
    "metric": "mistakes",
    "lib": 1
@@ -297,9 +297,9 @@
    "s": "hz",
    "k": "מוזיקה",
    "m": "♪",
-   "u": "https://www.haaretz.co.il/riddles",
+   "u": "https://www.haaretz.co.il/riddles/2024-08-13/ty-article-static/.free/0000018f-e796-d481-a58f-f7b6fa100000",
    "d": "שיר עברי בתרגום מוזר, אפשר לשמוע רמז.",
-   "metric": "none",
+   "metric": "hints",
    "lib": 1
   },
   {
@@ -319,9 +319,9 @@
    "s": "hz",
    "k": "ידע",
    "m": "מי",
-   "u": "https://www.haaretz.co.il/riddles",
+   "u": "https://www.haaretz.co.il/riddles/2023-02-26/ty-article-static/.premium/00000184-9eae-d199-ade4-dfef359e0000",
    "d": "תמונה מפוקסלת שמתבהרת לאט.",
-   "metric": "none",
+   "metric": "hints",
    "lib": 1
   },
   {
@@ -330,7 +330,7 @@
    "s": "hz",
    "k": "היגיון",
    "m": "הג",
-   "u": "https://www.haaretz.co.il/riddles",
+   "u": "https://www.haaretz.co.il/riddles/2023-12-27/ty-article-static/.premium/0000018b-7abc-d1da-a1bb-7fbcccb00000",
    "d": "חידת היגיון מילולית יומית.",
    "metric": "none",
    "lib": 1
@@ -363,9 +363,9 @@
    "s": "hz",
    "k": "מספרים",
    "m": "9",
-   "u": "https://www.haaretz.co.il/riddles",
+   "u": "https://www.haaretz.co.il/riddles/sudoku",
    "d": "סודוקו בשלוש רמות.",
-   "metric": "none",
+   "metric": "time",
    "why": "מהארץ, עוד לא במאגר"
   },
   {
@@ -374,9 +374,9 @@
    "s": "hz",
    "k": "ידע",
    "m": "20",
-   "u": "https://www.haaretz.co.il/riddles",
+   "u": "https://www.haaretz.co.il/magazine/20questions",
    "d": "הטקס השבועי, פעם בשבוע.",
-   "metric": "none",
+   "metric": "score",
    "why": "שבועי, טוב לסופ״ש ביחד"
   },
   {

@@ -244,6 +244,15 @@ class ResultsTest {
         assertEquals("copy", g.acceptClipboard("Connections\nPuzzle #5")!!.kind)
     }
 
+    /** Written for the browser check (tools/result_check.cjs): the end screen's lines, read when nothing was copied (1.9.10). */
+    @Test
+    fun dumpTheEndScreenReaderForTheBrowserCheck() {
+        val dir = File("build/display-scripts").apply { mkdirs() }
+        File(dir, "result-lines.js").writeText(ResultWatch.LINES)
+        assertEquals("a\nb", ResultWatch.lines("\"a\\nb\""))
+        assertEquals("", ResultWatch.lines(null))
+    }
+
     /** Written for the browser check (tools/capture_check.cjs), which runs the real script in Chromium. */
     @Test
     fun dumpCaptureScriptForTheBrowserCheck() {

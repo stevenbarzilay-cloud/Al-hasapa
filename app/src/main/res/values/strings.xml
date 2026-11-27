@@ -144,6 +144,9 @@
     <string name="kb_mode_switch_touch">מעבר בין משחק בטלפון, מקלדת לטלוויזיה, ומגע במשחק שבטלוויזיה</string>
     <string name="kb_touch_area">המשחק שבטלוויזיה. נגיעה כאן נוגעת במשחק באותה נקודה</string>
     <string name="kb_touch_waiting">מחכים לתמונה מהטלוויזיה…</string>
+    <string name="kb_touch_zoom_in">הגדלת התמונה</string>
+    <string name="kb_touch_zoom_out">הקטנת התמונה</string>
+    <string name="kb_touch_zoom_fit">כל המשחק</string>
     <string name="kb_touch_home">פותחים משחק בטלוויזיה, והוא יופיע כאן לנגיעה.</string>
     <string name="kb_touch_no_picture">הטלוויזיה לא מצליחה לשלוח תמונה של המשחק. אפשר לגעת בכל זאת: הטבעת על המסך מראה איפה.</string>
     <string name="kb_looking">מחפשים את הטלוויזיה בבית…</string>
@@ -275,6 +278,7 @@
     <string name="note_from">פתק מ%1$s ל%2$s</string>
     <string name="note_after_game">אחרי %1$s</string>
     <string name="note_ok">❤️ קראנו</string>
+    <string name="result_read_screen">קראנו את התוצאה ממסך הסיום של המשחק. אפשר לתקן לפני השמירה.</string>
     <string name="played_auto_toast">סימנו ששיחקנו</string>
     <string name="cheer_bullseye">בול! 🎯</string>
     <string name="cheer_great">יפה מאוד!</string>

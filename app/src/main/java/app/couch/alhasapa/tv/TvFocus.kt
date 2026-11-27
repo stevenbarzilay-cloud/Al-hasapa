@@ -1,7 +1,9 @@
 package app.couch.alhasapa.tv
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -57,6 +59,7 @@ fun Modifier.tvTarget(id: String?, label: String?, bring: Boolean, paint: Boolea
     val remote = tv != null && tv.isFocused(myId)
     val lit = remote || androidFocused
     val requester = remember { BringIntoViewRequester() }
+    val interactions = remember { MutableInteractionSource() }
     if (tv != null) DisposableEffect(tv, myId) { onDispose { tv.unregister(myId) } }
     LaunchedEffect(remote, bring) { if (remote && bring) requester.bringIntoView() }
     LaunchedEffect(remote, label) { if (remote && label != null) tv?.focusLabel = label }
@@ -70,7 +73,10 @@ fun Modifier.tvTarget(id: String?, label: String?, bring: Boolean, paint: Boolea
             drawContent()
         }
         .semantics { if (lit) stateDescription = "נבחר" }
-        .clickable(onClick = onClick)
+        // On a TV the app marks the focus itself (the red, a cushion's threads). Android's own focus, which the box puts on some button
+        // when a screen opens and which the remote never moves (the app takes its keys first), drew a grey box behind that button
+        // for as long as the screen was up (a cushion of the home, 1.9.9). A phone keeps the ripple of a touch.
+        .clickable(interactionSource = interactions, indication = if (tv != null && tv.enabled) null else LocalIndication.current, onClick = onClick)
 }
 
 /** Marks the area the page (the WebView) occupies, so the arrows can move between the page and the app's buttons. */

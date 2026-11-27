@@ -75,7 +75,7 @@ class KeyboardModeActivity : ComponentActivity() {
             override fun saveResult() = client.send(KeyLink.Msg.SaveResult)
 
             // Touch mode: the TV's game pictured here, and the fingers on it sent back.
-            override fun mirror(on: Boolean, width: Int) = client.mirror(on, width)
+            override fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop?) = client.mirror(on, width, crop)
             override fun frameShown(n: Int) = client.frameShown(n)
             override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) = client.send(KeyLink.Msg.Touch(a, x, y))
 

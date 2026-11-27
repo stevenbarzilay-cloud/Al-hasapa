@@ -38,6 +38,27 @@ object ResultWatch {
   try{Object.defineProperty(window,'__couchResult',{value:W})}catch(x){window.__couchResult=W}
 })();"""
 
+    /**
+     * The end screen's short lines that speak of a result (tries, mistakes, hints, a time, a score out of something, a percentage of the
+     * players), for a game that copies nothing (Haaretz's): read once, when "save the result" is pressed, from the page and the frames
+     * of the same site inside it. Long lines (the article around a game) are left out. What is read is turned into numbers at once
+     * (HebrewResult) and the lines themselves are not kept.
+     */
+    const val LINES = """(function(){try{
+  var RX=/ניסיונ|נסיונ|ניחוש|טעות|טעויות|רמז|שחקנ|משתתפ|פותר|גולש|שניות|דקות|מתוך|פתרת|פתרנו|הצלחת|הצלחנו|נגמרו|%|[0-9]+ *\/ *[0-9]+|[0-9]{1,2}:[0-9]{2}/;
+  var out=[];
+  function take(doc,depth){
+    var t=(doc.body&&doc.body.innerText)||'', ls=t.split(/\n+/);
+    for(var i=0;i<ls.length&&out.length<24;i++){var l=ls[i].replace(/\s+/g,' ').trim(); if(l.length>1&&l.length<=120&&RX.test(l)) out.push(l)}
+    if(depth<2){var fr=doc.querySelectorAll('iframe'); for(var j=0;j<fr.length;j++){try{var d=fr[j].contentDocument; if(d) take(d,depth+1)}catch(e){}}}
+  }
+  take(document,0);
+  return out.join('\n');
+}catch(e){return ''}})()"""
+
+    /** What [LINES] answered (evaluateJavascript hands back a JSON string), as plain text. */
+    fun lines(raw: String?): String = runCatching { org.json.JSONTokener(raw ?: "").nextValue() as? String }.getOrNull().orEmpty()
+
     /** 1 when a share or copy button is on the screen, 0 when not ("" when the script is not there). */
     const val READY = "(function(){try{return window.__couchResult?String(window.__couchResult.ready()):''}catch(e){return ''}})()"
 

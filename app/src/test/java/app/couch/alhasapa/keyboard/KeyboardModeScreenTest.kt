@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.remote.KeyClient
@@ -55,7 +57,10 @@ class KeyboardModeScreenTest {
         override fun sendLogin(site: String) { sent += "login:$site" }
         override fun signIn(site: String) { sent += "signin:$site" }
         override fun saveResult() { sent += "save-result" }
-        override fun mirror(on: Boolean, width: Int) { sent += "mirror:$on" + (if (on && width > 0) ":w" else "") }
+        override fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop?) {
+            sent += "mirror:$on" + (if (on && width > 0) ":w" else "") + (if (crop != null) ":part" else "")
+            if (on) lastCrop = crop
+        }
         override fun frameShown(n: Int) { sent += "shown:$n" }
         override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) { sent += "touch:${a.name.lowercase()}"; touches += Offset(x, y) }
         override fun saveMe(p: app.couch.alhasapa.data.Person) { sent += "me:${p.who}:${p.name}:${p.shape}:${p.color}" }
@@ -66,6 +71,7 @@ class KeyboardModeScreenTest {
     private var me by mutableStateOf<String?>(null)
     private var withCouple = false
     private val touches = ArrayList<Offset>()
+    private var lastCrop: KeyLink.Crop? = null
     private var frame by mutableStateOf<KeyClient.MirrorFrame?>(null)
     private var frameNone by mutableStateOf<String?>(null)
     private var versions by mutableStateOf<KeyClient.Versions?>(null)
@@ -121,6 +127,40 @@ class KeyboardModeScreenTest {
         rule.onNodeWithText("מקלדת").performClick(); rule.waitForIdle()
         assertEquals(listOf("mirror:false"), sent.filter { it.startsWith("mirror") })
         key("q").assertIsDisplayed()
+    }
+
+    @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun thePictureIsZoomedWithTwoFingersOrTheButtonsAndTouchesStillLandOnTheirSpot() {
+        state = KeyClient.State.Connected("MiTV", "Dialed", touch = true); show()
+        frame = KeyClient.MirrorFrame(1, 160, 90, jpeg(160, 90))
+        val until = System.currentTimeMillis() + 5_000
+        while (!sent.contains("shown:1") && System.currentTimeMillis() < until) { rule.waitForIdle(); Thread.sleep(10) }
+        sent.clear()
+        // Two fingers spread: the picture grows; nothing touches the game, and the TV is asked for the part in view.
+        rule.onNodeWithTag(MIRROR_TAG).performTouchInput {
+            pinch(center - Offset(40f, 0f), center - Offset(160f, 0f), center + Offset(40f, 0f), center + Offset(160f, 0f))
+        }
+        rule.mainClock.advanceTimeBy(300); rule.waitForIdle()
+        assertTrue("no touch on the game: $sent", sent.none { it.startsWith("touch:") })
+        assertTrue("a part of the page asked for: $sent", sent.any { it == "mirror:true:w:part" })
+        val zoomed = lastCrop!!
+        assertTrue("smaller than the whole page: $zoomed", zoomed.w < 0.6f && zoomed.h < 0.6f)
+        // A tap in the middle is still the middle of the part in view.
+        sent.clear(); touches.clear()
+        rule.onNodeWithTag(MIRROR_TAG).performTouchInput { click(center) }
+        assertEquals(listOf("touch:down", "touch:up"), sent.filter { it.startsWith("touch:") })
+        assertEquals((zoomed.x0 + zoomed.x1) / 2, touches.first().x, 0.03f)
+        assertEquals((zoomed.y0 + zoomed.y1) / 2, touches.first().y, 0.03f)
+        // The whole game again with one button; then larger with the other.
+        sent.clear()
+        rule.onNode(hasContentDescription("כל המשחק")).assertIsEnabled().performClick()
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(300); rule.waitForIdle()
+        assertEquals("all of the page again: $sent", null, lastCrop)
+        rule.onNode(hasContentDescription("הגדלת התמונה")).performClick()
+        rule.waitForIdle(); rule.mainClock.advanceTimeBy(300); rule.waitForIdle()
+        // (The phone's screen is wider than the game: across, more than a share of 1/1.5 of it is in view; down, exactly that.)
+        assertEquals(1f / 1.5f, lastCrop!!.h, 0.03f)
     }
 
     @Test

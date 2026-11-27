@@ -183,6 +183,8 @@ class KeyServer(
         @Volatile var who = ""
         /** Touch mode: how wide the phone draws the pictures (0: it wants none), and the key they are sealed with (null: none for this phone). */
         @Volatile var mirrorWidth = 0
+        /** The part of the page the phone shows, zoomed in (null: all of it). */
+        @Volatile var mirrorCrop: KeyLink.Crop? = null
         @Volatile var frameKey: ByteArray? = null
         /** The picture sent and not yet said to be seen (-1: none), when it went, and whether this phone has any picture at all yet. */
         @Volatile var awaiting = -1
@@ -247,8 +249,12 @@ class KeyServer(
             is Msg.Pair -> checkCode(m.code)
             is Msg.Mirror -> {
                 if (ready) {
+                    val zoomOnly = m.on && mirrorWidth > 0
                     mirrorWidth = if (m.on) m.w.coerceIn(MIN_FRAME_WIDTH, KeyLink.MAX_FRAME_WIDTH) else 0
-                    awaiting = -1; hasPicture = false; toldNone = null
+                    mirrorCrop = if (m.on) m.crop else null
+                    // Zoomed in or out while showing: the next picture is of the new part, at once (the one on the way is let go).
+                    awaiting = -1; toldNone = null
+                    if (!zoomOnly) hasPicture = false else unchangedReset = true
                     main.post { frameTick() }
                 }
                 true
@@ -411,6 +417,8 @@ class KeyServer(
     /** The last picture's bytes, and how many pictures in a row came out the same (a page standing still is pictured less often). */
     @Volatile private var lastJpeg: ByteArray? = null
     private var unchanged = 0
+    /** A phone zoomed: the next picture differs whatever it shows. */
+    @Volatile private var unchangedReset = false
     private var mirroringNow = false
 
     private fun frameTick() {
@@ -450,7 +458,10 @@ class KeyServer(
         lastFrameAt = now
         val n = ++frameN
         val width = due.maxOf { it.mirrorWidth }
-        val asked = runCatching { source.capture(width) { bmp -> encoder.execute { picture(n, bmp, due, now) } } }
+        // The part of the page the phones show: all of it, unless every one of them is zoomed in (then the part that holds them all).
+        val crop = due.map { it.mirrorCrop }.reduce { a, b -> KeyLink.Crop.union(a, b) }
+        if (unchangedReset) { unchangedReset = false; unchanged = 0; lastJpeg = null }
+        val asked = runCatching { source.capture(width, crop) { bmp -> encoder.execute { picture(n, bmp, due, now, crop) } } }
         if (asked.isFailure) {
             capturing = false
             main.postDelayed(frameTickR, CAPTURE_RETRY_MS)
@@ -458,7 +469,7 @@ class KeyServer(
     }
 
     /** On the pictures' thread: the JPEG, sealed for each phone that is due one (and only when it differs from the last). */
-    private fun picture(n: Int, bmp: Bitmap?, due: List<Peer>, started: Long) {
+    private fun picture(n: Int, bmp: Bitmap?, due: List<Peer>, started: Long, crop: KeyLink.Crop?) {
         val jpeg = bmp?.let { b ->
             runCatching { ByteArrayOutputStream(64 * 1024).also { b.compress(Bitmap.CompressFormat.JPEG, FRAME_QUALITY, it) }.toByteArray() }.getOrNull()
         }
@@ -476,7 +487,7 @@ class KeyServer(
             if (same && p.hasPicture && p.awaiting < 0) continue
             val (iv, data) = FrameCrypto.seal(key, n, jpeg)
             p.awaiting = n; p.sentAt = at; p.hasPicture = true; p.toldNone = null
-            p.send(Msg.Frame(n, w, h, iv, data))
+            p.send(Msg.Frame(n, w, h, iv, data, crop))
         }
         main.post {
             capturing = false

@@ -130,8 +130,8 @@ interface KeySink {
     /** Presses "save the result" on the TV (offered while a game's end screen is up there). */
     fun saveResult() {}
 
-    /** Touch mode: pictures of the TV's game are wanted ([on]), [width] pixels wide, or no more. */
-    fun mirror(on: Boolean, width: Int) {}
+    /** Touch mode: pictures of the TV's game are wanted ([on]), [width] pixels wide, of the part [crop] of the page when zoomed in, or no more. */
+    fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop? = null) {}
 
     /** Picture [n] is on the screen (the TV sends the next one only then). */
     fun frameShown(n: Int) {}

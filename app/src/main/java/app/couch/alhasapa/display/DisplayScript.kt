@@ -20,6 +20,12 @@ import org.json.JSONObject
  * second, which a TV box cannot keep up with (it froze the picture on one, and at its full graphics a key took too long to show for a
  * game with 25 seconds a question). Only that named key is looked at, and it is set only when it is not there: a choice made in the
  * game's own settings stays.
+ *
+ * And, on a TV only, for a site whose profile asks for it ([DisplayProfile.tvLight]): the site's blurs and frosted glass are taken out of
+ * its style sheets as they arrive, and out of the inline styles its scripts animate. Dialed blurs dozens of things, one by 70 px over an
+ * area larger than the screen, and frosts the glass behind its labels; the box's graphics chip could not draw that, the picture froze
+ * and the app closed the game. Only those two effects go (colours, sizes, motion and the game stay), and never a blur that keeps
+ * something locked out of sight.
  */
 object DisplayScript {
     fun build(profile: DisplayProfile, tv: Boolean = false): String {
@@ -31,9 +37,10 @@ object DisplayScript {
             val pairs = JSONObject().apply { profile.tvStorage.forEach { (k, v) -> put(k, v) } }.toString()
             "  try{var P=${quote(pairs)};P=JSON.parse(P);for(var k in P){if(window.localStorage.getItem(k)===null)window.localStorage.setItem(k,P[k])}}catch(e){}\n"
         } else ""
+        val lightFx = if (tv && profile.tvLight) LIGHT_FX else ""
         return """
 (function(){
-$prefs  var CSS=${quote(css)}, LIGHT=${!profile.dark};
+$prefs$lightFx  var CSS=${quote(css)}, LIGHT=${!profile.dark};
   function head(){return document.head||document.documentElement}
   function light(){
     if(!LIGHT) return;
@@ -60,6 +67,50 @@ $prefs  var CSS=${quote(css)}, LIGHT=${!profile.dark};
 })();
 """.trimIndent()
     }
+
+    /** The blurs and frosted glass out (see the class comment). Idempotent: a second run only sweeps the sheets again. */
+    internal const val LIGHT_FX = """  (function(){
+    if(window.__couchLight){window.__couchLight();return}
+    var B=/blur\([^)]*\)/g, KEEP=/lock|premium|paywall|subscri/i, n=0;
+    // Frosted glass, and the filters of the drawn-on bits before and after elements (glows), by a rule of our own that wins.
+    var RULE='*,*::before,*::after{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}*::before,*::after{filter:none!important}';
+    function own(){if(document.getElementById('couch-light'))return;var h=document.head||document.documentElement;if(!h)return;var st=document.createElement('style');st.id='couch-light';st.textContent=RULE;h.appendChild(st)}
+    function cls(el){var c=el.className;return c&&c.baseVal!==undefined?c.baseVal:(c||'')}
+    function keep(el){return KEEP.test(cls(el))||(el.parentElement&&KEEP.test(cls(el.parentElement)))}
+    // A style rule the page's own sheet allows us to read (a sheet of the same site): its blurs go at the source.
+    function fix(st,sel){
+      if(!st||(sel&&KEEP.test(sel)))return;
+      var f=st.getPropertyValue('filter');
+      if(f&&f.indexOf('blur(')>=0){var r=f.replace(B,'').trim();st.setProperty('filter',r||'none',st.getPropertyPriority('filter'));n++}
+      var w=st.getPropertyValue('will-change');if(w&&w.indexOf('filter')>=0)st.setProperty('will-change','auto');
+    }
+    function walk(rules,sel){for(var i=0;i<rules.length;i++){var r=rules[i],s=r.selectorText||r.name||sel||'';if(r.style)fix(r.style,s);if(r.cssRules)walk(r.cssRules,s)}}
+    function sheets(){var ss=document.styleSheets;for(var i=0;i<ss.length;i++){var sh=ss[i];if(sh.__couchLight)continue;try{var rs=sh.cssRules;if(!rs)continue;walk(rs,'');sh.__couchLight=1}catch(e){sh.__couchLight=1}}}
+    // Any element drawn blurred, whatever made it so (another site's sheet, an animation, a script): its blur off, on the element
+    // itself, above the sheets and the animations; any other filter it has stays.
+    function el(e){
+      if(!e||e.nodeType!==1||keep(e))return;
+      var f=getComputedStyle(e).filter;
+      if(f&&f.indexOf('blur(')>=0){var r=f.replace(B,'').trim();e.style.setProperty('filter',r||'none','important');n++}
+    }
+    function scan(root){var all=(root||document).getElementsByTagName('*');for(var i=0;i<all.length&&i<3000;i++)el(all[i])}
+    var pend=[],t=0;
+    function later(x){if(x)pend.push(x);if(!t)t=setTimeout(function(){t=0;own();sheets();var p=pend;pend=[];if(p.length>40)scan();else for(var i=0;i<p.length;i++){el(p[i]);if(p[i].getElementsByTagName)scan(p[i])}},120)}
+    window.__couchLight=function(){own();sheets();scan()};
+    window.__couchLightCount=function(){return n};
+    own();
+    new MutationObserver(function(ms){
+      for(var i=0;i<ms.length;i++){var m=ms[i];
+        if(m.type==='attributes'){var e=m.target;if(m.attributeName==='style'&&e.style&&e.style.filter&&e.style.filter.indexOf('blur(')>=0&&e.style.getPropertyPriority('filter')!=='important'&&!keep(e)){var r=e.style.filter.replace(B,'').trim();e.style.setProperty('filter',r||'none','important');n++}else later(e)}
+        else for(var j=0;j<m.addedNodes.length;j++)later(m.addedNodes[j])}
+    }).observe(document,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class']});
+    // An animation that blurs is caught as it starts.
+    document.addEventListener('animationstart',function(e){var x=e.target;requestAnimationFrame(function(){el(x)})},true);
+    document.addEventListener('transitionrun',function(e){if(e.propertyName==='filter'){var x=e.target;requestAnimationFrame(function(){el(x)})}},true);
+    document.addEventListener('DOMContentLoaded',function(){own();sheets();scan()});
+    window.addEventListener('load',function(){sheets();scan()});
+  })();
+"""
 
     /** A JS string literal (or null) for a Kotlin string: JSON quoting, with the characters that could end a script block escaped. */
     private fun quote(s: String?): String =

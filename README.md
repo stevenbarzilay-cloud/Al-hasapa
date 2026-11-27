@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.9.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.10.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -403,6 +403,34 @@ want to play on, starting with Krillion and NYT:
     button has the focus, though the home keeps a focus of its own); a note after a game's celebration; the phone's dialogs (asked
     once and saved; a note with words, a drawing and the game on the TV). **Not tried on the devices:** two phones connected to the
     box at once (allowed, but only one ever was), and how a note reads from the couch.
+- **1.9.10: Dialed light enough for the box, Haaretz's games by their own links and scored, zoom in touch mode, no grey box.**
+  From the first evening with 1.9.9 (the picture's size: right; the paw: right; touch mode: to keep):
+  - *Dialed froze the TV in its second game* ("the game froze the picture, so we closed it": the app's guard, after four seconds of
+    a frozen picture). Dialed blurs dozens of things, one by 70 px over more than the whole screen, frosts the glass behind its
+    labels, and animates blurs; that is what a TV box's graphics chip cannot draw. On the TV the app now takes the blurs and the
+    frosted glass out of Dialed as it draws: its style sheets come from another site, which a page's script may not read, so the
+    blurred elements are found by how they are drawn (and as each animation starts) and drawn without the blur, and a rule of the
+    app's own takes the frosted glass away. Colours, sizes, motion and the game stay; a blur that keeps something locked stays.
+    Checked in Chromium on a page made like Dialed's (`tools/light_check.cjs`) and on Dialed itself (its first screen looks the
+    same). How many blurs went is written in the report (ⓘ). `display_profiles.json`: `"tvLight": true` (`DisplayScript.LIGHT_FX`).
+  - *Haaretz's games all opened the games' main page.* Each now opens its own page: the links were found by searching the web (the
+    site itself cannot be opened from where this is built). 5 אותיות, מה הקשר?, איזה שיר!, מי אני? and הגיונית have their game
+    pages; סודוקו its own page; 20 שאלות the column's page. Where a game's link leads somewhere else, the report says so.
+  - *Haaretz's results*, which are words, not a number to copy: when "save the result" finds nothing to copy, the end screen's short
+    lines that speak of a result are read (from the page and the frames of the same site in it; not the article around the game,
+    not what is hidden) and turned into numbers: tries ("פתרתם בניסיון השלישי", "ב-4 ניסיונות מתוך 6"), mistakes, hints, a time, a
+    score out of something, and how we did against everyone ("טובים יותר מ-82% מהשחקנים", "בין ה-10% המהירים"). The sheet opens
+    with them in the app's own words ("קראנו את התוצאה ממסך הסיום"), to be checked and saved; a game with nothing but a standing is
+    scored by it (better than 82% is 8 of 10). Only the numbers are kept, never a line of the page (a lost game's screen may hold the
+    answer). איזה שיר! and מי אני? are now scored by hints, סודוקו by time, 20 שאלות by the score. **The end screens were not seen**:
+    the patterns are the common ways of saying these things, and the first real ones may need a mend.
+  - *Zoom in touch mode*: two fingers spread or pinch the picture and move it (they never touch the game); "+", "−" and "the whole
+    game" buttons in its corner do the same with one hand. Zoomed in, the TV sends only that part of the page (`mirror.c`,
+    `frame.c`), so it is as sharp as the TV's pixels allow; a tap still lands on the same spot of the game. An older TV sends the
+    whole page, enlarged on the phone.
+  - *A grey box behind one cushion*: Android puts its own focus on some button when a screen opens, which the remote never moves (the
+    app takes the keys first), and drew its grey mark behind it. On the TV the app's buttons no longer wear Android's mark; the
+    remote's focus (the red, a cushion's threads) is the only one (`tvTarget`, `TvPreviewTest.aCushionWithAndroidsOwnFocusLooksLikeAnyOther`).
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

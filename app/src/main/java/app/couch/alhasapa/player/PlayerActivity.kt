@@ -61,7 +61,7 @@ class PlayerActivity : ComponentActivity() {
         // Touch mode (1.9.8): a game played by dragging turns the phone to touch mode by itself, and the phone is shown the game's page.
         if (tv.enabled) {
             remote.touchGame = !session.loginMode && session.gameId?.let { app.catalog.game(it)?.touch } == true
-            remote.frameSource = FrameSource { w, done -> picturePage(w, done) }
+            remote.frameSource = FrameSource { w, crop, done -> picturePage(w, crop, done) }
         }
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -130,10 +130,14 @@ class PlayerActivity : ComponentActivity() {
      * A picture of the game's page for a phone in touch mode: the window's own pixels where the page is (PixelCopy, so whatever the
      * graphics chip drew, a game's canvas included), made at most [maxWidth] wide by the copy itself.
      */
-    private fun picturePage(maxWidth: Int, done: (android.graphics.Bitmap?) -> Unit) {
+    private fun picturePage(maxWidth: Int, crop: app.couch.alhasapa.remote.KeyLink.Crop?, done: (android.graphics.Bitmap?) -> Unit) {
         val box = remote.pageBox
         if (box == null || isFinishing || isDestroyed) { done(null); return }
-        val src = android.graphics.Rect(box.l.toInt(), box.t.toInt(), box.r.toInt(), box.b.toInt())
+        // A phone zoomed in: only that part of the page, so it is as sharp there as the TV's own pixels allow.
+        val bw = box.r - box.l
+        val bh = box.b - box.t
+        val src = if (crop == null) android.graphics.Rect(box.l.toInt(), box.t.toInt(), box.r.toInt(), box.b.toInt())
+        else android.graphics.Rect((box.l + crop.x0 * bw).toInt(), (box.t + crop.y0 * bh).toInt(), (box.l + crop.x1 * bw).toInt(), (box.t + crop.y1 * bh).toInt())
         if (src.width() < 16 || src.height() < 16) { done(null); return }
         val w = minOf(maxWidth, src.width()).coerceAtLeast(16)
         val h = (src.height().toLong() * w / src.width()).toInt().coerceAtLeast(16)

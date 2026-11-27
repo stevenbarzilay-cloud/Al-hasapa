@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -135,6 +137,42 @@ class TvPreviewTest {
         rule.runOnIdle { c.navigate(Dir.DOWN) }; rule.waitForIdle()
         repeat(3) { rule.runOnIdle { c.navigate(Dir.LEFT) }; rule.waitForIdle() }
         shot("tv-home-more.png")
+    }
+
+    /**
+     * The box gives one of the cushions Android's own focus when the home opens (the remote's focus is the app's, and moves without
+     * it). Until 1.9.10 that cushion then wore Android's focus mark, a grey box behind it, for as long as the home was up.
+     */
+    @Test
+    fun aCushionWithAndroidsOwnFocusLooksLikeAnyOther() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val date = java.time.LocalDate.of(2026, 11, 23)
+        val model = app.couch.alhasapa.home.HomeModel.from(app.couch.alhasapa.data.CouchState.empty(), catalog, pieces, date)
+        val nav = app.couch.alhasapa.home.HomeNav()
+        app.couch.alhasapa.home.warmHomeArt(ApplicationProvider.getApplicationContext<Context>())
+        rule.setContent {
+            // As on a TV, which is driven by keys, not by touch (Android's focus exists only then).
+            val input = androidx.compose.ui.platform.LocalInputModeManager.current
+            androidx.compose.runtime.LaunchedEffect(Unit) { input.requestInputMode(androidx.compose.ui.input.InputMode.Keyboard) }
+            AlHasapaTheme { TvLayer(c) { app.couch.alhasapa.home.TvHome(model, phoneConnected = false, nav = nav, onPlay = {}, onAccounts = {}, onMore = {}, onInfo = {}) } }
+        }
+        rule.waitForIdle()
+        val node = rule.onNode(androidx.compose.ui.test.hasContentDescription("Strands", substring = true))
+        node.requestFocus()
+        rule.waitForIdle()
+        node.assertIsFocused()
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        val dir = File("build/previews").apply { mkdirs() }
+        File(dir, "tv-home-android-focus.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        // Just inside the button's corner, outside the cushion's own outline: the wall behind it, as beside any other cushion.
+        val b = node.fetchSemanticsNode().boundsInRoot
+        val corner = img.getPixel(b.left.toInt() + 3, b.top.toInt() + 3)
+        val outside = img.getPixel(b.left.toInt() - 2, b.top.toInt() + 3)
+        // (The wall is a faint gradient: two points side by side may differ by a shade.)
+        fun near(a: Int, b: Int) = listOf(16, 8, 0).all { sh -> kotlin.math.abs(((a shr sh) and 0xFF) - ((b shr sh) and 0xFF)) <= 6 }
+        org.junit.Assert.assertTrue("no box of Android's own behind the cushion: %08x against %08x".format(corner, outside), near(corner, outside))
     }
 
     /** The TV's settings over the home, with the picture made a little smaller (the red corners at its edges), and each cursor. */

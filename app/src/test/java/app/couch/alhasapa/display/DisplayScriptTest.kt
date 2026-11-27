@@ -74,5 +74,21 @@ class DisplayScriptTest {
         // As on the TV for Krillion: the real profile from the table.
         File(dir, "display-tv-krillion.js").writeText(DisplayScript.build(profileOf("https://krillion.io/"), tv = true))
         assertTrue(File(dir, "display-tv-krillion.js").readText().contains("krillion-low-power"))
+        // As on the TV for Dialed: its blurs and frosted glass out (tools/light_check.cjs).
+        File(dir, "display-tv-dialed.js").writeText(DisplayScript.build(profileOf("https://dialed.gg/color"), tv = true))
+        assertTrue(File(dir, "display-tv-dialed.js").readText().contains("__couchLight"))
+    }
+
+    @Test
+    fun onlyOnATvAndOnlyForTheSitesThatAskDoTheBlursGo() {
+        val dialed = profileOf("https://dialed.gg/sound")
+        assertTrue("the whole site, every game of it", dialed.tvLight)
+        assertTrue(DisplayScript.build(dialed, tv = true).contains("__couchLight"))
+        assertFalse("not on a phone", DisplayScript.build(dialed, tv = false).contains("__couchLight"))
+        assertFalse("not for another site", DisplayScript.build(profileOf("https://krillion.io/"), tv = true).contains("__couchLight"))
+        // Whatever was saved for a page of the site, it holds (it is about the box, not about how a page is shown).
+        val saved = JSONObject().put("dialed.gg/color", dialed.copy(zoom = 110).toJson())
+        assertTrue(profiles.resolve("https://dialed.gg/color", saved).profile.tvLight)
+        assertFalse("never part of what is saved", dialed.toJson().has("tvLight"))
     }
 }

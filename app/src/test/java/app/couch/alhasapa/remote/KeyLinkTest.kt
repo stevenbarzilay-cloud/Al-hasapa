@@ -33,7 +33,8 @@ class KeyLinkTest {
             Msg.Screen("Catfishing", result = true), Msg.SaveResult,
             // From 1.9.8: touch mode.
             Msg.Screen("Dialed", touch = true), Msg.Screen("Dialed", result = true, touch = true),
-            Msg.Mirror(true, 1_080), Msg.Mirror(false, 0), Msg.FrameOk(17), Msg.FrameNone(KeyLink.NONE_HOME), Msg.FrameNone(KeyLink.NONE_CAPTURE),
+            Msg.Mirror(true, 1_080), Msg.Mirror(false, 0), Msg.FrameOk(17),
+            Msg.Mirror(true, 900, KeyLink.Crop(0.25f, 0.1f, 0.75f, 0.6f)), Msg.FrameNone(KeyLink.NONE_HOME), Msg.FrameNone(KeyLink.NONE_CAPTURE),
             Msg.Touch(KeyLink.TouchAction.DOWN, 0.25f, 0.75f), Msg.Touch(KeyLink.TouchAction.MOVE, 0.2512f, 0.7f),
             Msg.Touch(KeyLink.TouchAction.UP, 1f, 0f), Msg.Touch(KeyLink.TouchAction.CANCEL, 0.5f, 0.5f),
             // From 1.9.9: each of us on our own phone, and notes.
@@ -62,6 +63,22 @@ class KeyLinkTest {
         // Anything that is not Base64 goes the long way round, escaped, and still comes back the same.
         val odd = Msg.Frame(1, 2, 3, "a\"b", "c\\d")
         assertEquals(odd, KeyLink.decode(KeyLink.encode(odd), KeyLink.MAX_FRAME_LINE))
+    }
+
+    @Test
+    fun aPictureOfAPartOfThePageSaysWhichPart() {
+        val part = KeyLink.Crop(0.1f, 0.2f, 0.6f, 0.7f)
+        val m = Msg.Frame(3, 640, 360, "AAECAwQFBgcICQoL", "QUJD".repeat(100), part)
+        assertEquals(m, KeyLink.decode(KeyLink.encode(m), KeyLink.MAX_FRAME_LINE))
+        // From an older TV there is no part: the whole page.
+        assertEquals(null, (KeyLink.decode(KeyLink.encode(m.copy(crop = null)), KeyLink.MAX_FRAME_LINE) as Msg.Frame).crop)
+        fun crop(json: String) = KeyLink.Crop.of(org.json.JSONArray(json))
+        assertNull("all of it is no part", crop("[0,0,1,1]"))
+        assertNull("too small to be one", crop("[0.5,0.5,0.52,0.6]"))
+        assertNull("not numbers", crop("[\"a\",0,1,1]"))
+        assertEquals(KeyLink.Crop(0f, 0.5f, 1f, 1f), crop("[-1,0.5,3,1]"))
+        assertEquals(KeyLink.Crop(0.1f, 0.1f, 0.9f, 0.8f), KeyLink.Crop.union(KeyLink.Crop(0.1f, 0.2f, 0.5f, 0.8f), KeyLink.Crop(0.3f, 0.1f, 0.9f, 0.4f)))
+        assertNull("a phone that shows all of it wins", KeyLink.Crop.union(part, null))
     }
 
     @Test
