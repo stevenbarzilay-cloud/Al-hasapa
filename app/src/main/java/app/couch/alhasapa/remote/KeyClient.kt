@@ -573,8 +573,14 @@ class KeyClient(
     }
 }
 
-/** A TV found on this network (2.0): where it is, and its id when the network said it. */
-data class FoundTv(val address: String, val tv: String)
+/**
+ * A TV found on this network (2.0): where it is, and its id when the network said it ([tv]; empty when it did not). [hint]: the
+ * beginning of its id, from the name it announces itself by (enough to try it first; what it says of itself decides).
+ */
+data class FoundTv(val address: String, val tv: String, val hint: String = "") {
+    /** Whether this may be one of [tvs]: by its id, or, when the network did not say it, by the beginning of it in its name. */
+    fun mayBe(tvs: Set<String>): Boolean = tv in tvs || (tv.isEmpty() && hint.isNotEmpty() && tvs.any { it.startsWith(hint) })
+}
 
 /** Asks the home network (DNS-SD) where the TVs' keyboard links are. */
 class NsdFinder(context: Context) {
@@ -585,9 +591,9 @@ class NsdFinder(context: Context) {
      * say is given too (after those it does), to be asked who it is; with no [tvs], every TV found.
      */
     fun find(tvs: Set<String>, timeoutMs: Long): List<String> {
-        val all = scan(timeoutMs) { f -> tvs.isNotEmpty() && f.tv in tvs }
-        val meant = all.filter { it.tv in tvs }.map { it.address }
-        return if (tvs.isEmpty()) all.map { it.address } else meant + all.filter { it.tv.isEmpty() }.map { it.address }
+        val all = scan(timeoutMs) { f -> tvs.isNotEmpty() && f.mayBe(tvs) }
+        if (tvs.isEmpty()) return all.map { it.address }
+        return (all.filter { it.tv in tvs } + all.filter { it.tv !in tvs && it.mayBe(tvs) } + all.filter { it.tv.isEmpty() && !it.mayBe(tvs) }).map { it.address }
     }
 
     /** Every TV found within [timeoutMs], or until [enough] says one of them is the one looked for. */
@@ -604,7 +610,8 @@ class NsdFinder(context: Context) {
                 nsd.resolveService(info, object : NsdManager.ResolveListener {
                     override fun onServiceResolved(r: NsdServiceInfo) {
                         val tv = runCatching { r.attributes["tv"]?.let { String(it, Charsets.UTF_8) } }.getOrNull().orEmpty()
-                        r.host?.hostAddress?.let { found.offer(FoundTv((if (':' in it) "[$it]" else it) + ":" + r.port, tv)) }
+                        val hint = NAME.find(r.serviceName.orEmpty())?.groupValues?.get(1).orEmpty()
+                        r.host?.hostAddress?.let { found.offer(FoundTv((if (':' in it) "[$it]" else it) + ":" + r.port, tv, hint)) }
                         resolving.set(false); next()
                     }
                     override fun onResolveFailed(r: NsdServiceInfo, error: Int) { resolving.set(false); next() }
@@ -635,6 +642,11 @@ class NsdFinder(context: Context) {
         }
         runCatching { nsd.stopServiceDiscovery(discovery) }
         return out.values.toList()
+    }
+
+    private companion object {
+        /** A TV announces itself as "AlHasapa TV " and the first four characters of its id (see KeyServer.announce). */
+        val NAME = Regex("AlHasapa TV ([0-9a-f]{4})")
     }
 }
 

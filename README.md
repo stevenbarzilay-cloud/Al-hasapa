@@ -841,6 +841,20 @@ Do these in order; each one tells you which part to blame if it fails.
 6. **Do Not Disturb.** While casting, once per evening, the chip should appear. Tell me if it never does.
 7. **Updates.** Install a newer APK over this one without uninstalling: logins and history stay.
 
+**Couches (2.0), once, on the Pixel and the TV.** None of this could be run on a device while it was written:
+
+1. **The update keeps everything.** Install 2.0 over what is there, on the TV and on both phones (no uninstall). The TV's home
+   says "הספה של סטיב ורוני" beside the date; the phones' home shows the same under the header; names, points, history and logins
+   are as they were; keyboard mode connects with no code.
+2. **"הספות שלי"** (the line under the phone's header, or the settings tab): the home couch with its mark, "הטלפון מחובר עכשיו
+   לטלוויזיה …" while it is, and the TV listed under "טלוויזיות ברשת הזאת" as the home's.
+3. **Still alike.** A result saved on the TV shows on the phones; a game played alone on one phone nudges the other.
+4. **A guest.** With a second TV, or a friend's: choose it in "הספות שלי", "לשחק כאן כאורח הערב", type the code (the TV says
+   what the phone asks to come as), say who you are there. The line "מתארח בספה של …" stays over the home; a game played alone
+   asks which couch first; "סיום ביקור" lets go of that TV at once.
+5. **The link.** After the first run of the release workflow (`docs/DISTRIBUTION.md`): "שליחת האפליקציה לחבר" says "✓ מוכן לשליחה",
+   and both downloads install on a device that never had the app (it opens on "הקמת ספה משלי" / "הצטרפות לספה קיימת").
+
 What to expect to differ from the prototype: a few game links are Google searches standing in for a direct link (the hub
 marks them "קישור זמני"; replace them under "הקישורים שלנו"), and the Haaretz chain link in the catalogue is a dated page.
 

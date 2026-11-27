@@ -257,3 +257,16 @@ class CouchSetupTest {
         assertFalse(app.couch.alhasapa.results.SoloTargets.isHome(before.copy(couch = danny.id), repo))
     }
 }
+
+/** Finding a TV on the network (2.0): which of those found may be one of the TVs that are meant. */
+class FoundTvTest {
+    @Test
+    fun aTvIsMeantByItsIdOrByTheBeginningOfItInItsNameWhenTheNetworkDoesNotSayIt() {
+        val meant = setOf("ab12cd34ef56")
+        assertTrue(FoundTv("192.168.1.5:47123", "ab12cd34ef56").mayBe(meant))
+        assertFalse("another TV, by its id", FoundTv("192.168.1.6:47123", "ffff00001111", "ab12").mayBe(meant))
+        assertTrue("its id was not said, its name begins like it: tried, and what it says of itself decides", FoundTv("192.168.1.7:47123", "", "ab12").mayBe(meant))
+        assertFalse(FoundTv("192.168.1.8:47123", "", "9999").mayBe(meant))
+        assertFalse(FoundTv("192.168.1.9:47123", "", "").mayBe(meant))
+    }
+}

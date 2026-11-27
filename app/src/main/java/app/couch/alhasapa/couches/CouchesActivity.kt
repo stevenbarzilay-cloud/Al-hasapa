@@ -212,7 +212,8 @@ class CouchesActivity : ComponentActivity() {
                 note = state.left?.let { stringResource(R.string.couch_code_wrong, it) } ?: p.couch?.name, tag = COUCH_CODE_TAG,
                 onOk = { code -> if (code.length == 4) client.sendCode(code) }, onDismiss = { giveUp() },
             )
-            KeyClient.State.Wait -> { Toast.makeText(this, R.string.couch_wait, Toast.LENGTH_LONG).show(); giveUp() }
+            // The TV closed pairing for a while (too many wrong codes): said once, and the connection is given up on.
+            KeyClient.State.Wait -> LaunchedEffect(p) { Toast.makeText(this@CouchesActivity, R.string.couch_wait, Toast.LENGTH_LONG).show(); giveUp() }
             // The chosen TV is not on this network: said, with another try or a way out. Nothing was changed.
             is KeyClient.State.NotFound -> DialogCard({ giveUp() }) {
                 androidx.compose.material3.Text(
@@ -280,8 +281,10 @@ class CouchesActivity : ComponentActivity() {
             joining -> Step.Join(n)
             // A phone from before 2.0 that knew several TVs, and this is one of them: asked once whether it is its home's.
             n.tv.id in couches.askHome -> Step.AskHome(n)
-            // A TV with no couch yet, the home's own, or (for a phone from before 2.0 that has yet to learn its couch) the one it was paired with.
-            c == null || c.id == home?.id || (home == null && n.tv.id in couches.homeTvs) -> Step.ConnectHome(n)
+            // One of the home's own TVs already: connected to, with nothing to ask.
+            n.tv.id in couches.homeTvs && (c == null || home == null || c.id == home.id) -> { connect(n, KeyLink.AS_HOME, Purpose.HOME_TV); Step.None }
+            // A TV with no couch yet, or one of the home's couch that this phone has not met: it joins the home.
+            c == null || c.id == home?.id -> Step.ConnectHome(n)
             // A couch saved before: the visit begins as it was set up, without the choices again.
             couches.saved(c.id)?.kept == true -> { visitSaved(couches.saved(c.id)!!, n); Step.None }
             else -> Step.Options(n)
