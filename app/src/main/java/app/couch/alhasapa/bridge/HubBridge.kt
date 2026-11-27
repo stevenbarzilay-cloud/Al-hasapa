@@ -54,6 +54,9 @@ class HubBridge(
 
         /** "הספות שלי" (2.0): the home couch, friends' couches, a visit, and the app's install link for a friend. */
         fun openCouches() {}
+
+        /** "שליחת האפליקציה לחבר" (2.0): the install link, to the share sheet, once both downloads are known to be there. */
+        fun shareApp() {}
     }
 
     /** `{rev, fresh, state}`: `fresh` is true on the very first run, when the page may bring over what it stored itself. */
@@ -131,6 +134,9 @@ class HubBridge(
 
     @JavascriptInterface
     fun openCouches() { if (!TvMode.isTelevision(context)) actions.openCouches() }
+
+    @JavascriptInterface
+    fun shareApp() { if (!TvMode.isTelevision(context)) actions.shareApp() }
 
     /** How many notes written on this phone wait for the TV. */
     @JavascriptInterface

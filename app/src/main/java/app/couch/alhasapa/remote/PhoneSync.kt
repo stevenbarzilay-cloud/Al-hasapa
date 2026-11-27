@@ -77,7 +77,9 @@ class PhoneSync(
             val st = c.state.value
             if (st is KeyClient.State.Connected) {
                 if (connectedAt == 0L) connectedAt = now
-                if (c.notesWaiting.value == 0 && !c.awaitingAll && now - connectedAt >= SETTLE_MS) {
+                // (Only the notes written for the home wait for this TV; one for a friend's couch waits for that couch's.)
+                val home = (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo?.peek { app.couch.alhasapa.data.Couches.of(it)?.id }
+                if (RemoteStore(context).pendingNotes(home, home).isEmpty() && !c.awaitingAll && now - connectedAt >= SETTLE_MS) {
                     RemoteStore(context).syncedAt = target
                     RemoteStore(context).sharedAt = System.currentTimeMillis()
                     Flight.log("sync: handed over to the TV")

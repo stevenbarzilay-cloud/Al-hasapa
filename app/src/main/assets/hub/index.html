@@ -1032,7 +1032,7 @@ function renderSettings(){
       <div class="row-btns"><button class="btn primary" type="button" data-act="addMany">הוספת כולם</button></div></div>
     ${NATIVE&&NATIVE.openCouches&&!document.documentElement.classList.contains("tv")?`<div class="panel"><h3>הספות שלי</h3>
       <p class="help" style="margin:0 0 8px">ספת הבית, ספות של חברים שמתארחים בהן, חיבור טלוויזיה, ושליחת האפליקציה לחבר (קישור התקנה בלבד, בלי פרטים שלכם).</p>
-      <div class="row-btns"><button class="btn" type="button" data-act="couches">הספות שלי</button><button class="btn" type="button" data-act="couches">שליחת האפליקציה לחבר</button></div></div>`:""}
+      <div class="row-btns"><button class="btn" type="button" data-act="couches">הספות שלי</button><button class="btn" type="button" data-act="shareapp">שליחת האפליקציה לחבר</button></div></div>`:""}
     <div class="panel"><h3>החשבונות</h3>
       <p class="help" style="margin:0 0 8px">התחברות ל-NYT, להארץ ולשני חשבונות הלינקדאין. נשמרת רק באפליקציה הזאת.</p>
       <div class="row-btns"><button class="btn" type="button" data-act="accounts">לחשבונות</button></div></div>
@@ -1248,6 +1248,7 @@ document.querySelector("main").addEventListener("click",e=>{
   if(act==="shuffle"){featOffset++;renderHome();return}
   if(act==="accounts"){NATIVE?NATIVE.openAccounts():toast("החשבונות זמינים באפליקציה.");return}
   if(act==="couches"){if(NATIVE&&NATIVE.openCouches)NATIVE.openCouches();return}
+  if(act==="shareapp"){if(NATIVE&&NATIVE.shareApp)NATIVE.shareApp();else if(NATIVE&&NATIVE.openCouches)NATIVE.openCouches();return}
   if(act==="urls"){setView("settings");return}
   if(act==="saveLinks"){saveLinks();return}
   if(act==="addGame"){addGameFromForm();return}

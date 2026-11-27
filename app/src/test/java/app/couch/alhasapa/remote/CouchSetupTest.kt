@@ -48,24 +48,27 @@ class CouchSetupTest {
     private fun without(state: JSONObject, vararg keys: String): String = JSONObject(state.toString()).also { s -> keys.forEach { s.remove(it) } }.toString()
 
     @Test
-    fun theTvAndThePhonesItGaveItsRelayToAgreeOnTheirCouchAndKeepEverything() {
+    fun aTvAndItsPhoneFromBefore20AreOfOneCouchAndKeepEverything() {
         val relay = RelayConfig.create()
         RelayStore(context).config = relay
         val before = from112()
-        // The TV.
+        // The TV names its couch (from the topic of the relay it made).
         val tv = StateRepository(Memory(before))
         CouchSetup.migrate(context, tv, tv = true)
-        // A phone that holds the same relay, paired with that TV.
+        val id = Couches.idFromTopic(relay.topic)
+        assertEquals(CouchRef(id, "הספה של סטיב ורוני"), Couches.of(tv.snapshot()))
+        // Its phone, paired with it before 2.0: of that TV's couch. Nothing is made up meanwhile, and nothing of its data is touched.
         RemoteStore(context).saveToken("tv0001", "t".repeat(64))
         val phone = StateRepository(Memory(before))
         CouchStore(context).migrated = false
         CouchSetup.migrate(context, phone, tv = false)
-
-        val id = Couches.idFromTopic(relay.topic)
-        assertEquals("the same couch on both, without their talking", CouchRef(id, "הספה של סטיב ורוני"), Couches.of(tv.snapshot()))
-        assertEquals(Couches.of(tv.snapshot()), Couches.of(phone.snapshot()))
-        assertEquals("the TV it was paired with is taken for the home's", setOf("tv0001"), CouchStore(context).homeTvs)
-        // Names, pieces, points, history, the games played alone, the friend who comes often: all as they were.
+        assertEquals(JSONObject(before).toString(), phone.snapshot().toString())
+        assertEquals("the TV it was paired with is the home's", setOf("tv0001"), CouchStore(context).homeTvs)
+        assertEquals(KeyClient.Target(setOf("tv0001"), KeyLink.AS_HOME), Links.targetFor(context))
+        // They meet (at home, or through the relay): the phone learns its couch from what the TV says.
+        for (share in app.couch.alhasapa.data.Shared.chunks(tv.snapshot(), listOf("2026-11-20"))) phone.mergeShared(share)
+        assertEquals("the same couch on both", Couches.of(tv.snapshot()), Couches.of(phone.snapshot()))
+        // Names, pieces, points, history, the games played alone, the friend who comes often: all as they were, on both.
         for (r in listOf(tv, phone)) {
             assertEquals(JSONObject(before).toString(), JSONObject(without(r.snapshot(), Couches.KEY, "stamps", "gone")).toString())
             assertEquals("סטיב" to "רוני", CouchState.names(r.snapshot()))
@@ -77,6 +80,18 @@ class CouchSetupTest {
         val again = phone.json()
         CouchSetup.migrate(context, phone, tv = false)
         assertEquals(again, phone.json())
+
+        // A phone that knew several TVs and holds a relay is of the couch of the TV that gave it: the same id, from the same topic.
+        val couches = CouchStore(context)
+        couches.migrated = false; couches.homeTvs = emptySet()
+        RemoteStore(context).saveToken("tv0002", "u".repeat(64))
+        val several = StateRepository(Memory(before))
+        CouchSetup.migrate(context, several, tv = false)
+        assertEquals(id, Couches.of(several.snapshot())!!.id)
+        assertEquals("each is taken for the home's until it says it is of another couch", setOf("tv0001", "tv0002"), couches.homeTvs)
+        CouchSetup.otherCouch(context, KeyClient.Tv("tv0002", "DannyTV", CouchRef("c1111111111111aa", "הספה של דני")))
+        assertEquals(setOf("tv0001"), couches.homeTvs)
+        assertEquals("and that one is kept among the friends' couches", listOf("הספה של דני"), couches.saved().map { it.name })
         RelayStore(context).config = null
     }
 
@@ -216,5 +231,29 @@ class CouchSetupTest {
         assertEquals(setOf("tv0001"), couches.homeTvs)
         assertNull("the couch that is the home is not also a saved one", couches.saved(ours))
         assertNotNull("Danny's, which was the home for a while, is kept", couches.saved(danny.id))
+    }
+
+    @Test
+    fun aStateFromBefore20ThatHasNotLearntItsCouchYetIsKeptWhenTheHomeChanges() {
+        val couches = CouchStore(context)
+        // A phone from 1.12, paired with one TV it has not met since the update: its couch has no id yet.
+        RemoteStore(context).saveToken("tv0001", "t".repeat(64))
+        val repo = StateRepository(Memory(from112()))
+        CouchSetup.migrate(context, repo, tv = false)
+        assertNull(Couches.of(repo.snapshot()))
+        val danny = CouchRef("c1111111111111aa", "הספה של דני")
+        CouchSetup.setHome(context, repo, danny, listOf("tv0009"), now = 5_000)
+        assertEquals(danny.id, Couches.of(repo.snapshot())!!.id)
+        // What it had is not lost: it is a saved couch now, whole, and can be the home again.
+        val was = couches.saved().single { it.archived }
+        assertEquals("הספה של סטיב ורוני", was.name)
+        CouchSetup.setHome(context, repo, CouchRef(was.id, was.name), was.tvs, now = 6_000)
+        assertNotNull(CouchState.entry(repo.snapshot(), "2026-11-20", "wordle"))
+        assertEquals("סטיב" to "רוני", CouchState.names(repo.snapshot()))
+        assertEquals(listOf("סטיב", "רוני", "דני"), Couple.all(repo.snapshot()).map { it.name })
+        // And a game said to be the home's before the home had an id is the home's still.
+        val before = app.couch.alhasapa.remote.SoloTarget("", "הספה של סטיב ורוני", "a", "סטיב", home = true)
+        assertTrue(app.couch.alhasapa.results.SoloTargets.isHome(before, repo))
+        assertFalse(app.couch.alhasapa.results.SoloTargets.isHome(before.copy(couch = danny.id), repo))
     }
 }

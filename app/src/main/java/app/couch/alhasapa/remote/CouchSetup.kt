@@ -17,11 +17,12 @@ import java.io.File
  */
 object CouchSetup {
     /**
-     * A device from before 2.0 (it has a state and no couch) is given its couch, without a question where that is safe: the TV and
-     * the phones it handed the solo relay to all take the same id from the relay's topic, so they agree without talking. A phone
-     * without the relay that was paired with one TV learns its couch from that TV when they next meet; one paired with several TVs
-     * cannot tell which is its home's, and asks once ([CouchStore.askHome]). The state itself is not touched meanwhile, whatever
-     * happens: names, points, history, logins and pairings stay as they are.
+     * A device from before 2.0 (it has a state and no couch) is given its couch, without a question where that is safe. The TV
+     * names its couch (from the topic of the solo relay it made, when it made one). A phone that was paired with one TV is of that
+     * TV's couch: it learns the id from it when they next meet (at home, or through the relay), and until then its couch is simply
+     * unnamed. A phone that knew several TVs takes the couch of the one that gave it the relay it holds (the same id, from the
+     * same topic, without their talking); with no relay to tell by, it asks once ([CouchStore.askHome]). The state itself is not
+     * touched meanwhile, whatever happens: names, points, history, logins and pairings stay as they are.
      */
     fun migrate(context: Context, repo: StateRepository, tv: Boolean = BuildConfig.TV) {
         val couches = CouchStore(context)
@@ -36,8 +37,9 @@ object CouchSetup {
         } else {
             val tvs = RemoteStore(context).knownTvs()
             when {
-                topic != null -> { repo.update { s -> Couches.set(s, Couches.idFromTopic(topic), "", 0L) }; sortTvs(context, couches, known = true) }
                 tvs.isEmpty() -> repo.update { s -> Couches.set(s, Couches.newId(), "", 0L) }
+                tvs.size == 1 -> sortTvs(context, couches, known = false)
+                topic != null -> { repo.update { s -> Couches.set(s, Couches.idFromTopic(topic), "", 0L) }; sortTvs(context, couches, known = true) }
                 else -> sortTvs(context, couches, known = false)
             }
             Flight.log("couches: this phone's data from before 2.0 is its home couch's (${tvs.size} TVs known${if (topic != null) ", id from the relay's topic" else ""})")
@@ -148,6 +150,8 @@ object CouchSetup {
     fun setHome(context: Context, repo: StateRepository, to: CouchRef, tvs: Collection<String>, now: Long = System.currentTimeMillis()) {
         val couches = CouchStore(context)
         val remote = RemoteStore(context)
+        // (A state from before 2.0 that has not learnt its couch's id yet is a couch all the same: it is given one, and kept.)
+        if (repo.peek { Couches.of(it) == null && !Couches.needsSetup(it) }) repo.update { s -> Couches.set(s, Couches.newId(), "", 0L) }
         val was = repo.peek { Couches.of(it) }
         if (was?.id == to.id) return
         // The home that was: its state kept here, and listed among the saved couches with who the phone's holder was there.

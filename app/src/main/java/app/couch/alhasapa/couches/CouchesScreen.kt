@@ -69,6 +69,8 @@ data class Nearby(val address: String, val tv: KeyClient.Tv)
 data class CouchesView(
     val home: CouchRef?,
     val homeTvs: Int,
+    /** The ids of the home's own TVs (a TV among them is the home's, whatever it says of its couch). */
+    val homeTvIds: Set<String> = emptySet(),
     val saved: List<SavedCouch>,
     val visit: Visit?,
     /** The TV the phone is connected to this moment, and the couch it is of; null when it is connected to none. */
@@ -168,7 +170,7 @@ fun CouchesScreen(v: CouchesView, a: CouchesActions) {
         if (!v.joining) Card(Modifier.testTag(COUCH_HOME_TAG)) {
             Badge(stringResource(R.string.couch_home_badge))
             Text(v.home?.name.orEmpty(), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
-            v.home?.let { Text(stringResource(R.string.couch_id, Couches.short(it.id)), fontSize = 14.sp, color = Palette.Ink2) }
+            v.home?.takeIf { it.id.isNotEmpty() }?.let { Text(stringResource(R.string.couch_id, Couches.short(it.id)), fontSize = 14.sp, color = Palette.Ink2) }
             Text(
                 if (v.homeTvs == 0) stringResource(R.string.couch_home_no_tv) else stringResource(R.string.couch_home_tvs, v.homeTvs),
                 fontSize = 16.sp, color = Palette.Ink2,
@@ -206,8 +208,8 @@ fun CouchesScreen(v: CouchesView, a: CouchesActions) {
         for (n in v.nearby) {
             val couch = n.tv.couch
             val what = when {
+                n.tv.id in v.homeTvIds || (couch != null && couch.id == v.home?.id) -> stringResource(R.string.couch_found_is_home)
                 couch == null -> stringResource(R.string.couch_found_new)
-                couch.id == v.home?.id -> stringResource(R.string.couch_found_is_home)
                 else -> couch.name
             }
             val label = stringResource(R.string.couch_found_tv, n.tv.name) + " · " + what

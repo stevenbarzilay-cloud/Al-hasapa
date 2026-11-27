@@ -529,6 +529,7 @@ class KeyClient(
                     is Msg.Share -> { if (!isGuest && runCatching { book.takeShare(m.share) }.getOrDefault(false)) _shared.value = _shared.value + 1 }
                     Msg.ShareAll -> {
                         awaitingAll = false
+                        _shared.value = _shared.value + 1
                         if (tvId.isNotEmpty()) store.setSharedAll(tvId)
                         Flight.log("sync: every evening kept is alike on the TV and this phone now")
                         if (adopting) {

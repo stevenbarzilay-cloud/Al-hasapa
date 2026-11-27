@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.sp
 import app.couch.alhasapa.CouchApp
 import app.couch.alhasapa.R
 import app.couch.alhasapa.data.CouchRef
@@ -57,13 +58,16 @@ class CouchesActivity : ComponentActivity() {
         data class Join(val n: Nearby) : Step
         data class SetHome(val to: CouchRef, val tv: String, val address: String?) : Step
         data class Remove(val c: SavedCouch) : Step
+        /** A phone from before 2.0 that knew several TVs chose one of them: is it its home's? */
+        data class AskHome(val n: Nearby) : Step
         data object Rename : Step
         data object Address : Step
     }
 
     /** What the connection being made is for, once the TV has let the phone in. */
     private enum class Purpose { VISIT_EVENING, VISIT_KEEP, HOME_TV, JOIN, NEW_HOME }
-    private data class Pending(val tv: String, val couch: CouchRef?, val purpose: Purpose)
+    /** [resume]: who the phone's holder was at that couch the last time (a saved couch): they are that player again, with no question. */
+    private data class Pending(val tv: String, val couch: CouchRef?, val purpose: Purpose, val resume: String? = null)
 
     private var step by mutableStateOf<Step>(Step.None)
     private var pending by mutableStateOf<Pending?>(null)
@@ -72,6 +76,8 @@ class CouchesActivity : ComponentActivity() {
     private var link by mutableStateOf<AppLink.Ready?>(null)
     private var tick by mutableIntStateOf(0)
     private val joining by lazy { intent.getBooleanExtra(EXTRA_JOIN, false) }
+    /** Opened by "שליחת האפליקציה לחבר": the link is handed to the share sheet as soon as it is known to be ready. */
+    private var shareWhenReady = false
 
     private val couches by lazy { CouchStore(this) }
     private val remote by lazy { RemoteStore(this) }
@@ -92,6 +98,7 @@ class CouchesActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
         client = Links.client(this)
+        shareWhenReady = savedInstanceState == null && intent.getBooleanExtra(EXTRA_SHARE, false)
         val pieces = PiecesConfig.load(this)
         val actions = object : CouchesActions {
             override fun back() = finish()
@@ -119,7 +126,7 @@ class CouchesActivity : ComponentActivity() {
                 val view = remember(state, tv, revision, shared, guestChanges, tick, nearby, scanning, link) {
                     CouchesView(
                         home = home() ?: couch.repo.peek { CouchRef("", Couches.name(it)) }.takeIf { !joining },
-                        homeTvs = couches.homeTvs.size,
+                        homeTvs = couches.homeTvs.size, homeTvIds = couches.homeTvs,
                         saved = couches.saved().filter { it.kept },
                         visit = couches.visitNow(),
                         connected = connected,
@@ -159,6 +166,22 @@ class CouchesActivity : ComponentActivity() {
             )
             is Step.Join -> JoinDialog(s.n.tv.couch, s.n.tv.name, onJoin = { step = Step.None; connect(s.n, KeyLink.AS_HOME, Purpose.JOIN) }, onDismiss = { step = Step.None })
             is Step.SetHome -> SetHomeDialog(s.to, home(), onConfirm = { step = Step.None; setHome(s) }, onDismiss = { step = Step.None })
+            is Step.AskHome -> DialogCard({ step = Step.None }) {
+                androidx.compose.material3.Text(
+                    stringResource(R.string.kb_ask_home, s.n.tv.name, s.n.tv.couch?.name ?: s.n.tv.name), fontSize = 19.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold, color = app.couch.alhasapa.ui.theme.Palette.Ink,
+                )
+                Choice(stringResource(R.string.kb_ask_home_yes), null, dark = true, tag = "ask-home-yes") {
+                    CouchSetup.answerHome(this@CouchesActivity, s.n.tv, home = true)
+                    step = Step.None; connect(s.n, KeyLink.AS_HOME, Purpose.HOME_TV)
+                }
+                Choice(stringResource(R.string.kb_ask_home_no), null, dark = false, tag = "ask-home-no") {
+                    CouchSetup.answerHome(this@CouchesActivity, s.n.tv, home = false)
+                    Links.refresh(this@CouchesActivity)
+                    step = if (s.n.tv.couch != null) Step.Options(s.n) else Step.None
+                    tick++
+                }
+            }
             is Step.Remove -> RemoveCouchDialog(
                 s.c, pending = guest.pending(s.c.id).isNotEmpty(),
                 onConfirm = {
@@ -190,6 +213,14 @@ class CouchesActivity : ComponentActivity() {
                 onOk = { code -> if (code.length == 4) client.sendCode(code) }, onDismiss = { giveUp() },
             )
             KeyClient.State.Wait -> { Toast.makeText(this, R.string.couch_wait, Toast.LENGTH_LONG).show(); giveUp() }
+            // The chosen TV is not on this network: said, with another try or a way out. Nothing was changed.
+            is KeyClient.State.NotFound -> DialogCard({ giveUp() }) {
+                androidx.compose.material3.Text(
+                    stringResource(R.string.couch_tv_not_found, p.couch?.name ?: ""), fontSize = 18.sp, color = app.couch.alhasapa.ui.theme.Palette.Ink,
+                )
+                SmallButton(stringResource(R.string.couch_tv_retry), dark = true) { client.retry() }
+                SmallButton(stringResource(R.string.couch_cancel), dark = false) { giveUp() }
+            }
             is KeyClient.State.Connected -> if (p.purpose == Purpose.VISIT_EVENING || p.purpose == Purpose.VISIT_KEEP) {
                 // The guest says who they are there: one of that couch's players, or someone new.
                 val c = p.couch ?: tv?.couch
@@ -197,7 +228,10 @@ class CouchesActivity : ComponentActivity() {
                     val evening = Couple.evening()
                     val people = couches.people(c.id).filter { !it.removed && (!it.guest || it.day == evening) }
                     val kept = p.purpose == Purpose.VISIT_KEEP
-                    GuestWhoDialog(
+                    // A saved couch: who they were there, if that couch still has them, and no question again.
+                    val again = p.resume?.let { w -> people.firstOrNull { it.who == w } }
+                    if (again != null) LaunchedEffect(p, again.who) { beginVisit(c, p.tv, again, kept = true, added = false) }
+                    else if (p.resume == null || people.isNotEmpty()) GuestWhoDialog(
                         c, people, couches.saved(c.id)?.me, pieces,
                         onPick = { person -> beginVisit(c, p.tv, person, kept, added = false) },
                         onNew = { name ->
@@ -222,13 +256,16 @@ class CouchesActivity : ComponentActivity() {
         when (p.purpose) {
             Purpose.HOME_TV, Purpose.NEW_HOME, Purpose.JOIN -> {
                 if (st.role != KeyLink.AS_HOME) return
-                // (A phone that joins has the couch only once the TV handed it over.)
+                // (A phone that joins has the couch only once the TV handed it over, players and all.)
                 val home = home() ?: return
                 if (tv.couch != null && tv.couch.id != home.id) return
+                if (p.purpose != Purpose.HOME_TV && client.awaitingAll) return
                 couches.addHomeTv(tv.id)
                 pending = null
                 Links.unchoose(this)
                 Flight.log("couches: a TV of the home was connected")
+                // One of this couch's own from now on: who plays from this phone is asked at its home.
+                if (p.purpose != Purpose.HOME_TV && remote.me == null) couches.askMe = true
                 if (p.purpose == Purpose.JOIN) { setResult(RESULT_OK); finish() }
                 tick++
             }
@@ -241,7 +278,10 @@ class CouchesActivity : ComponentActivity() {
         val c = n.tv.couch
         step = when {
             joining -> Step.Join(n)
-            c == null || c.id == home?.id -> Step.ConnectHome(n)
+            // A phone from before 2.0 that knew several TVs, and this is one of them: asked once whether it is its home's.
+            n.tv.id in couches.askHome -> Step.AskHome(n)
+            // A TV with no couch yet, the home's own, or (for a phone from before 2.0 that has yet to learn its couch) the one it was paired with.
+            c == null || c.id == home?.id || (home == null && n.tv.id in couches.homeTvs) -> Step.ConnectHome(n)
             // A couch saved before: the visit begins as it was set up, without the choices again.
             couches.saved(c.id)?.kept == true -> { visitSaved(couches.saved(c.id)!!, n); Step.None }
             else -> Step.Options(n)
@@ -259,15 +299,15 @@ class CouchesActivity : ComponentActivity() {
     private fun visitSaved(c: SavedCouch, n: Nearby? = null) {
         val tv = n?.tv?.id ?: nearby.firstOrNull { it.tv.couch?.id == c.id }?.tv?.id ?: c.tvs.firstOrNull() ?: return
         val address = n?.address ?: nearby.firstOrNull { it.tv.id == tv }?.address
-        pending = Pending(tv, CouchRef(c.id, c.name), Purpose.VISIT_KEEP)
+        // (The visit begins once that TV has let the phone in: who they were there is taken up again then.)
+        pending = Pending(tv, CouchRef(c.id, c.name), Purpose.VISIT_KEEP, resume = c.me)
         Links.choose(this, tv, address, KeyLink.AS_GUEST)
         client.retry()
-        // Who they were there, if that couch still has them: no question again.
-        val me = c.me?.let { w -> couches.people(c.id).firstOrNull { it.who == w && !it.removed } }
-        if (me != null) beginVisit(CouchRef(c.id, c.name), tv, me, kept = true, added = false)
     }
 
     private fun beginVisit(c: CouchRef, tv: String, me: Person, kept: Boolean, added: Boolean) {
+        // (A visit to another couch that was still on ends first: one visit at a time.)
+        if (couches.visit?.let { it.couch != c.id } == true) CouchSetup.endVisit(this)
         CouchSetup.startVisit(this, c, tv, me, kept, added = added)
         client.sendGuest(if (added) me else null)
         pending = null
@@ -287,10 +327,18 @@ class CouchesActivity : ComponentActivity() {
     }
 
     private fun setHome(s: Step.SetHome) {
-        CouchSetup.setHome(this, couch.repo, s.to, listOf(s.tv))
-        pending = Pending(s.tv, s.to, Purpose.NEW_HOME)
-        Links.choose(this, s.tv, s.address, KeyLink.AS_HOME)
-        client.retry()
+        CouchSetup.setHome(this, couch.repo, s.to, listOfNotNull(s.tv.takeIf { it.isNotEmpty() }))
+        Toast.makeText(this, getString(R.string.couch_home_changed, s.to.name), Toast.LENGTH_LONG).show()
+        if (s.tv.isNotEmpty()) {
+            // Let in as one of the new home's own (its TV asks for the code): its players and history come from it.
+            pending = Pending(s.tv, s.to, Purpose.NEW_HOME)
+            Links.choose(this, s.tv, s.address, KeyLink.AS_HOME)
+            client.retry()
+        } else {
+            // A couch that was the home before and has no TV: what was kept of it here is the home again.
+            pending = null
+            Links.unchoose(this); Links.refresh(this)
+        }
         tick++
     }
 
@@ -327,7 +375,17 @@ class CouchesActivity : ComponentActivity() {
 
     private fun checkLink() {
         link = null
-        Thread({ val r = runCatching { AppLink.check(probe ?: AppLink.UrlProbe) }.getOrDefault(AppLink.Ready.UNKNOWN); runOnUiThread { link = r } }, "app-link").start()
+        Thread({
+            val r = runCatching { AppLink.check(probe ?: AppLink.UrlProbe) }.getOrDefault(AppLink.Ready.UNKNOWN)
+            runOnUiThread {
+                link = r
+                if (shareWhenReady) {
+                    shareWhenReady = false
+                    if (r == AppLink.Ready.YES) shareApp()
+                    else Toast.makeText(this, if (r == AppLink.Ready.NO) R.string.share_app_not_ready else R.string.share_app_offline, Toast.LENGTH_LONG).show()
+                }
+            }
+        }, "app-link").start()
     }
 
     /** The install link, by whatever the person chooses to send it with. Offered only once both downloads are there. */
@@ -359,6 +417,11 @@ class CouchesActivity : ComponentActivity() {
         const val EXTRA_JOIN = "join"
 
         fun joinIntent(context: Context): Intent = Intent(context, CouchesActivity::class.java).putExtra(EXTRA_JOIN, true)
+
+        /** Opened by "שליחת האפליקציה לחבר": the install link goes to the share sheet as soon as both downloads are known to be there. */
+        const val EXTRA_SHARE = "share"
+
+        fun shareIntent(context: Context): Intent = Intent(context, CouchesActivity::class.java).putExtra(EXTRA_SHARE, true)
 
         /** In the tests: the TVs "on this network", a TV "at an address", and whether the downloads are there. */
         @Volatile var scanner: ((Context) -> List<Nearby>)? = null

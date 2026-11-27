@@ -45,7 +45,7 @@ object SoloTargets {
         CouchStore(context).visitNow()?.let { v -> SoloTarget(v.couch, v.name, v.me, v.meName, home = false) }
 
     /** Whether [t] is the home couch as it is now (the home may have been changed since [t] was chosen). */
-    fun isHome(t: SoloTarget, repo: StateRepository): Boolean = t.couch == repo.peek { Couches.of(it)?.id.orEmpty() }
+    fun isHome(t: SoloTarget, repo: StateRepository): Boolean = t.couch.isEmpty() || t.couch == repo.peek { Couches.of(it)?.id.orEmpty() }
 
     fun resolve(context: Context, repo: StateRepository, day: String, game: String): Need {
         CouchStore(context).target(day, game)?.let { return Need.Go(it) }

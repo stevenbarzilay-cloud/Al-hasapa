@@ -63,7 +63,8 @@ class KeyServer(
      */
     private val onGuestSide: (who: String) -> Unit = { who ->
         (context.applicationContext as? app.couch.alhasapa.CouchApp)?.let { a ->
-            Thread({ runCatching { SoloRelay(a, a.repo).send(who) } }, "guest-solo").start()
+            // (Who the guest is first, so the couch's phones name them; then the game.)
+            Thread({ runCatching { SoloRelay(a, a.repo).let { r -> r.sendShare("tv"); r.send(who) } } }, "guest-solo").start()
         }
     },
     /** The evening it is (a guest of the evening is one until it ends). */

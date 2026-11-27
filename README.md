@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.12.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 2.0.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -138,6 +138,67 @@ Hub notes:
 - `AppRootTest` runs the startup flow (hub created and told to load, splash lifts, hub stays mounted, error
   screen and retry) through the real Android framework with Robolectric. It cannot run Chromium, so page
   rendering itself is checked separately in a browser.
+
+## Couches (2.0)
+
+Until 2.0 there was one couch in the world, ours. From 2.0 every home has its own (its players, history and points), a friend gets
+the app by one link, and each of us can be a guest at the other's: play on their TV, and join their solo contest from our own
+phone. No registration, no e-mail, no password. It is always said in words which couch is the phone's home, which couch it is
+visiting, and where the result of the game in front goes.
+
+- **A couch** is an id that never changes and a name (`data/Couches.kt`); every state document says which couch it is the state
+  of (`couch: {id, name, at}`). Unnamed, a couch is called after its two players ("הספה של דני ומיה") and follows their names.
+  A share between devices carries the couch's id, and one that names another couch is refused whole (`Shared.merge`): nothing
+  of one couch is ever merged into another's state. A new couch has no names of ours in it (Kotlin and the hub's page alike).
+- **A new device** opens on a choice (`couches/Welcome.kt`): "הקמת ספה משלי" (on a phone: the two players' names and, if
+  wanted, the couch's; on a TV, which has no way to type but the remote, one press, and the first phone that joins names it) or
+  "הצטרפות לספה קיימת" (a phone chooses the home's TV in "הספות שלי" and types its code; a TV waits for the home's phone to
+  choose it, and takes that phone's couch whole, relay and all). A phone that began alone keeps everything when its own TV is
+  connected later. A phone that joined is asked "מי משחק מהטלפון הזה?".
+- **The link has roles** (`remote/KeyLink.kt`, `KeyServer.kt`): a phone comes to a TV as one of the home's own (everything 1.12
+  did), as a guest who may come again, or as a guest of this evening. The TV shows what is asked beside the code, keeps the role
+  with the pairing, and a guest cannot become one of the home's without the code again. A guest gets the remote (keys, touchpad,
+  touch mode, "save the result"), the players' names to choose who they are there (or to add themselves), and the day's solo
+  contests, the others' results sealed by the TV until their own is in. Never the home's history, its relay, or a login: the
+  phone refuses to send one to a friend's TV, and the TV refuses to take one from a guest.
+- **A phone connects only to the TV it means** (`KeyClient.Target`, `Links.kt`): the home's own TVs, or the TV of the couch being
+  visited, or the one the person just chose by hand to pair with. Every TV says who it is first; one that is not meant is let go
+  of before the phone has said anything of itself, so two TVs on one network are never confused, and finding a TV is not
+  connecting to it.
+- **"הספות שלי"** (`couches/CouchesActivity.kt`, phone): the home couch (words and a mark), what the phone is connected to this
+  moment (one line, apart), the visit under way with "סיום ביקור", the friends' couches kept for the next visits (name, short id,
+  who the holder is there), the TVs on this network to choose from, and "שליחת האפליקציה לחבר". A friend's TV offers "לשחק כאן
+  כאורח הערב" or "לשמור את הספה לביקורים הבאים"; in both the holder chooses one of that couch's players or adds themselves.
+  Neither changes the home. The home changes only by "להגדיר כספת הבית שלי", with a confirmation that names the new home; the
+  home that was is kept whole (on its own devices, and here among the saved couches), and nothing played until now moves.
+- **A visit** (`CouchStore.visit`) shows as a line over the phone's home for as long as it lasts ("מתארח בספה של דני", whether its
+  TV is reached, "סיום ביקור"); it ends when asked or with the evening (five in the morning), and never begins again by itself.
+- **Where a result goes.** A game on a TV is that TV's couch's, whoever holds the remote (the phone's button says "שמירת תוצאה
+  בספה של דני"). A game played alone with no visit on is the home's, and nothing is asked. During a visit the person is asked
+  before the game opens ("לאיזו ספה לשייך את התוצאה שלך ב־Connections?", both couches named in full), for every new game played
+  alone; the answer is kept with the game and the puzzle's day (`SoloTargets`), so a result typed later, a photo, a share from
+  another app or a second send all go where the first was meant to, and the button goes on saying so. A result for a friend's
+  couch is kept on the phone apart from the home's state (`GuestSolo`), handed to that couch's TV, and counted there once; with
+  no connection it waits, says so, and is counted nowhere else meanwhile. The home's history, points, relay and notifications
+  hear nothing of it; the friend's own phones hear of it through their own relay.
+- **A contest of several** (`data/Solo.kt`): everyone who played the day's game alone for a couch is in its contest, by their id
+  at that couch (two players of the same name are two players). Whoever handed in sees the others who did; nobody is crowned
+  (and nothing shows on the TV, where the whole room looks) while someone who joined is still playing. They can leave the
+  contest ("לפרוש מהתחרות"), and a day that ended waits for nobody. A tie names who is level. With two it is as it always was.
+- **A device from before 2.0** is given its couch without a question where that is safe (`CouchSetup.migrate`): the TV names
+  its couch; a phone that was paired with one TV is of that TV's couch and learns its id when they next meet; one that knew
+  several asks once which is its home's, and nothing is sent to any of them meanwhile. Names, points, history, logins and
+  pairings stay as they are; a pairing from before 2.0 is one of the home's own, as it always was.
+- **Distribution** (`docs/DISTRIBUTION.md`): the release workflow builds both apps signed with a private key from the
+  repository's secrets and publishes them as a GitHub Release with two files of fixed names; the page of the latest release is
+  the one link handed to a friend, and the phone offers it as "מוכן לשליחה" only once both downloads answer. Our own devices
+  keep the builds in `dist/`, signed with the repository's own key as before, so their updates go on installing over each other.
+- **Tests**: `CouchesTest` and `SoloContestTest` (identity, isolation, contests), `CouchLinkTest` (TVs and phones of different
+  homes over real sockets: a guest and one of the home's own, three friends at one contest and a fourth who plays for his own
+  home, two TVs on one network, a new TV and a new phone joining, pairings from before 2.0, notes), `CouchSetupTest` (what a
+  device from 1.12 keeps, visits, changing the home), `CouchesFlowTest` (an evening at a friend's from home and back, with the
+  app's own pieces, checking at each step what the phone says, which couch got the result and which couch's phones are told),
+  `CouchesUiTest` (the screens' words), and the hub's browser checks (`tools/hub_modes_check.cjs`, `tools/hub_solo_check.cjs`).
 
 ## Build
 

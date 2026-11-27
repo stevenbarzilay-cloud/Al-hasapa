@@ -100,6 +100,14 @@ class CouchStore(context: Context, name: String = "couches") {
         get() = prefs.getStringSet("ask_home", emptySet())!!.toSet()
         set(v) = prefs.edit { if (v.isEmpty()) remove("ask_home") else putStringSet("ask_home", v) }
 
+    /**
+     * The phone became one of a couch's own just now (it joined it, or the home was changed to it): who plays from this phone is
+     * asked the next time its home shows, once that couch's players are known.
+     */
+    var askMe: Boolean
+        get() = prefs.getBoolean("ask_me", false)
+        set(v) = prefs.edit { putBoolean("ask_me", v) }
+
     /** Whether what the phone knew before 2.0 was sorted into couches (done once, see CouchSetup). */
     var migrated: Boolean
         get() = prefs.getBoolean("migrated", false)

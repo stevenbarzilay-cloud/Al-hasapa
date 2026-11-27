@@ -377,7 +377,6 @@
     <string name="couch_rename_title">שם הספה</string>
     <string name="couch_save">שמירה</string>
     <string name="couch_cancel">ביטול</string>
-    <string name="couch_connected_now">🔗 מחובר עכשיו</string>
     <string name="couch_connected_tv">הטלפון מחובר עכשיו לטלוויזיה %1$s</string>
     <string name="couch_not_connected">הטלפון לא מחובר עכשיו לאף טלוויזיה</string>
     <string name="couch_looking">מחפשים את הטלוויזיה…</string>
@@ -429,6 +428,9 @@
     <string name="couch_typed_address">להקליד כתובת של טלוויזיה</string>
     <string name="couch_address_hint">הכתובת מופיעה בטלוויזיה, בכפתור ⓘ</string>
     <string name="couch_address_find">לבדוק</string>
+    <string name="couch_tv_not_found">הטלוויזיה של %1$s לא נמצאה ברשת הזאת. האפליקציה פתוחה בה, והטלפון על אותו Wi-Fi?</string>
+    <string name="couch_tv_retry">לנסות שוב</string>
+    <string name="couch_home_changed">ספת הבית שלך עכשיו: %1$s</string>
     <string name="couch_address_none">לא ענתה שם טלוויזיה עם האפליקציה.</string>
     <string name="visit_bar">מתארח %1$s</string>
     <string name="visit_as">בתור %1$s</string>
@@ -448,14 +450,11 @@
     <string name="kb_couches">הספות שלי</string>
     <string name="kb_visiting">מתארח %1$s</string>
     <string name="kb_save_result_in">🏁 המשחק נגמר: שמירת תוצאה %1$s</string>
-    <string name="kb_logins_guest">התחברויות לא עוברות לטלוויזיה של חברים.</string>
     <string name="target_question">לאיזו ספה לשייך את התוצאה שלך ב־%1$s?</string>
     <string name="target_home">%1$s · הבית שלי</string>
     <string name="target_visit">%1$s · מתארח כאן</string>
     <string name="target_hint">נשאל בכל משחק סולו חדש בזמן הביקור. הבחירה תקפה למשחק הזה בלבד.</string>
-    <string name="solo_for">⚔️ סולו · %1$s</string>
     <string name="solo_save_in">שמירת תוצאת הסולו %1$s</string>
-    <string name="result_save_in">שמירת תוצאה %1$s</string>
     <string name="solo_who_where">שחקן: %1$s · %2$s · החידה של %3$s</string>
     <string name="day_today">היום</string>
     <string name="day_yesterday">אתמול</string>
@@ -464,7 +463,6 @@
     <string name="solo_tie_between">🤝 תיקו בין %1$s</string>
     <string name="solo_withdraw">לפרוש מהתחרות (בלי תוצאה)</string>
     <string name="solo_withdrawn">פרשת מהתחרות. האחרים לא מחכים לך.</string>
-    <string name="solo_still_playing">עוד משחק/ת</string>
     <string name="solo_pending_send">התוצאה שמורה בטלפון. היא תישלח %1$s כשהטלפון יתחבר שוב לטלוויזיה שלה, ולא תיספר בשום ספה אחרת.</string>
     <string name="solo_send_now">לנסות לשלוח עכשיו</string>
     <string name="welcome_title">ברוכים הבאים לספה</string>
@@ -481,17 +479,13 @@
     <string name="setup_start">מקימים את הספה</string>
     <string name="join_title">לאיזו ספה מצטרפים?</string>
     <string name="join_hint">פותחים את האפליקציה בטלוויזיה שבבית, ובוחרים אותה כאן. אחר כך מקלידים את הקוד שיופיע בה.</string>
-    <string name="tv_welcome_title">ברוכים הבאים לספה</string>
-    <string name="tv_welcome_create">הקמת ספה משלי</string>
     <string name="tv_welcome_create_sub">מתחילים כאן. את השמות נותנים מהטלפון הראשון שמצטרף.</string>
-    <string name="tv_welcome_join">הצטרפות לספה קיימת</string>
     <string name="tv_welcome_join_sub">הספה כבר קיימת בטלפון, והטלוויזיה מצטרפת אליה</string>
     <string name="tv_join_title">מחברים את הטלוויזיה לספה שבטלפון</string>
     <string name="tv_join_1">בטלפון: «הספות שלי» ← «טלוויזיות ברשת הזאת»</string>
     <string name="tv_join_2">בוחרים בטלוויזיה הזאת (%1$s) ← «לחבר אותה לספת הבית שלי»</string>
     <string name="tv_join_3">מקלידים בטלפון את הקוד שיופיע כאן</string>
     <string name="tv_join_back">חזרה</string>
-    <string name="tv_couch_hint">חברו טלפון כדי לתת שמות: בטלפון «הצטרפות לספה קיימת».</string>
     <string name="remote_pair_home">טלפון מבקש להצטרף לספה כבן בית</string>
     <string name="remote_pair_guest">טלפון מבקש להתארח בספה (ולחזור בביקורים הבאים)</string>
     <string name="remote_pair_evening">טלפון מבקש להתארח בספה הערב</string>
@@ -506,5 +500,4 @@
     <string name="share_app_offline">לא הצלחנו לבדוק את הקישור (אין רשת?). אפשר לנסות שוב.</string>
     <string name="share_app_send">שליחה</string>
     <string name="share_app_again">לבדוק שוב</string>
-    <string name="hub_couch_chip">ספת הבית: %1$s. לפתיחת «הספות שלי»</string>
 </resources>

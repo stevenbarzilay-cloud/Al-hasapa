@@ -265,6 +265,8 @@ class MainActivity : ComponentActivity() {
         }
 
         override fun openCouches() { runOnUiThread { startActivity(Intent(this@MainActivity, CouchesActivity::class.java)) } }
+
+        override fun shareApp() { runOnUiThread { startActivity(CouchesActivity.shareIntent(this@MainActivity)) } }
     }
 
     override fun onStart() {
@@ -272,7 +274,10 @@ class MainActivity : ComponentActivity() {
         if (!TvMode.isTelevision(this)) {
             // During a visit (2.0) the phone holds its connection to the friend's TV while the app is in front, so the visit's line
             // says at once when it is lost; at home it only hands over what waits for the home's TV, and lets go.
-            if (CouchStore(this).visitNow() != null) Links.acquire(this, this) else { Links.release(this); phoneSync.start() }
+            val couches = CouchStore(this)
+            if (couches.visitNow() != null) Links.acquire(this, this) else { Links.release(this); phoneSync.start() }
+            // The phone became one of a couch's own a moment ago (it joined it, or its home was changed): who plays from it is asked.
+            if (couches.askMe) { couches.askMe = false; if (RemoteStore(this).me == null) meOpen = true }
             couchTick++
         }
         tvLookHandler.post(tvLook)
@@ -290,7 +295,7 @@ class MainActivity : ComponentActivity() {
      * here at once, and handed to the TV now if it can be reached, or the next time the app comes to the front (PhoneSync).
      */
     @androidx.compose.runtime.Composable
-    private fun PhoneHomeDialogs(couch: CouchApp, pieces: PiecesConfig) {
+    private fun PhoneHomeDialogs(couch: CouchApp, pieces: PiecesConfig, @Suppress("UNUSED_PARAMETER") stateRev: Long = 0L) {
         val store = RemoteStore(this)
         val day = Couple.evening()
         if (meOpen) {
@@ -421,7 +426,7 @@ class MainActivity : ComponentActivity() {
                         },
                         onJoin = { joinCouch.launch(CouchesActivity.joinIntent(this@MainActivity)) },
                     )
-                    if (!tv.enabled) PhoneHomeDialogs(app, pieces)
+                    if (!tv.enabled) PhoneHomeDialogs(app, pieces, stateRev)
                     return@Layer
                 }
                 if (tv.enabled && !webHub) {
@@ -512,7 +517,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-                if (!tv.enabled) PhoneHomeDialogs(app, pieces)
+                // (Drawn again with the state: the players a couch just handed over are the ones to choose from.)
+                if (!tv.enabled) PhoneHomeDialogs(app, pieces, stateRev)
                 whoPlaysFor?.let { id ->
                     val game = app.catalog.game(id)
                     if (game != null) {
