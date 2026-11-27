@@ -253,11 +253,17 @@ class KeyClient(
     @Volatile private var tvId = ""
     @Volatile private var tvName = ""
 
+    /** Which start this is: a loop of an earlier one (stopped, and not yet gone when the next began) ends when it sees a newer. */
+    private val round = java.util.concurrent.atomic.AtomicInteger()
+
     fun start() {
         if (!running.compareAndSet(false, true)) return
         ShareBus.add(pushShare)
-        Thread({ loop() }, "keys-link").apply { isDaemon = true }.start()
+        val mine = round.incrementAndGet()
+        Thread({ loop(mine) }, "keys-link").apply { isDaemon = true }.start()
     }
+
+    private fun alive(mine: Int): Boolean = running.get() && round.get() == mine
 
     fun stop() {
         if (!running.compareAndSet(true, false)) return
@@ -355,10 +361,10 @@ class KeyClient(
 
     private enum class Met { NOBODY, ANOTHER, OURS }
 
-    private fun loop() {
+    private fun loop(mine: Int) {
         var pause = 0L
-        while (running.get()) {
-            if (pause > 0) { wake.poll(pause, TimeUnit.MILLISECONDS); if (!running.get()) break }
+        while (alive(mine)) {
+            if (pause > 0) { wake.poll(pause, TimeUnit.MILLISECONDS); if (!alive(mine)) break }
             val t = target
             if (t == null) {
                 // No TV is meant: nothing is looked for, whatever is on this network.
@@ -373,17 +379,17 @@ class KeyClient(
             val known = listOfNotNull(manual, t.address) + t.tvs.mapNotNull { store.addressOf(it) } +
                 (if (t.role == KeyLink.AS_HOME) listOfNotNull(store.lastAddress) else emptyList())
             for (a in known) {
-                if (!running.get() || target != t || met == Met.OURS) break
-                if (tried.add(a)) met = maxOf(met, session(a, t))
+                if (!alive(mine) || target != t || met == Met.OURS) break
+                if (tried.add(a)) met = maxOf(met, session(a, t, mine))
             }
-            if (met != Met.OURS && running.get() && target == t && manual == null) {
+            if (met != Met.OURS && alive(mine) && target == t && manual == null) {
                 _state.value = State.Looking
                 val found = finder(t.tvs, 8_000).filter { it !in tried }
                 for (a in found) {
-                    if (!running.get() || target != t || met == Met.OURS) break
-                    if (tried.add(a)) met = maxOf(met, session(a, t))
+                    if (!alive(mine) || target != t || met == Met.OURS) break
+                    if (tried.add(a)) met = maxOf(met, session(a, t, mine))
                 }
-                if (met != Met.OURS && running.get() && target == t && _state.value !is State.OtherCouch && _state.value !is State.AskHome) {
+                if (met != Met.OURS && alive(mine) && target == t && _state.value !is State.OtherCouch && _state.value !is State.AskHome) {
                     _state.value = State.NotFound(NO_TV)
                     wake.clear(); wake.poll(20_000, TimeUnit.MILLISECONDS)      // a press of "look again", or by itself in a while
                     pause = 0
@@ -398,11 +404,11 @@ class KeyClient(
             }
             pause = if (met == Met.OURS) 800 else 2_500                         // dropped: back quickly; refused: a little later
         }
-        _state.value = State.Looking
+        if (round.get() == mine) _state.value = State.Looking
     }
 
     /** One connection, from the greeting to its end: who was there (nobody, a TV that is not meant, or one that is). */
-    private fun session(address: String, t: Target): Met {
+    private fun session(address: String, t: Target, mine: Int): Met {
         val host = address.substringBeforeLast(':')
         val port = address.substringAfterLast(':').toIntOrNull() ?: KeyLink.PORT
         _state.value = State.Connecting(address)
@@ -414,7 +420,7 @@ class KeyClient(
             s.soTimeout = 15_000
             socket = s
             val input = s.getInputStream().bufferedReader(Charsets.UTF_8)
-            while (running.get() && target == t) {
+            while (alive(mine) && target == t) {
                 // A line from the TV may hold a picture of the game (touch mode): larger than anything the phone sends.
                 val line = KeyServer.readLine(input, KeyLink.MAX_FRAME_LINE) ?: break
                 val m = KeyLink.decode(line, KeyLink.MAX_FRAME_LINE) ?: continue
@@ -471,11 +477,12 @@ class KeyClient(
                         startPinging()
                         // Touch mode was on the screen when the connection dropped: the pictures are asked for again.
                         if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth, mirrorCrop))
+                        // A guest: who they are here first (a note or a game of theirs is taken as that player's).
+                        if (isGuest) sendGuest(null)
                         // The notes written for this couch that its TV does not keep yet.
                         for (n in notesFor()) write(Msg.NoteMsg(n))
                         if (isGuest) {
-                            // A guest: who they are here, and the games they played alone for this couch. Nothing of the home.
-                            sendGuest(null)
+                            // The games they played alone for this couch. Nothing of the home.
                             flushGuest()
                         } else if (runCatching { book.fresh() }.getOrDefault(false) || (runCatching { book.couch() }.getOrNull() == null && tvCouch != null)) {
                             // A phone with no couch yet (it joins this one, or is from before 2.0 and learns which its home is):

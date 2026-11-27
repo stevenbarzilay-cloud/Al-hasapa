@@ -372,7 +372,8 @@ class KeyServer(
             }
             is Msg.SoloSideMsg -> {
                 // A guest's own side of a game played alone for this couch's contest (2.0): theirs only, whatever it says.
-                if (ready && who.isNotEmpty()) main.post { guestSolo(m) }
+                // (Who they are here is said just before, and taken in on the main thread: looked at there, after it.)
+                if (ready) main.post { if (who.isNotEmpty()) guestSolo(m) }
                 true
             }
             Msg.ShareAll -> {
@@ -387,7 +388,8 @@ class KeyServer(
             }
             is Msg.NoteMsg -> {
                 // (A guest writes as the player they said they are; one who has not said writes nothing.)
-                if (ready && (!guest || who.isNotEmpty())) main.post {
+                if (ready) main.post {
+                    if (guest && who.isEmpty()) return@post
                     // From whoever holds this phone, whatever the note says.
                     val n = if (who.isNotEmpty()) m.note.copy(from = who) else m.note
                     val kept = runCatching { book.note(n) }.getOrDefault(false)
