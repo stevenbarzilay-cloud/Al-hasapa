@@ -273,7 +273,7 @@
     <string name="me_guest">אורח</string>
     <string name="me_remove">הסרה</string>
     <string name="me_other_help">הצבע מסמן רק אותך: העיצוב של האפליקציה נשאר בצבעים של שנינו.</string>
-    <string name="me_guest_help">אורח נשאר עד סוף הערב. הצבע מסמן רק אותו.</string>
+    <string name="me_guest_help">אורח נשאר עד סוף הערב (עד חמש בבוקר). הצבע מסמן רק אותו.</string>
     <string name="note_kept">הפתק נשמר, ויגיע לטלוויזיה בפעם הבאה שהאפליקציה פתוחה בבית.</string>
     <string name="note_button">השארת פתק</string>
     <string name="note_button_waiting">השארת פתק. %1$d מחכים לטלוויזיה</string>

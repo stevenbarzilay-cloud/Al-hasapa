@@ -114,7 +114,7 @@ internal fun IdentityDialog(
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         PieceIcon(pieces.styleOf(p), 26.dp, label = "")
-                        Text(label + if (p.guest) " · " + stringResource(R.string.me_guest) else "", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                        Text(label + if (p.guest && p.name.isNotEmpty()) " · " + stringResource(R.string.me_guest) else "", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                             color = if (chosen) Palette.Cream else Palette.Ink, maxLines = 1)
                     }
                 }
