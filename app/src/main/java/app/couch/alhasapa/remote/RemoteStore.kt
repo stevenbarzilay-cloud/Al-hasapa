@@ -11,8 +11,8 @@ import org.json.JSONObject
  * (a random token each, with the phone's name). On the phone: its own id, a token for each TV it was paired with, and where the TV was
  * last found (so the next connection does not have to look for it).
  */
-class RemoteStore(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("remote", Context.MODE_PRIVATE)
+class RemoteStore(context: Context, name: String = "remote") {
+    private val prefs = context.applicationContext.getSharedPreferences(name, Context.MODE_PRIVATE)
 
     private fun id(key: String): String = prefs.getString(key, null) ?: randomHex(6).also { prefs.edit { putString(key, it) } }
 

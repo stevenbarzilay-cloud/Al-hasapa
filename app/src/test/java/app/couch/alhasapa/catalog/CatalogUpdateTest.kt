@@ -32,7 +32,11 @@ class CatalogUpdateTest {
     private fun stateWith(prefs: Map<String, String>): String =
         JSONObject().put("v", 1).put("prefs", JSONObject().apply { prefs.forEach { (k, v) -> put(k, v) } }).put("log", JSONObject()).toString()
 
-    @Before fun asOnADeviceThatNeverSawThisCatalogue() { context.getSharedPreferences("catalogue", Context.MODE_PRIVATE).edit().clear().commit() }
+    @Before fun asOnADeviceThatNeverSawThisCatalogue() {
+        // (The app's own state is made first, as it is at the start of the app: it applies the catalogue's update itself, once.)
+        (context as app.couch.alhasapa.CouchApp).repo
+        context.getSharedPreferences("catalogue", Context.MODE_PRIVATE).edit().clear().commit()
+    }
 
     @Test
     fun aSkipOfAGameAskedForByNameIsForgottenAndEveryOtherChoiceStays() {

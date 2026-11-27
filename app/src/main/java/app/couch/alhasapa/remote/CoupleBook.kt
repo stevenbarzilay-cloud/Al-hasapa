@@ -32,6 +32,9 @@ interface CoupleBook {
     /** The couch this device is of (2.0), or null while it has none yet. */
     fun couch(): app.couch.alhasapa.data.CouchRef? = null
 
+    /** A new device, nothing chosen on it yet (2.0): it has nothing of its own to tell, and takes the couch it joins. */
+    fun fresh(): Boolean = false
+
     /**
      * On the TV (2.0): a guest's own side of a game played alone for this couch's contest, kept where newer. True when the couch has
      * it now (kept this time, or already there), so the guest's phone can stop keeping it to send.
@@ -72,6 +75,8 @@ class RepoCoupleBook(private val repo: () -> StateRepository?) : CoupleBook {
     override fun takeShare(s: org.json.JSONObject): Boolean = repo()?.mergeShared(s) ?: false
 
     override fun couch(): app.couch.alhasapa.data.CouchRef? = repo()?.peek { app.couch.alhasapa.data.Couches.of(it) }
+
+    override fun fresh(): Boolean = repo()?.peek { app.couch.alhasapa.data.Couches.needsSetup(it) } ?: true
 
     override fun guestSide(day: String, game: String, side: app.couch.alhasapa.data.SoloSide): Boolean {
         val r = repo() ?: return false

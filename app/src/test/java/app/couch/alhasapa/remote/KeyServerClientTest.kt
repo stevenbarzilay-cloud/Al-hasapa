@@ -202,6 +202,8 @@ class KeyServerClientTest {
             KeyClient(context, phoneName = "Pixel 8", find = { "127.0.0.1:${server.port}" }, appCode = 28, appVer = "1.9.4", book = phoneBook).also { clients += it }
         }, newest = { 500 }, onDone = { done++ })
         assertTrue("something waits", sync.waiting())
+        // (2.0: the phone goes to its home's own TV only; this one is it.)
+        CouchStore(context).homeTvs = setOf(RemoteStore(context).tvId)
         sync.start()
         waitFor("the note reached the TV") { tvBook.notes.any { it.id == "h1" } }
         assertEquals("from the one who holds the phone", "u1a2b3c4", tvBook.notes.first { it.id == "h1" }.from)
@@ -373,7 +375,7 @@ class KeyServerClientTest {
         // What the two tell each other is the version at which they last had to be updated together (raised by 1.9.7, the end of a
         // game, by 1.9.8, touch mode, and by 1.9.9, each of us on our own phone): two apps of releases after it that changed only one
         // of the two have nothing to say to each other about versions.
-        assertEquals("raised only by a release that needs both", 39, KeyLink.TOGETHER_SINCE)
+        assertEquals("raised only by a release that needs both", 40, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()

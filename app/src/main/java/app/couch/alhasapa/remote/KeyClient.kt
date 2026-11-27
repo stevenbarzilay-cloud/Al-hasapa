@@ -269,7 +269,7 @@ class KeyClient(
     /** A change made on this phone (1.12): its recent share goes to the TV, when connected (to the home's own TV only, 2.0). */
     private val pushShare: () -> Unit = {
         // Made ready on the thread that writes to the TV, not on the one that made the change (the main one, as a rule).
-        if (_state.value is State.Connected && !isGuest && !adopting) writer.execute { runCatching { ShareBus.recent(book).forEach { write(Msg.Share(it)) } } }
+        if (_state.value is State.Connected && !isGuest && !adopting && !book.fresh()) writer.execute { runCatching { ShareBus.recent(book).forEach { write(Msg.Share(it)) } } }
     }
 
     /** How many times the TV brought something new (1.12): the screens showing the state read it again. */
@@ -477,12 +477,17 @@ class KeyClient(
                             // A guest: who they are here, and the games they played alone for this couch. Nothing of the home.
                             sendGuest(null)
                             flushGuest()
-                        } else if (runCatching { book.couch() }.getOrNull() == null && tvCouch != null) {
+                        } else if (runCatching { book.fresh() }.getOrDefault(false) || (runCatching { book.couch() }.getOrNull() == null && tvCouch != null)) {
                             // A phone with no couch yet (it joins this one, or is from before 2.0 and learns which its home is):
                             // everything the TV keeps first, and only then what the phone keeps.
                             adopting = true; awaitingAll = true
                             write(Msg.ShareAll)
                         } else {
+                            // A TV with no couch yet (it joins this phone's): the couch's relay first, if the couch has one
+                            // already, so the TV takes it rather than make another.
+                            if (tvCouch == null) frameKey?.let { key ->
+                                RelayStore(appContext).config?.let { c -> write(Msg.Relay(RelayCrypto.seal(key, KeyLink.RELAY_AAD, c.toJson().toByteArray()))) }
+                            }
                             // Both of us as this phone knows us.
                             sendCouple()
                             // Everything this phone keeps alike with the TV (1.12): two weeks of evenings, and the rest. The first time

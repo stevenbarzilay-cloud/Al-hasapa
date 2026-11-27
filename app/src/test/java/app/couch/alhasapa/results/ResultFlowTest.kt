@@ -1,5 +1,6 @@
 package app.couch.alhasapa.results
 
+import app.couch.alhasapa.TestCouch
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -50,6 +51,7 @@ class ResultFlowTest {
     private val today get() = CouchState.dayKey(LocalDate.now())
     private var scenario: ActivityScenario<*>? = null
 
+    @org.junit.Before fun ourCouch() { TestCouch.ours() }
     @After fun close() { scenario?.close() }
 
     private fun player(gameId: String, who: String? = null) {
@@ -210,6 +212,10 @@ class ResultFlowTest {
 
     // ---- alone (1.11) ----
 
+    /** 2.0: the button that saves a game played alone says where it goes; with no visit on, that is the home couch. */
+    private val SAVE_SOLO = "שמירת תוצאת הסולו בספה של סטיב ורוני"
+
+
     @Test
     fun aGamePlayedAloneIsSealedUntilTheOtherPlaysItThenTheEnvelopeOpens() {
         phoneOnly()
@@ -220,7 +226,7 @@ class ResultFlowTest {
         rule.onNodeWithText("מי פיצח?").assertDoesNotExist()
         type("או ידנית: ניסיונות", "4")
         rule.onNodeWithText("זוהה: 4/6 · ייחתם במעטפה").assertIsDisplayed()
-        press("שמירה"); rule.waitForIdle()
+        press(SAVE_SOLO); rule.waitForIdle()
         assertNull("not on the couch's page", CouchState.entry(app.repo.snapshot(), today, "wordle"))
         assertEquals(4.0, Solo.side(app.repo.snapshot(), today, "wordle", "b")!!.v!!, 0.0)
         rule.onNodeWithText("✉️ נחתם במעטפה").assertIsDisplayed()
@@ -243,7 +249,7 @@ class ResultFlowTest {
         scenario = ActivityScenario.launch<ShareReceiverActivity>(ShareReceiverActivity.soloIntent(context, "wordle")); rule.waitForIdle()
         rule.onNodeWithText("⚔️ Wordle · לבד").assertIsDisplayed()
         type("או ידנית: ניסיונות", "3")
-        press("שמירה"); rule.waitForIdle()
+        press(SAVE_SOLO); rule.waitForIdle()
         assertEquals(3.0, Solo.side(app.repo.snapshot(), today, "wordle", "a")!!.v!!, 0.0)
         rule.onNodeWithText("✉️ נחתם במעטפה").assertIsDisplayed()
         RemoteStore(context).me = null
@@ -259,7 +265,7 @@ class ResultFlowTest {
         rule.onNodeWithText("ביחד או לבד?").assertIsDisplayed()
         rule.onNode(hasTestTag(PLAY_SOLO_TAG)).performClick(); rule.waitForIdle()
         rule.onNodeWithText("⚔️ Wordle · לבד").assertIsDisplayed()
-        press("שמירה"); rule.waitForIdle()
+        press(SAVE_SOLO); rule.waitForIdle()
         assertEquals(3.0, Solo.side(app.repo.snapshot(), today, "wordle", "b")!!.v!!, 0.0)
         assertNull("not on the couch's page", CouchState.entry(app.repo.snapshot(), today, "wordle"))
         assertEquals("solo", RelayStore(context).mode(today, "wordle"))
@@ -290,9 +296,11 @@ class ResultFlowTest {
             // It was taken: read on the phone, only the line with the result kept.
             scenario!!.onActivity { (it as ShareReceiverActivity).readPhoto(android.net.Uri.parse("content://app.couch.alhasapa.photos/photos/screen.jpg")) }
             rule.waitForIdle()
-            rule.onNodeWithText("📷 קראנו מהתמונה. כדאי לבדוק.").assertIsDisplayed()
-            rule.onNodeWithText("זוהה: 4/6 · ייחתם במעטפה").assertIsDisplayed()
-            press("שמירה"); rule.waitForIdle()
+            rule.onNodeWithText("📷 קראנו מהתמונה. כדאי לבדוק.").performScrollTo().assertIsDisplayed()
+            // (2.0: the sheet also says whose couch and which day's puzzle, so on a phone held sideways this line is a scroll away.)
+            rule.onNodeWithText("זוהה: 4/6 · ייחתם במעטפה").performScrollTo().assertIsDisplayed()
+            rule.onNodeWithText("שחקן: סטיב · הספה של סטיב ורוני · החידה של היום").performScrollTo().assertIsDisplayed()
+            press(SAVE_SOLO); rule.waitForIdle()
             val side = Solo.side(app.repo.snapshot(), today, "wordle", "a")!!
             assertEquals(4.0, side.v!!, 0.0)
             assertTrue("the photo is gone", !java.io.File(context.cacheDir, "photos/screen.jpg").exists())

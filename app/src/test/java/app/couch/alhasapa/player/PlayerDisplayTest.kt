@@ -1,5 +1,6 @@
 package app.couch.alhasapa.player
 
+import app.couch.alhasapa.TestCouch
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
@@ -43,6 +44,7 @@ class PlayerDisplayTest {
     private val app get() = context as CouchApp
     private var scenario: ActivityScenario<PlayerActivity>? = null
 
+    @org.junit.Before fun ourCouch() { TestCouch.ours() }
     @After fun close() { scenario?.close() }
 
     /** On a television the bars and panels are replaced by the dock (see PlayerTvDockTest), so these phone layouts do not exist there. */

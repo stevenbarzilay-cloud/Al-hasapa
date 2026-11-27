@@ -259,6 +259,7 @@ class SoloRelayTest {
 
     @Test
     fun theNewsIsSaidOnThePhoneOncePerGameAndDay() {
+        app.couch.alhasapa.TestCouch.ours()
         shadowOf(context as android.app.Application).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
         val app = context as CouchApp
         SoloNews.notify(context, app, listOf(SoloRelay.News(key, "bandle", "a", reveal = false)))

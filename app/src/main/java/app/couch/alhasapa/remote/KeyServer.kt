@@ -68,6 +68,12 @@ class KeyServer(
     },
     /** The evening it is (a guest of the evening is one until it ends). */
     private val evening: () -> String = { app.couch.alhasapa.data.Couple.evening() },
+    /**
+     * A phone of the home handed over the couch's solo relay (2.0): a TV that joins a couch which has one already (a second TV, or
+     * a new one in place of the old) takes it, rather than making another that the couch's other devices would not hear. True when
+     * it was taken (the TV had none).
+     */
+    private val onRelay: (RelayConfig) -> Boolean = { c -> RelayStore(context).let { st -> if (st.config == null) { st.config = c; true } else false } },
 ) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -152,7 +158,7 @@ class KeyServer(
         if (peers.any { it.ready }) shareOut.execute {
             runCatching {
                 // The home's own phones get what changed; a guest only the contests they may see (2.0).
-                if (peers.any { it.member } && book.couch() != null) {
+                if (peers.any { it.member } && !book.fresh()) {
                     val shares = ShareBus.recent(book)
                     peers.forEach { p -> if (p.member) shares.forEach { p.send(Msg.Share(it)) } }
                 }
@@ -356,6 +362,14 @@ class KeyServer(
                 }
                 true
             }
+            is Msg.Relay -> {
+                // The couch's relay from one of the home's own phones, sealed under this connection's key: taken only by a TV with none.
+                val key = frameKey
+                if (member && key != null) RelayCrypto.open(key, KeyLink.RELAY_AAD, m.sealed)?.let { RelayConfig.parse(String(it, Charsets.UTF_8)) }?.let { c ->
+                    if (runCatching { onRelay(c) }.getOrDefault(false)) Flight.log("relay: this TV took the couch's relay from ${shownName()}'s phone")
+                }
+                true
+            }
             is Msg.SoloSideMsg -> {
                 // A guest's own side of a game played alone for this couch's contest (2.0): theirs only, whatever it says.
                 if (ready && who.isNotEmpty()) main.post { guestSolo(m) }
@@ -364,7 +378,7 @@ class KeyServer(
             Msg.ShareAll -> {
                 // The first time this phone and the TV meet since 1.12: every evening the TV keeps, then "that was all".
                 if (member) {
-                    val all = ShareBus.opening(book, all = true)
+                    val all = if (runCatching { book.fresh() }.getOrDefault(false)) emptyList() else ShareBus.opening(book, all = true)
                     all.forEach { send(Msg.Share(it)) }
                     send(Msg.ShareAll)
                     Flight.log("sync: every evening kept was sent to ${shownName()} (${all.size} messages)")
@@ -412,11 +426,13 @@ class KeyServer(
             if (!plain) runCatching { book.couple() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { send(Msg.CoupleMsg("", it)) }
             // The solo relay (1.11), sealed for this phone only: someone else on the home network sees that something went, not what.
             // Only to the home's own phones: a guest never holds the home's relay.
-            val hasCouch = runCatching { book.couch() }.getOrNull() != null
-            if (hasCouch) sendRelay()
+            // (A TV on which nothing was chosen yet makes no relay and says nothing of its own: it takes the couch of the phone
+            // that joins it to its home, relay and all.)
+            val settled = !runCatching { book.fresh() }.getOrDefault(false)
+            if (settled) sendRelay()
             // Everything the TV keeps alike with the phones (1.12): two weeks of evenings, and the rest. A TV that is of no couch yet
             // (2.0: it is joining the one a phone began) says nothing of its own first: it takes the phone's.
-            if (member && hasCouch) for (s in ShareBus.opening(book)) send(Msg.Share(s))
+            if (member && settled) for (s in ShareBus.opening(book)) send(Msg.Share(s))
             if (guest) sendContests()
             Flight.log(
                 "phone keyboard: $name connected${if (guest) " as a guest" else ""}" +

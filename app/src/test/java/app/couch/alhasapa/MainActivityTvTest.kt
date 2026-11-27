@@ -39,6 +39,7 @@ class MainActivityTvTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var scenario: ActivityScenario<MainActivity>? = null
 
+    @org.junit.Before fun ourCouch() { TestCouch.ours() }
     @After fun close() { scenario?.close() }
 
     private fun launch() { scenario = ActivityScenario.launch(MainActivity::class.java); rule.waitForIdle() }

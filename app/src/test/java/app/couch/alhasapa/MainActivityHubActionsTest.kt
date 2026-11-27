@@ -41,7 +41,7 @@ class MainActivityHubActionsTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var scenario: ActivityScenario<MainActivity>? = null
 
-    @Before fun noReportOfAPreviousRun() { CrashReport.clear(context); Flight.acknowledgePrevious() }
+    @Before fun noReportOfAPreviousRun() { CrashReport.clear(context); Flight.acknowledgePrevious(); TestCouch.ours() }
     @After fun close() { scenario?.close() }
 
     private fun launch(): ActivityScenario<MainActivity> = ActivityScenario.launch(MainActivity::class.java).also { scenario = it; rule.waitForIdle() }

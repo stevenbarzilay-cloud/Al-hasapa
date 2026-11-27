@@ -56,7 +56,7 @@ class TvHomeLookTest {
     private val c = TvController(true, 2f)
     private val nav = HomeNav()
     private val played = ArrayList<String>()
-    private var state by mutableStateOf(CouchState.empty())
+    private var state by mutableStateOf(app.couch.alhasapa.TestCouch.state())
     private var older by mutableStateOf<String?>(null)
 
     private fun model() = HomeModel.from(state, catalog, pieces, date)
@@ -209,7 +209,7 @@ class TvHomeLookTest {
     fun quickPressesAShorterShelfAndTheButtonsAtTheFoot() {
         // All but three games on the shelf: the second shelf is short.
         val keep = setOf("letterboxed", "tiles", "worldle")
-        state = CouchState.empty().also { s -> s.put("prefs", JSONObject().apply { catalog.games.filter { !it.lib && it.id !in keep }.forEach { put(it.id, "yes") } }) }
+        state = app.couch.alhasapa.TestCouch.state().also { s -> s.put("prefs", JSONObject().apply { catalog.games.filter { !it.lib && it.id !in keep }.forEach { put(it.id, "yes") } }) }
         show()
         val shelf = model().tonight.map { it.id }
         val more = model().more.map { it.id }

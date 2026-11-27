@@ -9,7 +9,7 @@ import org.junit.Test
 
 /** Each of us as every device shows us, and the notes we leave each other (1.9.9). */
 class CoupleTest {
-    private fun state() = CouchState.empty()
+    private fun state() = ours()
 
     @Test
     fun theNewerNameAndPieceWinPersonByPerson() {
@@ -94,11 +94,14 @@ class CoupleTest {
     }
 }
 
+/** Our couch (the two of us by name): a new state names nobody (2.0, see CouchesTest). */
+private fun ours(): JSONObject = CouchState.empty().also { it.put("names", JSONObject().put("a", "סטיב").put("b", "רוני")) }
+
 /** The others (1.10): someone who comes often, kept until removed; a guest, for the evening they came only. */
 class OthersTest {
     @Test
     fun othersAndGuestsAreHereOnTheirEveningsAndARemovalTravels() {
-        val s = CouchState.empty()
+        val s = ours()
         val dani = Person(Couple.newId(), "דני", "star", "green", 10)
         val maya = Person(Couple.newId(), "מיה", "", "", 11, guest = true, day = "2026-11-27")
         assertTrue(Couple.isId(dani.who) && dani.other)
@@ -111,7 +114,7 @@ class OthersTest {
         assertFalse(Couple.everyone(s, "2026-11-27").any { it.who == dani.who })
         val mark = Couple.others(s).first { it.who == dani.who }
         assertTrue(mark.removed); assertEquals(11L, mark.at)
-        val tv = CouchState.empty()
+        val tv = ours()
         Couple.offer(tv, dani)
         assertTrue("the removal reaches a device that still has them", Couple.offer(tv, mark))
         assertFalse(Couple.everyone(tv, "2026-11-27").any { it.who == dani.who })
@@ -131,7 +134,7 @@ class OthersTest {
         assertEquals("2026-11-27", Couple.evening(at(28, 4, 59)))
         assertEquals("the next morning is the next evening's", "2026-11-28", Couple.evening(at(28, 5, 0)))
         // A guest who came at ten is still here for the game after midnight, and gone by the next evening.
-        val s = CouchState.empty()
+        val s = ours()
         Couple.put(s, Person(Couple.newId(), "מיה", "", "", 11, guest = true, day = Couple.evening(at(27, 22, 0))))
         assertTrue(Couple.everyone(s, Couple.evening(at(28, 1, 15))).any { it.name == "מיה" })
         assertFalse(Couple.everyone(s, Couple.evening(at(28, 20, 0))).any { it.name == "מיה" })

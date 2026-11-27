@@ -1,5 +1,6 @@
 package app.couch.alhasapa.player
 
+import app.couch.alhasapa.TestCouch
 import android.content.Context
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
@@ -40,6 +41,7 @@ class PlayerTvDockTest {
     private val app get() = context as CouchApp
     private var scenario: ActivityScenario<PlayerActivity>? = null
 
+    @org.junit.Before fun ourCouch() { TestCouch.ours() }
     @After fun close() { scenario?.close() }
 
     private fun launch(gameId: String = "wordle") {
