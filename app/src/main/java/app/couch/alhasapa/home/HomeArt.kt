@@ -91,7 +91,8 @@ object HomeArt {
             }
             if (tintA) mask("-r")?.let { layer(it, a.base.toArgb(), lift(a.base.toArgb())); it.recycle() }
             if (tintB) mask("-p")?.let { layer(it, b.soft.toArgb(), 1f); it.recycle() }
-            Art(out.asImageBitmap(), base.bounds).also { tinted[key] = it }
+            // One pair of colours at a time is kept: the one before is of no use any more.
+            Art(out.asImageBitmap(), base.bounds).also { tinted.clear(); tinted[key] = it }
         }.getOrElse { base }
     }
 

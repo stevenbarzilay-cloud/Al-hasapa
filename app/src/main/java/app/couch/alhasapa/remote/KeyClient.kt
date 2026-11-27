@@ -168,7 +168,10 @@ class KeyClient(
     }
 
     /** A change made on this phone (1.12): its recent share goes to the TV, when connected. */
-    private val pushShare: () -> Unit = { if (_state.value is State.Connected) ShareBus.recent(book).forEach { write(Msg.Share(it)) } }
+    private val pushShare: () -> Unit = {
+        // Made ready on the thread that writes to the TV, not on the one that made the change (the main one, as a rule).
+        if (_state.value is State.Connected) writer.execute { runCatching { ShareBus.recent(book).forEach { write(Msg.Share(it)) } } }
+    }
 
     /** How many times the TV brought something new (1.12): the screens showing the state read it again. */
     private val _shared = MutableStateFlow(0)

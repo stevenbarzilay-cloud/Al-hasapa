@@ -128,10 +128,18 @@ class KeyServer(
         Flight.log("phone keyboard: stopped")
     }
 
-    /** A change made on the TV (1.12): its recent share goes to every phone connected. */
+    /**
+     * A change made on the TV (1.12): its recent share goes to every phone connected. Made ready off the thread that made the change
+     * (the main one, as a rule: a copy of the state is not made twice there), and only when a phone is there to hear it.
+     */
+    private val shareOut = Executors.newSingleThreadExecutor { r -> Thread(r, "share-out").apply { isDaemon = true } }
     private val pushShares: () -> Unit = {
-        val shares = ShareBus.recent(book)
-        peers.forEach { p -> if (p.ready && !p.plain) shares.forEach { p.send(Msg.Share(it)) } }
+        if (peers.any { it.ready && !it.plain }) shareOut.execute {
+            runCatching {
+                val shares = ShareBus.recent(book)
+                peers.forEach { p -> if (p.ready && !p.plain) shares.forEach { p.send(Msg.Share(it)) } }
+            }
+        }
     }
 
     private fun accept(s: ServerSocket) {
