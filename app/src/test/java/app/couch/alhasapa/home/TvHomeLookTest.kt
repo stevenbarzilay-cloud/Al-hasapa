@@ -171,6 +171,8 @@ class TvHomeLookTest {
         left()
         rule.onNodeWithTag(DETAIL_TITLE).assertTextEquals("הגדרות ועוד")
         left()
+        rule.onNodeWithTag(DETAIL_TITLE).assertTextEquals("התאמה לטלוויזיה")
+        left()
         rule.onNodeWithTag(DETAIL_TITLE).assertTextEquals("מידע לתיקון תקלות")
         // With the information panel over the home the focus is on the panel's own button; the home says what it said.
         press(KeyEvent.KEYCODE_DPAD_CENTER)
@@ -191,7 +193,7 @@ class TvHomeLookTest {
         older = "1.9.0"
         show()
         val m = model()
-        for (text in listOf("המדף של הערב", "עוד משחקים", "התחברות לאתרים", "הגדרות ועוד", "מידע לתיקון תקלות")) rule.onNodeWithText(text).assertIsDisplayed()
+        for (text in listOf("המדף של הערב", "עוד משחקים", "התחברות לאתרים", "הגדרות ועוד", "התאמה לטלוויזיה", "מידע לתיקון תקלות")) rule.onNodeWithText(text).assertIsDisplayed()
         rule.onNodeWithText("שיחקנו 0 מתוך ${m.total}", substring = true).assertIsDisplayed()      // the evening's count
         rule.onNodeWithText("נקודות ספה", substring = true).assertIsDisplayed()                     // the score
         rule.onNodeWithText("נובמבר", substring = true).assertIsDisplayed()                         // the day

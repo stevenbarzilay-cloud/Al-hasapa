@@ -54,10 +54,10 @@ import app.couch.alhasapa.ui.theme.Palette
 /** Panels read from the couch: nothing in them is below 20sp. */
 private val PanelText = 20.sp
 
-/** The panel beside the game (the one on the right, where a Hebrew reader begins): whose couch, which game, how long. */
+/** The panel beside the game (the one on the right, where a Hebrew reader begins): whose couch, which game, what time it is. */
 @Composable
 fun IdentityPanel(
-    width: Dp, title: String, elapsed: String, modifier: Modifier = Modifier, compact: Boolean = false,
+    width: Dp, title: String, clock: String, modifier: Modifier = Modifier, compact: Boolean = false,
     /** The menu is part of the panel, so the settings are never hidden: always one tap away. */
     onMenu: () -> Unit = {}, onBack: (() -> Unit)? = null, zoom: Int? = null, onZoom: (Int) -> Unit = {},
     portrait: Boolean = true, onMode: (() -> Unit)? = null, onUi: (() -> Unit)? = null,
@@ -81,7 +81,8 @@ fun IdentityPanel(
         Spacer(Modifier.height(12.dp))
         // Digits read left to right even in a Hebrew sentence, so the clock sits in its own left-to-right run.
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Text(elapsed, fontSize = if (compact) 28.sp else 34.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = elapsed })
+            val said = stringResource(R.string.clock_desc, clock)
+            Text(clock, fontSize = if (compact) 28.sp else 34.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = said })
         }
         if (zoom != null) {
             Spacer(Modifier.height(12.dp))
@@ -339,9 +340,4 @@ private fun SheetButton(label: String, description: String?, modifier: Modifier,
     }
 }
 
-/** m:ss, or h:mm:ss after the first hour. */
-fun formatElapsed(seconds: Long): String {
-    val s = seconds.coerceAtLeast(0)
-    val h = s / 3600; val m = (s % 3600) / 60; val sec = s % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
-}
+

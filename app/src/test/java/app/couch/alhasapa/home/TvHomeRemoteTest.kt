@@ -177,7 +177,7 @@ class TvHomeRemoteTest {
     @Test
     fun theInformationPanelOpensFromItsButtonAndTheArrowsDoNotWanderBehindIt() {
         show()
-        down(); down(); left(); left()
+        down(); down(); left(); left(); left()
         assertEquals(INFO_ID, c.focusedId)
         ok()
         assertEquals(TvPanel.INFO, c.panel)

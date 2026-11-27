@@ -4,6 +4,11 @@ import android.view.KeyEvent
 import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import kotlin.math.roundToInt
+import androidx.core.content.edit
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 
@@ -20,7 +25,22 @@ class TvHost(private val activity: ComponentActivity) {
         val prefs = activity.getSharedPreferences("tv", android.content.Context.MODE_PRIVATE)
         c.slim = prefs.getBoolean("slim", false)
         c.onSlimChanged = { prefs.edit().putBoolean("slim", it).apply() }
+        // The TV's settings (see TvSettingsPanel), the same for every screen of the app on this TV.
+        c.pictureScale = prefs.getInt(PICTURE, 100) / 100f
+        c.uiScale = prefs.getInt(UI, 100) / 100f
+        c.cursorShape = CursorShape.of(prefs.getString(CURSOR, null))
+        c.cursorSize = CursorSize.of(prefs.getString(CURSOR_SIZE, null))
+        c.onLookChanged = {
+            prefs.edit {
+                putInt(PICTURE, (c.pictureScale * 100).roundToInt()); putInt(UI, (c.uiScale * 100).roundToInt())
+                putString(CURSOR, c.cursorShape.id); putString(CURSOR_SIZE, c.cursorSize.id)
+            }
+        }
     }
+
+    /** The first of us's colour (the interface's), for the plain arrow cursor; read again when the state changes. */
+    private val couch = activity.application as? app.couch.alhasapa.CouchApp
+    private val pieces by lazy { app.couch.alhasapa.data.PiecesConfig.load(activity) }
 
     init {
         // Keys are taken at the window, before the focused view (a WebView would eat the arrows). Not an Activity override:
@@ -63,7 +83,23 @@ class TvHost(private val activity: ComponentActivity) {
         set(value) { controller.screenTitle = value; if (app.couch.alhasapa.remote.RemoteKeys.front === controller) app.couch.alhasapa.remote.RemoteKeys.server?.screen = value }
 
     @Composable
-    fun Layer(content: @Composable () -> Unit) = TvLayer(controller, content)
+    fun Layer(content: @Composable () -> Unit) {
+        val app = couch
+        if (enabled && app != null) {
+            val revision by app.repo.revision.collectAsState()
+            LaunchedEffect(revision) {
+                runCatching { controller.accent = pieces.styleFor(app.repo.snapshot(), "a").accent }
+            }
+        }
+        TvLayer(controller, content)
+    }
+
+    companion object {
+        const val PICTURE = "picture"
+        const val UI = "ui"
+        const val CURSOR = "cursor"
+        const val CURSOR_SIZE = "cursor_size"
+    }
 }
 
 /** The window's callback with the TV remote in front: the controller sees every key first, and anything it does not use goes on as usual. */

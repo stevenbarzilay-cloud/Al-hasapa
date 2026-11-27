@@ -173,6 +173,7 @@ const val CARD_PREFIX = "home-"
 const val ACCOUNTS_ID = "home:accounts"
 const val MORE_ID = "home:more"
 const val INFO_ID = "home:info"
+const val SETTINGS_ID = "home:tv-settings"
 
 /** For the tests: the name, the kind and the words about what is in focus. */
 const val DETAIL_TITLE = "home:detail-title"
@@ -214,16 +215,19 @@ fun TvHome(
     onAccounts: () -> Unit,
     onMore: () -> Unit,
     onInfo: () -> Unit,
+    /** The TV's own settings: the picture's size, the writing's, the cursor (see TvSettingsPanel). */
+    onSettings: () -> Unit = {},
 ) {
     val tv = LocalTv.current
     val tonightIds = remember(model.tonight) { model.tonight.map { cardId(it.id) } }
     val moreIds = remember(model.more) { model.more.map { cardId(it.id) } }
-    val pillIds = remember { listOf(ACCOUNTS_ID, MORE_ID, INFO_ID) }
+    val pillIds = remember { listOf(ACCOUNTS_ID, MORE_ID, SETTINGS_ID, INFO_ID) }
     val ok: (String) -> Unit = { id ->
         when (id) {
             ACCOUNTS_ID -> onAccounts()
             MORE_ID -> onMore()
             INFO_ID -> onInfo()
+            SETTINGS_ID -> onSettings()
             else -> onPlay(id.removePrefix(CARD_PREFIX))
         }
     }
@@ -260,6 +264,7 @@ fun TvHome(
         ACCOUNTS_ID to Detail(appName, stringResource(R.string.home_accounts), stringResource(R.string.home_about_accounts)),
         MORE_ID to Detail(appName, stringResource(R.string.home_more_settings), stringResource(R.string.home_about_more)),
         INFO_ID to Detail(appName, stringResource(R.string.tv_info_title), stringResource(R.string.home_about_info)),
+        SETTINGS_ID to Detail(appName, stringResource(R.string.home_tv_settings), stringResource(R.string.home_about_tv_settings)),
     )
     val said = remember { arrayOfNulls<Detail>(1) }
     val now = remember(focusedId, model) {
@@ -308,6 +313,7 @@ fun TvHome(
             ) {
                 Pill(ACCOUNTS_ID, stringResource(R.string.home_accounts), onAccounts)
                 Pill(MORE_ID, stringResource(R.string.home_more_settings), onMore)
+                Pill(SETTINGS_ID, stringResource(R.string.home_tv_settings), onSettings)
                 Pill(INFO_ID, stringResource(R.string.tv_info_title), onInfo)
                 Spacer(Modifier.width(4.dp))
                 // The phone's app and this one are built together: when one of them was left behind, say which (it is easy to miss).
@@ -513,10 +519,10 @@ private fun Pill(id: String, label: String, onClick: () -> Unit) {
             .background(Palette.Tint)
             .tvTarget(id, label, onClick)                       // in focus it takes the red, like every button of the app
             .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(14.dp))
-            .padding(horizontal = 20.dp)
+            .padding(horizontal = 16.dp)
             .semantics { role = Role.Button; contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = if (lit) Palette.Cream else Palette.Ink, maxLines = 1)
+        Text(label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = if (lit) Palette.Cream else Palette.Ink, maxLines = 1)
     }
 }

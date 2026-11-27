@@ -104,6 +104,31 @@ class MainActivityTvTest {
     }
 
     @Test
+    fun thePictureCanBeMadeSmallerFromTheHomeWhenTheTvCropsItAndItIsKept() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
+        context.getSharedPreferences("tv", android.content.Context.MODE_PRIVATE).edit().clear().commit()
+        launch()
+        val before = rule.onNodeWithText("המדף של הערב").fetchSemanticsNode().boundsInWindow
+        val logoBefore = rule.onNode(hasContentDescription("על הספה שלנו")).fetchSemanticsNode().boundsInWindow
+        // Down to the buttons at the foot, two to the left: "התאמה לטלוויזיה"; OK opens the settings on the picture's "smaller".
+        remote(android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.onNodeWithText("גודל התמונה").assertIsDisplayed()
+        repeat(5) { remote(android.view.KeyEvent.KEYCODE_DPAD_CENTER) }
+        rule.onNodeWithText("95%").assertIsDisplayed()
+        assertEquals("kept on this TV", 95, context.getSharedPreferences("tv", android.content.Context.MODE_PRIVATE).getInt("picture", 100))
+        remote(android.view.KeyEvent.KEYCODE_BACK)
+        // Everything is drawn smaller, with a margin all round: the shelf's title is further from the right edge than it was.
+        val after = rule.onNodeWithText("המדף של הערב").fetchSemanticsNode().boundsInWindow
+        assertTrue("$before -> $after", after.right < before.right - 30f)
+        val logo = rule.onNode(hasContentDescription("על הספה שלנו")).fetchSemanticsNode().boundsInWindow
+        assertEquals("the logo is drawn at 95% of its size", logoBefore.width * 0.95f, logo.width, 2f)
+        // And the next start begins that way.
+        scenario!!.close(); launch()
+        val again = rule.onNodeWithText("המדף של הערב").fetchSemanticsNode().boundsInWindow
+        assertEquals(after.right, again.right, 1f)
+    }
+
+    @Test
     fun theFullHubIsOneStepFromTheHomeAndBackComesHome() {
         CrashReport.clear(context); Flight.acknowledgePrevious()
         launch()
@@ -137,7 +162,7 @@ class MainActivityTvTest {
     fun theInformationPanelOpensFromTheHomeWithTheRemote() {
         CrashReport.clear(context); Flight.acknowledgePrevious()
         launch()
-        remote(android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+        remote(android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
         rule.onNodeWithText("אם משהו לא עובד", substring = true).assertIsDisplayed()
         rule.onNodeWithText("app ", substring = true).assertIsDisplayed()
         remote(android.view.KeyEvent.KEYCODE_BACK)

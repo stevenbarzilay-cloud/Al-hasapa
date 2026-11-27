@@ -88,6 +88,26 @@ class RemoteLogicTest {
     }
 
     @Test
+    fun anArrowHoldingTheCursorAgainstTheTopOrBottomPushesOn() {
+        val c = cursor(1000f, 600f)
+        val sink = Rec()
+        c.jumpTo(500f, 600f)
+        c.keyDown(Dir.DOWN, sink); c.tick(16, sink)
+        assertTrue("held against the bottom: it pushes down by ${c.pushing}", c.pushing > 0f)
+        val first = c.pushing
+        repeat(60) { c.tick(16, sink) }
+        assertTrue("faster the longer it is held", c.pushing > first)
+        c.keyUp(Dir.DOWN); c.tick(16, sink)
+        assertEquals(0f, c.pushing, 0f)
+        c.jumpTo(500f, 0f); c.keyDown(Dir.UP, sink); c.tick(16, sink)
+        assertTrue("against the top: up", c.pushing < 0f)
+        c.keyUp(Dir.UP); c.jumpTo(500f, 300f); c.keyDown(Dir.DOWN, sink); c.tick(16, sink)
+        assertEquals("in the middle it only moves", 0f, c.pushing, 0f)
+        c.keyUp(Dir.DOWN); c.jumpTo(1000f, 300f); c.keyDown(Dir.RIGHT, sink); c.tick(16, sink)
+        assertEquals("the sides do not scroll", 0f, c.pushing, 0f)
+    }
+
+    @Test
     fun cancelLiftsAFingerThatIsDown() {
         val c = cursor(); val r = Rec()
         c.okDown(0, r); c.okDown(1, r); c.okUp(r)

@@ -143,6 +143,30 @@ class KeyboardModeScreenTest {
     }
 
     @Test
+    fun aFingerHeldStillOnTheTouchpadGrabsDragsAndLetsGoWhenLifted() {
+        state = KeyClient.State.Connected("MiTV", "Dialed"); show()
+        rule.onNode(tab).performTouchInput { down(center); repeat(8) { moveBy(Offset(-60f, 0f), 16) }; up() }
+        rule.mainClock.advanceTimeBy(1_000)
+        val pad = rule.onNode(hasContentDescription("מזיזים את הכפה עם אצבע אחת · נגיעה קצרה לוחצת · שתי אצבעות גוללות"))
+        sent.clear()
+        // Held still for a moment: the TV's finger goes down where the paw is; moved: a drag; lifted: let go. No click.
+        pad.performTouchInput { down(center); advanceEventTime(HOLD_TO_GRAB_MS + 120); repeat(5) { moveBy(Offset(30f, 0f), delayMillis = 20) }; up() }
+        rule.waitForIdle()
+        assertEquals("drag:true", sent.first())
+        assertTrue("then the moves: $sent", sent.drop(1).dropLast(1).isNotEmpty() && sent.drop(1).dropLast(1).all { it == "move:right" })
+        assertEquals("drag:false", sent.last())
+        assertTrue("no click", "click" !in sent)
+        // A finger that moves at once only moves the paw, as before.
+        sent.clear()
+        pad.performTouchInput { down(center); repeat(5) { moveBy(Offset(30f, 0f), delayMillis = 20) }; up() }
+        assertTrue("$sent", sent.isNotEmpty() && sent.all { it == "move:right" })
+        // And a short touch is still a click.
+        sent.clear()
+        pad.performTouchInput { click(center) }
+        assertEquals(listOf("click"), sent)
+    }
+
+    @Test
     fun aShortPullSpringsBackAndATouchOnTheTabOpensIt() {
         state = KeyClient.State.Connected("MiTV", "Krillion"); show()
         rule.onNode(tab).performTouchInput { down(center); moveBy(Offset(-40f, 0f), 200); up() }

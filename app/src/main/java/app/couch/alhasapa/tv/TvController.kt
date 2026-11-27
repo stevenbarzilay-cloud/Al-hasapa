@@ -22,10 +22,16 @@ enum class InputMode { NAV, PAW }
 enum class Zone { PAGE, NATIVE }
 
 /** A short message shown on screen when the way of controlling things changes or something is worth knowing. */
-enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW }
+enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW, FRAME_HIDDEN }
 
-/** A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up). */
-enum class TvPanel { INFO }
+/**
+ * A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up): the information for fixing a
+ * fault, and the TV's own settings (the picture's size, the size of the writing, the cursor).
+ */
+enum class TvPanel { INFO, SETTINGS }
+
+/** The ids of a panel's own buttons begin with this: while a panel is up, the arrows move between those only. */
+const val PANEL_PREFIX = "panel:"
 
 /** The page, as one of the things the arrows can move to. */
 const val PAGE_ID = "page"
@@ -86,6 +92,42 @@ class TvController(val enabled: Boolean, density: Float) {
 
     /** True when the remote's focus ring is on the app's button with this [id]. */
     fun isFocused(id: String): Boolean = mode == InputMode.NAV && zone == Zone.NATIVE && focusedId == id
+
+    // ---- how the TV's screens are shown (the TV's settings: see TvSettingsPanel; kept across starts by the host) ----
+
+    /**
+     * How much of the screen the picture takes, 0.85 to 1. A TV that crops the edges of the picture (most do, a little, unless set
+     * otherwise) cuts off what is drawn there; the whole picture, writing and all, is then made this much smaller, with an empty
+     * margin around it, until its corners show.
+     */
+    var pictureScale by mutableFloatStateOf(1f)
+
+    /** How large the writing and the buttons are drawn, 0.85 to 1.25 (1: as designed). */
+    var uiScale by mutableFloatStateOf(1f)
+
+    var cursorShape by mutableStateOf(CursorShape.PAW)
+    var cursorSize by mutableStateOf(CursorSize.MEDIUM)
+
+    /** The colour of the interface (the first of us's colour), which the plain arrow cursor wears. */
+    var accent by mutableStateOf(app.couch.alhasapa.ui.theme.Palette.Red)
+
+    /** One of the settings above changed: the host keeps it. */
+    var onLookChanged: () -> Unit = {}
+
+    /** Where this screen's area begins in the window (it is smaller than the window when [pictureScale] is below 1), in px. */
+    var originX = 0f
+    var originY = 0f
+
+    /** A game asked for the whole screen: the dock is put away (Back brings it back). */
+    var frameHidden by mutableStateOf(false)
+        private set
+
+    fun hideFrame(hidden: Boolean) {
+        if (frameHidden == hidden) return
+        frameHidden = hidden
+        if (hidden) { if (zone == Zone.NATIVE && pageBox != null) { zone = Zone.PAGE; focusedId = null }; say(TvHint.FRAME_HIDDEN) }
+        Flight.log("tv: the game's frame ${if (hidden) "hidden" else "shown"}")
+    }
 
     /** The app's own buttons, registered by their position on screen (see [tvTarget]); and the page's area. */
     private val targets = LinkedHashMap<String, NavTarget>()
@@ -151,7 +193,8 @@ class TvController(val enabled: Boolean, density: Float) {
         if (!enabled) return
         if (keyboardOpen) closeKeyboard()
         pageNav.blur()
-        panel = p; zone = Zone.NATIVE; focusedId = PANEL_CLOSE_ID          // one OK closes it again
+        // The information: one OK closes it again. The settings: the focus begins on the first of them.
+        panel = p; zone = Zone.NATIVE; focusedId = if (p == TvPanel.SETTINGS) SETTINGS_FIRST_ID else PANEL_CLOSE_ID
         Flight.log("tv: panel $p open")
     }
 
@@ -238,14 +281,39 @@ class TvController(val enabled: Boolean, density: Float) {
     fun remoteScroll(dyDp: Float) {
         if (!enabled) return
         onScrolled(dyDp)
-        val d = decor ?: return
-        val props = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_MOUSE }
-        val coords = MotionEvent.PointerCoords().apply { x = cursor.x; y = cursor.y; setAxisValue(MotionEvent.AXIS_VSCROLL, dyDp / SCROLL_DP_PER_NOTCH) }
+        scrollAt(cursor.x, cursor.y, dyDp * SCROLL_GAIN * cursor.density)
+    }
+
+    /**
+     * Scrolls what is under ([x], [y]) of this screen by [px] (positive: the content comes down), with a mouse's wheel.
+     *
+     * On the page the wheel is given to the page itself, at the point under the paw. Until 1.9.5 it was given to the window, which
+     * hands it on through the app's own layers; on the way it did not always reach the page, and the page did not scroll.
+     */
+    private fun scrollAt(x: Float, y: Float, px: Float) {
+        val wx = x + originX
+        val wy = y + originY
+        val notches = px / scrollFactor()
         val t = SystemClock.uptimeMillis()
-        val ev = MotionEvent.obtain(t, t, MotionEvent.ACTION_SCROLL, 1, arrayOf(props), arrayOf(coords), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_MOUSE, 0)
+        val frame = web?.parent as? View
+        if (frame != null && frame.isAttachedToWindow) {
+            val at = IntArray(2).also { frame.getLocationInWindow(it) }
+            if (wx >= at[0] && wx < at[0] + frame.width && wy >= at[1] && wy < at[1] + frame.height) {
+                val ev = Touches.wheel(t, wx - at[0], wy - at[1], notches)
+                frame.dispatchGenericMotionEvent(ev)
+                ev.recycle()
+                return
+            }
+        }
+        val d = decor ?: return
+        val ev = Touches.wheel(t, wx, wy, notches)
         d.dispatchGenericMotionEvent(ev)
         ev.recycle()
     }
+
+    /** How far one notch of a wheel scrolls on this device, in px. */
+    private fun scrollFactor(): Float =
+        decor?.let { runCatching { android.view.ViewConfiguration.get(it.context).scaledVerticalScrollFactor }.getOrNull() }?.takeIf { it > 0f } ?: (64f * cursor.density)
 
     /** Every scroll from the touchpad, for tests. */
     var onScrolled: (dyDp: Float) -> Unit = {}
@@ -291,8 +359,8 @@ class TvController(val enabled: Boolean, density: Float) {
     private fun send(action: Int, x: Float, y: Float) {
         onInjected(action, x, y)
         val d = decor ?: return
-        val ev = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
-        ev.source = InputDevice.SOURCE_TOUCHSCREEN
+        // The cursor lives in this screen's area; the window's own coordinates begin [originX], [originY] further up and left.
+        val ev = Touches.finger(downTime, SystemClock.uptimeMillis(), action, x + originX, y + originY)
         d.dispatchTouchEvent(ev)
         ev.recycle()
     }
@@ -305,6 +373,8 @@ class TvController(val enabled: Boolean, density: Float) {
         override fun run() {
             if (!cursor.moving) return
             cursor.tick(CursorController.TICK_MS, sink)
+            // The paw held against the top or the bottom of the screen: what is under it scrolls on, faster the longer it is held.
+            if (cursor.pushing != 0f) scrollAt(cursor.x, cursor.y, -cursor.pushing)
             sync()
             handler.postDelayed(this, CursorController.TICK_MS)
         }
@@ -337,11 +407,14 @@ class TvController(val enabled: Boolean, density: Float) {
         }
     }
 
-    /** With the information panel up: Up and Down scroll it, Left and Right and OK work its buttons, Back closes it. */
+    /**
+     * With a panel up: Back closes it. The information: Up and Down scroll it, Left and Right and OK work its buttons. The settings:
+     * the arrows move between its buttons and OK presses.
+     */
     private fun handlePanelKey(e: KeyEvent): Boolean {
         val dir = dirOf(e.keyCode)
         if (e.keyCode == KeyEvent.KEYCODE_BACK) { if (e.action == KeyEvent.ACTION_UP) closePanel(); return true }
-        if (dir == Dir.UP || dir == Dir.DOWN) { if (e.action == KeyEvent.ACTION_DOWN) textScroller?.invoke(if (dir == Dir.DOWN) 1 else -1); return true }
+        if (panel == TvPanel.INFO && (dir == Dir.UP || dir == Dir.DOWN)) { if (e.action == KeyEvent.ACTION_DOWN) textScroller?.invoke(if (dir == Dir.DOWN) 1 else -1); return true }
         return handleNavKey(e)
     }
 
@@ -390,8 +463,14 @@ class TvController(val enabled: Boolean, density: Float) {
             }
             return
         }
-        // The information panel has one button, and the focus is on it: nothing behind the panel can be reached with the arrows.
-        if (panel != null) return
+        // A panel: the arrows stay among its own buttons, nothing behind it can be reached. (The information has only one.)
+        if (panel != null) {
+            val from = focusedId?.let { targets[it]?.box }
+            val own = onScreen().filter { it.id.startsWith(PANEL_PREFIX) || it.id == PANEL_CLOSE_ID }
+            val next = if (from == null) own.minWithOrNull(compareBy<NavTarget> { it.box.t }.thenBy { -it.box.r }) else Spatial.next(from, own, dir, exclude = focusedId)
+            if (next != null) { zone = Zone.NATIVE; focusedId = next.id }
+            return
+        }
         screenNav?.let { nav ->
             when (val next = nav.move(focusedId.takeIf { zone == Zone.NATIVE }, dir)) {
                 null -> {}                                                  // not the screen's business: the general rule
@@ -452,7 +531,7 @@ class TvController(val enabled: Boolean, density: Float) {
             mode = InputMode.PAW
             pageNav.blur()
             val box = focusedId?.let { targets[it]?.box }
-            if (box != null) cursor.jumpTo(box.cx, box.cy)
+            if (box != null) cursor.jumpTo(box.cx - originX, box.cy - originY)
             cursorVisible = true; sync()
             say(TvHint.PAW_ON)
         } else {
@@ -585,8 +664,12 @@ class TvController(val enabled: Boolean, density: Float) {
         /** The information panel's close button. */
         const val PANEL_CLOSE_ID = "panel-close"
 
-        /** Two fingers moving this many dp on the touchpad scroll one notch of a mouse's wheel. */
-        const val SCROLL_DP_PER_NOTCH = 20f
+        /** The settings' first button, where the focus begins when they open. */
+        const val SETTINGS_FIRST_ID = PANEL_PREFIX + "picture-smaller"
+
+        /** One dp of finger on the phone's touchpad scrolls the page by this many dp. */
+        const val SCROLL_GAIN = 1.5f
+
 
         /** Tests put a fake page here before the screen is built. */
         var PageNavOverride: PageNav? = null

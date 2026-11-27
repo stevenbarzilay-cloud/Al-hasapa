@@ -77,6 +77,7 @@ import app.couch.alhasapa.results.ResultSheet
 import app.couch.alhasapa.results.ResultSupport
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.core.content.edit
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalContext
@@ -89,7 +90,7 @@ private const val SOUND_FIRST_LOOK_MS = 10_000L
 private const val SOUND_LOOK_MS = 20_000L
 
 private val ALL_ITEMS = BarItem.entries
-private val TOP_OF_BOTH = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM, BarItem.MODE, BarItem.UI)
+private val TOP_OF_BOTH = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.CLOCK, BarItem.ZOOM, BarItem.MODE, BarItem.UI)
 private val BOTTOM_OF_BOTH = listOf(BarItem.PROGRESS, BarItem.POINTS, BarItem.PIECES, BarItem.RESULT, BarItem.PLAYED)
 
 /**
@@ -186,11 +187,21 @@ fun PlayerScreen(
         onDispose { cm?.removePrimaryClipChangedListener(listener) }
     }
 
-    val startedAt = remember { System.currentTimeMillis() }
-    var now by remember { mutableLongStateOf(startedAt) }
-    // On a phone the bars show the clock. On a TV the dock's clock ticks by itself, so this screen (and the game's frame around the
-    // WebView) is not composed again every second on a slow box.
-    LaunchedEffect(tv) { if (tv == null) while (true) { delay(1_000); now = System.currentTimeMillis() } }
+    // The time of day. On a phone the bars show it, read again when the minute changes. On a TV the dock's clock ticks by itself, so
+    // this screen (and the game's frame around the WebView) is not composed again on a slow box.
+    var clock by remember { mutableStateOf(Clock.now()) }
+    LaunchedEffect(tv) { if (tv == null) while (true) { delay(Clock.untilNextMinute()); clock = Clock.now() } }
+
+    // On a TV a game can have the whole screen: its frame put away (Back brings it back), remembered for this game.
+    val framePrefs = remember { context.getSharedPreferences("tv", Context.MODE_PRIVATE) }
+    val frameKey = remember { "frame-hidden:" + (session.gameId ?: android.net.Uri.parse(session.url).host.orEmpty()) }
+    if (tv != null && !session.loginMode) {
+        DisposableEffect(tv) {
+            if (framePrefs.getBoolean(frameKey, false)) tv.hideFrame(true)
+            onDispose { tv.hideFrame(false) }
+        }
+    }
+    val hideFrame: (Boolean) -> Unit = { hidden -> tv?.hideFrame(hidden); framePrefs.edit { putBoolean(frameKey, hidden) } }
 
     // On a TV: what the page's sound was given and whether it had gaps, to the report every so often and when the game closes.
     // A site where gaps were counted gets the longest buffer from the next time it opens.
@@ -247,13 +258,14 @@ fun PlayerScreen(
 
     val openResult: () -> Unit = { resultText = ""; resultCaptured = false; resultOpen = true }
     val chrome = ChromeData(
-        title = session.title, elapsed = formatElapsed((now - startedAt) / 1000), info = info, played = played,
+        title = session.title, clock = clock, info = info, played = played,
         showPlayed = !session.loginMode, zoom = if (profile.mode != DisplayMode.NATIVE) profile.zoom else null,
-        portrait = profile.mode == DisplayMode.PORTRAIT_FIT, startedAt = startedAt,
+        portrait = profile.mode == DisplayMode.PORTRAIT_FIT,
     )
     val actions = ChromeActions(
         onMenu = { sheetOpen = true }, onBack = onClose, onResult = if (result != null) openResult else null,
         onTogglePlayed = onTogglePlayed, onZoom = quickZoom, onToggleMode = toggleMode, onCycleUi = cycleUi,
+        onHideFrame = { hideFrame(true) },
     )
 
     // On a TV the game's frame lives in the dock at the left edge.
@@ -266,6 +278,8 @@ fun PlayerScreen(
         val view = webView
         when {
             video.isShowing -> video.onHideCustomView()
+            // The frame was put away: Back brings it back first (the game stays open).
+            tv?.frameHidden == true -> hideFrame(false)
             resultOpen -> resultOpen = false
             sheetOpen -> sheetOpen = false
             view != null && view.canGoBack() -> view.goBack()
@@ -395,7 +409,7 @@ fun PlayerScreen(
                     }
                     if (layout.hasPanels) {
                         IdentityPanel(
-                            layout.panelWidth.dp, session.title, chrome.elapsed, compact = layout.compactPanels,
+                            layout.panelWidth.dp, session.title, chrome.clock, compact = layout.compactPanels,
                             onMenu = actions.onMenu, onBack = onClose, zoom = chrome.zoom, onZoom = quickZoom,
                             portrait = chrome.portrait, onMode = toggleMode, onUi = cycleUi,
                         )

@@ -20,7 +20,7 @@ interface TouchSink {
  *
  * Drag mode is a latch because a remote's centre button cannot be held while an arrow is pressed.
  */
-class CursorController(private val density: Float) {
+class CursorController(val density: Float) {
     var width = 0f; private set
     var height = 0f; private set
     var x = 0f; private set
@@ -33,6 +33,13 @@ class CursorController(private val density: Float) {
     private var okLong = false
 
     val moving: Boolean get() = held.isNotEmpty()
+
+    /**
+     * After a [tick] in which an arrow held the cursor against the top or the bottom edge: how far it pushed beyond it, in px (negative
+     * up, positive down); 0 otherwise. The screen scrolls by it (the page goes on past the edge of the screen).
+     */
+    var pushing = 0f
+        private set
 
     /** The screen's size: the cursor starts in the middle and stays inside. */
     fun resize(w: Float, h: Float) {
@@ -64,12 +71,15 @@ class CursorController(private val density: Float) {
 
     /** Advance by [dtMs] with the arrows as they are. Returns whether the cursor moved. */
     fun tick(dtMs: Long, sink: TouchSink): Boolean {
+        pushing = 0f
         if (held.isEmpty()) return false
         heldMs += dtMs
         val step = speedDpPerSec() * density * dtMs / 1000f
         val (ux, uy) = unit()
         val before = x to y
         move(ux * step, uy * step, sink)
+        if (height > 0f && uy > 0f && y >= height) pushing = uy * step
+        if (height > 0f && uy < 0f && y <= 0f) pushing = uy * step
         return (x to y) != before
     }
 
@@ -104,7 +114,7 @@ class CursorController(private val density: Float) {
 
     /** Let go of everything (the keyboard opened, the app paused). */
     fun cancel(sink: TouchSink) {
-        held.clear(); heldMs = 0L; okPressed = false; okLong = false
+        held.clear(); heldMs = 0L; okPressed = false; okLong = false; pushing = 0f
         if (dragging) { dragging = false; sink.up(x, y) }
     }
 

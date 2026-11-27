@@ -155,6 +155,101 @@ class TvControllerTest {
     }
 
     @Test
+    fun theSettingsPanelKeepsTheArrowsAmongItsOwnButtons() {
+        val (c, page) = screen()
+        // Over the screen's own buttons (still registered underneath): the panel's.
+        val pressed = ArrayList<String>()
+        fun panelButton(id: String, l: Float, t: Float) = c.register(PANEL_PREFIX + id, Box(l, t, l + 60f, t + 50f)) { pressed += id }
+        panelButton("picture-smaller", 600f, 100f); panelButton("picture-larger", 760f, 100f)
+        panelButton("ui-smaller", 600f, 200f); panelButton("ui-larger", 760f, 200f)
+        panelButton("cursor-paw", 400f, 300f); panelButton("cursor-arrow", 800f, 300f)
+        c.register(TvController.PANEL_CLOSE_ID, Box(100f, 20f, 200f, 70f)) { c.closePanel() }
+        c.openPanel(TvPanel.SETTINGS)
+        assertEquals(TvPanel.SETTINGS, c.panel)
+        assertEquals("the first setting has the focus", TvController.SETTINGS_FIRST_ID, c.focusedId)
+        press(c, KeyEvent.KEYCODE_DPAD_RIGHT); assertEquals(PANEL_PREFIX + "picture-larger", c.focusedId)
+        press(c, KeyEvent.KEYCODE_DPAD_CENTER); assertEquals(listOf("picture-larger"), pressed)
+        press(c, KeyEvent.KEYCODE_DPAD_DOWN); assertEquals("Down goes to the next setting, not scrolling", PANEL_PREFIX + "ui-larger", c.focusedId)
+        press(c, KeyEvent.KEYCODE_DPAD_DOWN); press(c, KeyEvent.KEYCODE_DPAD_DOWN)
+        assertTrue("never to the buttons behind the panel: ${c.focusedId}", c.focusedId!!.startsWith(PANEL_PREFIX))
+        press(c, KeyEvent.KEYCODE_DPAD_UP); press(c, KeyEvent.KEYCODE_DPAD_UP); press(c, KeyEvent.KEYCODE_DPAD_UP); press(c, KeyEvent.KEYCODE_DPAD_LEFT); press(c, KeyEvent.KEYCODE_DPAD_LEFT)
+        assertEquals("up at the top, the close button", TvController.PANEL_CLOSE_ID, c.focusedId)
+        assertTrue("the page was never walked", page.calls.none { it.startsWith("move") })
+        assertTrue(c.handleKey(key(KeyEvent.KEYCODE_BACK))); c.handleKey(key(KeyEvent.KEYCODE_BACK, KeyEvent.ACTION_UP))
+        assertNull("Back closes it", c.panel)
+    }
+
+    @Test
+    fun theTouchesAreAFingersAndLandWhereThePictureIs() {
+        val c = TvController(true, 2f)
+        val got = ArrayList<MotionEvent>()
+        c.decor = object : android.view.View(androidx.test.core.app.ApplicationProvider.getApplicationContext()) {
+            override fun dispatchTouchEvent(event: MotionEvent): Boolean { got += MotionEvent.obtain(event); return true }
+        }
+        // The picture made smaller on a TV that crops (see TvLayer): this screen's area begins 48 px in and 27 px down.
+        c.resize(1824f, 1026f); c.originX = 48f; c.originY = 27f
+        c.togglePaw(); c.placeCursor(100f, 200f)
+        c.remoteClick(); idle(200)
+        assertEquals(listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP), got.map { it.actionMasked })
+        for (e in got) {
+            assertEquals("where the cursor is, in the window", 148f, e.x, 0.01f); assertEquals(227f, e.y, 0.01f)
+            assertEquals("a finger", MotionEvent.TOOL_TYPE_FINGER, e.getToolType(0))
+            assertTrue("from a touchscreen", e.isFromSource(android.view.InputDevice.SOURCE_TOUCHSCREEN))
+        }
+        assertEquals("pressing while down", 1f, got[0].pressure, 0f)
+        // And the paw jumps to a button where the button is, wherever the picture begins.
+        c.togglePaw()
+        c.register("b", Box(548f, 327f, 648f, 427f)) {}; c.focus("b"); c.togglePaw()
+        assertEquals(550f, c.cursorX, 0.5f); assertEquals(350f, c.cursorY, 0.5f)
+    }
+
+    @Test
+    fun theWheelIsGivenToThePageUnderThePawAndElsewhereToTheWindow() {
+        val activity = org.robolectric.Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
+        val wheels = ArrayList<Triple<String, Float, Float>>()
+        val frame = object : android.widget.FrameLayout(activity) {
+            override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean {
+                if (event.actionMasked == MotionEvent.ACTION_SCROLL) wheels += Triple("page", event.x, event.getAxisValue(MotionEvent.AXIS_VSCROLL))
+                return true
+            }
+        }
+        val web = android.webkit.WebView(activity)
+        frame.addView(web)
+        val root = android.widget.FrameLayout(activity)
+        root.addView(frame, android.widget.FrameLayout.LayoutParams(400, 300).apply { leftMargin = 200; topMargin = 100 })
+        activity.setContentView(root)
+        idle(100)
+        val c = TvController(true, 1f)
+        c.decor = object : android.view.View(activity) {
+            override fun dispatchGenericMotionEvent(event: MotionEvent): Boolean { wheels += Triple("window", event.x, event.getAxisValue(MotionEvent.AXIS_VSCROLL)); return true }
+        }
+        c.web = web
+        c.resize(1000f, 600f)
+        c.togglePaw(); c.placeCursor(250f, 150f)
+        c.remoteScroll(20f)
+        val at = IntArray(2).also { frame.getLocationInWindow(it) }
+        assertEquals("page", wheels.single().first)
+        assertEquals("at the paw, in the page's own place", 250f - at[0], wheels.single().second, 0.5f)
+        assertTrue("fingers down, the page comes down: the wheel turns up", wheels.single().third > 0f)
+        wheels.clear()
+        c.placeCursor(50f, 50f)
+        c.remoteScroll(-20f)
+        assertEquals("away from the page, to the window", "window", wheels.single().first)
+        assertTrue(wheels.single().third < 0f)
+    }
+
+    @Test
+    fun aGameCanPutItsFrameAwayAndSaysHowToGetItBack() {
+        val (c, _) = screen()
+        c.focus("menu")
+        c.hideFrame(true)
+        assertTrue(c.frameHidden); assertEquals(TvHint.FRAME_HIDDEN, c.hint)
+        assertEquals("the focus goes back into the game", Zone.PAGE, c.zone)
+        c.hideFrame(false)
+        assertFalse(c.frameHidden)
+    }
+
+    @Test
     fun theInformationPanelTakesTheArrowsAndBackClosesIt() {
         val (c, page) = screen()
         var scrolled = 0

@@ -103,6 +103,51 @@ class PlayerTvDockTest {
     }
 
     @Test
+    fun theDockShowsTheTimeOfDayNotHowLongTheGameTook() {
+        launch()
+        val now = Clock.now()
+        rule.onNode(hasContentDescription("השעה $now")).assertIsDisplayed()
+        rule.onNodeWithText("0:00").assertDoesNotExist()
+    }
+
+    @Test
+    fun aGameCanHaveTheWholeScreenAndBackBringsTheFrameBack() {
+        context.getSharedPreferences("tv", Context.MODE_PRIVATE).edit().clear().commit()
+        launch()
+        button(str(R.string.tv_frame_hide)).performClick(); rule.waitForIdle()
+        button(str(R.string.tv_paw_off)).assertDoesNotExist()
+        rule.onNodeWithText(str(R.string.player_played)).assertDoesNotExist()
+        rule.onNodeWithText(str(R.string.tv_hint_frame_hidden)).assertIsDisplayed()
+        assertTrue("remembered for this game", context.getSharedPreferences("tv", Context.MODE_PRIVATE).getBoolean("frame-hidden:wordle", false))
+        // Back: the frame comes back and the game stays open.
+        scenario!!.onActivity { it.onBackPressedDispatcher.onBackPressed() }; rule.waitForIdle()
+        button(str(R.string.tv_paw_off)).assertIsDisplayed()
+        scenario!!.onActivity { assertFalse(it.isFinishing) }
+        assertFalse(context.getSharedPreferences("tv", Context.MODE_PRIVATE).getBoolean("frame-hidden:wordle", true))
+        // Hidden again and the game closed: the next time it opens with the whole screen.
+        button(str(R.string.tv_frame_hide)).performClick(); rule.waitForIdle()
+        scenario!!.close()
+        launch()
+        button(str(R.string.tv_paw_off)).assertDoesNotExist()
+        scenario!!.onActivity { it.onBackPressedDispatcher.onBackPressed() }; rule.waitForIdle()
+        button(str(R.string.tv_paw_off)).assertIsDisplayed()
+    }
+
+    @Test
+    fun theTvsSettingsOpenFromTheDockAndAreKept() {
+        context.getSharedPreferences("tv", Context.MODE_PRIVATE).edit().clear().commit()
+        launch()
+        button(str(R.string.tv_settings_open)).performClick(); rule.waitForIdle()
+        rule.onNodeWithText(str(R.string.tvset_title)).assertIsDisplayed()
+        rule.onNodeWithText(str(R.string.tvset_picture)).assertIsDisplayed()
+        rule.onNode(hasContentDescription("עכבר")).performClick(); rule.waitForIdle()
+        rule.onNode(hasContentDescription("קטן")).performClick(); rule.waitForIdle()
+        val prefs = context.getSharedPreferences("tv", Context.MODE_PRIVATE)
+        org.junit.Assert.assertEquals("mouse", prefs.getString("cursor", null))
+        org.junit.Assert.assertEquals("s", prefs.getString("cursor_size", null))
+    }
+
+    @Test
     fun theBackButtonLeavesTheGame() {
         launch()
         button(str(R.string.player_back)).performClick(); rule.waitForIdle()

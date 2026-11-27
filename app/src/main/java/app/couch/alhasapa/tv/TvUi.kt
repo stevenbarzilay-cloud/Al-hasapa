@@ -47,10 +47,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
+import kotlin.math.roundToInt
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.layout
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -88,18 +94,36 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
     if (!c.enabled) { content(); return }
     val appDirection = LocalLayoutDirection.current
     val still = animationsRemoved(LocalContext.current.contentResolver)
-    val screenH = LocalWindowInfo.current.containerSize.height / LocalDensity.current.density
-    CompositionLocalProvider(LocalTv provides c, LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Box(Modifier.fillMaxSize().onSizeChanged { c.resize(it.width.toFloat(), it.height.toFloat()) }) {
+    // The TV's settings (TvSettingsPanel): the whole picture a little smaller when the TV crops its edges, and the writing's size.
+    // Both are a change of scale: what is laid out is the same, only drawn smaller or larger, so no screen is rearranged by them.
+    val picture = c.pictureScale.coerceIn(MIN_PICTURE, 1f)
+    val base = LocalDensity.current
+    val scaled = Density(base.density * picture * c.uiScale.coerceIn(MIN_UI, MAX_UI), base.fontScale)
+    Box(Modifier.fillMaxSize().background(Palette.Cream)) {
+      Box(
+        Modifier
+            .layout { measurable, constraints ->
+                val w = constraints.maxWidth; val h = constraints.maxHeight
+                val iw = (w * picture).roundToInt(); val ih = (h * picture).roundToInt()
+                val placeable = measurable.measure(Constraints.fixed(iw, ih))
+                layout(w, h) { placeable.place((w - iw) / 2, (h - ih) / 2) }
+            }
+            .onGloballyPositioned { val at = it.positionInWindow(); c.originX = at.x; c.originY = at.y }
+            .onSizeChanged { c.resize(it.width.toFloat(), it.height.toFloat()) },
+      ) {
+      CompositionLocalProvider(LocalTv provides c, LocalLayoutDirection provides LayoutDirection.Ltr, LocalDensity provides scaled) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val screenH = maxHeight.value
             Row(Modifier.fillMaxSize()) {
-                if (!c.dockHidden) TvDock(c)
+                if (!c.dockHidden && !c.frameHidden) TvDock(c)
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     // The app's own screens are right to left, like on the phone.
                     Box(Modifier.weight(1f).fillMaxWidth()) {
                         CompositionLocalProvider(LocalLayoutDirection provides appDirection) {
                             content()
-                            // The information panel lies over the content (the page stays alive under it) and needs no WebView.
+                            // The panels lie over the content (the page stays alive under them) and need no WebView.
                             if (c.panel == TvPanel.INFO) InfoPanel(c)
+                            if (c.panel == TvPanel.SETTINGS) TvSettingsPanel(c)
                         }
                     }
                     AnimatedVisibility(
@@ -121,7 +145,31 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
                 phones = remote.phones.size
             }
             remote.code?.let { PairingCard(it, remote.codeFor.orEmpty(), Modifier.align(Alignment.TopCenter).padding(top = 12.dp)) }
+            // While the picture's size is being set: its four corners, which must all be seen whole on the TV.
+            if (c.panel == TvPanel.SETTINGS) FitCorners()
             CursorOverlay(c)
+        }
+      }
+      }
+    }
+}
+
+/** The smallest the picture can be made, and the range of the writing's size. */
+const val MIN_PICTURE = 0.85f
+const val MIN_UI = 0.85f
+const val MAX_UI = 1.25f
+
+/** Red corners at the very edges of the picture, and a thin line between them: the TV shows them whole when nothing is cropped. */
+@Composable
+private fun FitCorners() {
+    Canvas(Modifier.fillMaxSize()) {
+        val arm = 46.dp.toPx(); val t = 6.dp.toPx(); val w = size.width; val h = size.height
+        drawRect(Palette.Red.copy(alpha = 0.55f), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f.dp.toPx()))
+        for ((x, y) in listOf(0f to 0f, w to 0f, 0f to h, w to h)) {
+            val left = if (x == 0f) 0f else w - arm
+            val top = if (y == 0f) 0f else h - t
+            drawRect(Palette.Red, topLeft = Offset(left, top), size = androidx.compose.ui.geometry.Size(arm, t))
+            drawRect(Palette.Red, topLeft = Offset(if (x == 0f) 0f else w - t, if (y == 0f) 0f else h - arm), size = androidx.compose.ui.geometry.Size(t, arm))
         }
     }
 }
@@ -314,6 +362,7 @@ private fun HintPill(c: TvController, modifier: Modifier) {
         TvHint.TYPE -> stringResource(R.string.tv_hint_type)
         TvHint.PHONE -> stringResource(R.string.tv_hint_phone)
         TvHint.PHONE_PAW -> stringResource(R.string.tv_hint_phone_paw)
+        TvHint.FRAME_HIDDEN -> stringResource(R.string.tv_hint_frame_hidden)
         null -> null
     }
     AnimatedVisibility(visible = text != null, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {
@@ -336,30 +385,25 @@ private fun HintPill(c: TvController, modifier: Modifier) {
 }
 
 /**
- * The remote's free finger in paw mode: a paw print, red while it is dragging. Its centre is where a tap lands.
+ * The remote's free finger in paw mode, in the shape and size chosen in the TV's settings: a paw, a mouse, a fish, a ball of yarn or a
+ * plain arrow in the interface's colour. Its tip is where a tap lands; the rest of it lies away from that point, so nothing pointed at
+ * is covered (until 1.9.5 the paw sat on the point it tapped).
  *
- * A small picture of its own that is only moved (a layer's position): a move of the paw paints nothing again. Until 1.9.3 the paw was
- * drawn on a canvas as large as the screen, so every move had the whole screen painted again, sixty times a second while a finger was
- * on the phone's touchpad; on the TV box that was felt as a slow paw.
+ * A small picture of its own that is only moved (a layer's position): a move paints nothing again. (Until 1.9.3 it was drawn on a
+ * canvas as large as the screen, and every move had the whole screen painted again.)
  */
 @Composable
 private fun CursorOverlay(c: TvController) {
     if (c.mode != InputMode.PAW || !c.cursorVisible || c.keyboardOpen) return
     Canvas(
-        Modifier.size(PawBox).graphicsLayer {
-            translationX = c.cursorX - size.width / 2f
-            translationY = c.cursorY - size.height / 2f
+        Modifier.size(c.cursorSize.dp.dp).graphicsLayer {
+            translationX = c.cursorX - size.width * CursorArt.TIP
+            translationY = c.cursorY - size.height * CursorArt.TIP
         },
     ) {
-        val at = Offset(size.width / 2f, size.height / 2f)
-        drawPaw(Offset(at.x, at.y + 8f * density), density * 0.9f, if (c.dragging) Palette.Red else Palette.Ink, Palette.Cream)
-        drawCircle(Palette.Red, radius = 3f * density, center = at)
-        drawCircle(Palette.Cream, radius = 1.4f * density, center = at)
+        with(CursorArt) { cursor(c.cursorShape, Offset.Zero, size.width, c.accent, c.dragging) }
     }
 }
-
-/** The paw's own picture: the print (some 37 dp across, 37 dp tall, mostly below its centre) with room to spare. */
-private val PawBox = 72.dp
 
 /**
  * The keyboard, kept small: a slim header (what has been typed, and a close button) over four rows of soft, rounded keys. The

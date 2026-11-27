@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.5.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.6.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -312,6 +312,25 @@ want to play on, starting with Krillion and NYT:
   - Also: what phone and TV tell each other about versions is now the version at which the two last had to be updated together
     (`KeyLink.TOGETHER_SINCE`, still 1.9.4), so a release like this one, which changes only the TV, does not send anyone to update
     the phone.
+- **1.9.6: the TV fitted to our TV, the time of day, a cursor of our choice, a game with the whole screen, drags that work.**
+  From the first evening with 1.9.5:
+  - *The picture fitted to the TV.* Our TV crops the edges of the picture (most do, a little), and parts of the screens were cut off.
+    "התאמה לטלוויזיה" (a button at the foot of the home, and one in a game's dock) opens the TV's own settings, all with the remote:
+    the picture's size (100% down to 85%: the whole picture, writing and all, is drawn smaller with a margin around it, until four red
+    corners show whole) and the size of the writing and the buttons (85% to 125%). Both are a change of scale, so no screen is laid
+    out differently; both are kept on the TV (`TvLayer`, `TvSettingsPanel`). Touches the cursor makes land where the picture is.
+  - *The time of day* in a game's frame, on the TV and on the phone, instead of how long the game has been open (`Clock`).
+  - *The cursor.* Smaller (30 dp instead of about 40), three sizes, and five shapes: a paw, a mouse, a fish, a ball of yarn, and a
+    plain arrow in the interface's colour (the first of us's colour). Each points with a small red tip at its top left, where the tap
+    lands, and lies below and to the right of it: nothing pointed at is covered any more (`CursorArt`).
+  - *A game with the whole screen.* A button in the dock puts the frame away; Back brings it back (and only the next Back leaves
+    the game). It is kept for that game.
+  - *Dragging and scrolling.* The touches the cursor makes are now a finger's (a finger tool, pressure, a fingertip's size): until
+    now they were Android's simplest touch, whose tool is "unknown", and some games' drag code did not take it for a finger. On
+    the phone's touchpad a finger held still for a moment grabs (the phone buzzes), moving it drags, lifting it lets go, as on a
+    phone; the button under the pad is still there. Two fingers scroll the page under the cursor directly (the wheel used to be
+    handed to the window, and on its way through the app's layers did not always reach the page), at a gentler pace. With the
+    remote, the cursor held against the top or the bottom of the screen scrolls the page on, faster the longer it is held.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

@@ -41,7 +41,7 @@ class PlayerBarsTest {
 
     @Test
     fun theSplitBarsEachKeepTheirOwnItems() {
-        val top = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM)
+        val top = listOf(BarItem.MENU, BarItem.BACK, BarItem.TITLE, BarItem.CLOCK, BarItem.ZOOM)
         assertEquals(top, fitItems(top, 860f, UiSize.MEDIUM))
     }
 }

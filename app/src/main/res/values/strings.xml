@@ -221,4 +221,21 @@
     <string name="panel_points_short">%1$d נק׳</string>
     <string name="tv_frame_slim">מסגרת צרה (רק כפתורים)</string>
     <string name="tv_frame_full">מסגרת מלאה (עם השעון והניקוד)</string>
+    <string name="tv_frame_hide">להסתיר את המסגרת (כל המסך למשחק)</string>
+    <string name="tv_hint_frame_hidden">כל המסך למשחק. Back מחזיר את המסגרת</string>
+    <string name="tv_settings_open">התאמה לטלוויזיה: גודל התמונה, הכתב והסמן</string>
+    <string name="tvset_title">התאמה לטלוויזיה</string>
+    <string name="tvset_body">החצים עוברים בין הכפתורים, OK לוחץ, Back סוגר. כל שינוי נראה מיד ונשמר בטלוויזיה הזאת.</string>
+    <string name="tvset_picture">גודל התמונה</string>
+    <string name="tvset_picture_help">אם משהו נחתך בקצוות: להקטין עד שרואים את ארבע הפינות האדומות במלואן.</string>
+    <string name="tvset_ui">גודל הכתב והכפתורים</string>
+    <string name="tvset_ui_help">הכול גדול יותר או קטן יותר, באותו סידור.</string>
+    <string name="tvset_cursor">הסמן</string>
+    <string name="tvset_cursor_help">מה שמזיזים בחצים במצב כפה, או בלוח המגע של הטלפון. הנקודה האדומה בקצה שלו היא מה שנלחץ.</string>
+    <string name="tvset_cursor_size">גודל הסמן</string>
+    <string name="tvset_smaller">להקטין</string>
+    <string name="tvset_larger">להגדיל</string>
+    <string name="home_tv_settings">התאמה לטלוויזיה</string>
+    <string name="home_about_tv_settings">גודל התמונה אם הקצוות נחתכים, גודל הכתב, וצורת הסמן וגודלו.</string>
+    <string name="clock_desc">השעה %1$s</string>
 </resources>

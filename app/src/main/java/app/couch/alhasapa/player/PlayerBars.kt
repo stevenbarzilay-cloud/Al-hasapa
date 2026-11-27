@@ -41,12 +41,13 @@ import app.couch.alhasapa.ui.PieceIcon
 import app.couch.alhasapa.ui.theme.Palette
 
 /** What the always-visible UI shows. The bars drop items from the least important end as the room gets short. */
-enum class BarItem { MENU, BACK, TITLE, TIMER, PROGRESS, POINTS, PIECES, ZOOM, MODE, UI, RESULT, PLAYED }
+enum class BarItem { MENU, BACK, TITLE, CLOCK, PROGRESS, POINTS, PIECES, ZOOM, MODE, UI, RESULT, PLAYED }
 
 /** What the bars and panels display. */
 data class ChromeData(
     val title: String,
-    val elapsed: String,
+    /** The time of day (see [Clock]). */
+    val clock: String,
     val info: PlayerInfo,
     val played: Boolean,
     val showPlayed: Boolean,
@@ -54,8 +55,6 @@ data class ChromeData(
     val zoom: Int?,
     /** The page is shown phone-shaped (otherwise wide), for the button that swaps them. */
     val portrait: Boolean = true,
-    /** When the game began (System.currentTimeMillis), for a clock that ticks by itself; 0 = use [elapsed] as it is. */
-    val startedAt: Long = 0L,
 )
 
 /** What they can do. [onResult] is null where there is no result to record (the sign-in screens). */
@@ -69,17 +68,19 @@ class ChromeActions(
     val onToggleMode: () -> Unit = {},
     /** Move the always-visible UI to its next place (sides, top, bottom, both, a button). */
     val onCycleUi: () -> Unit = {},
+    /** On a TV: put the game's frame away, so the game has the whole screen (Back brings it back). */
+    val onHideFrame: () -> Unit = {},
 )
 
 /** Items in order of how much a bar misses them, most important first (the menu is never dropped). */
 private val IMPORTANCE = listOf(
-    BarItem.MENU, BarItem.BACK, BarItem.PLAYED, BarItem.RESULT, BarItem.TITLE, BarItem.TIMER, BarItem.ZOOM,
+    BarItem.MENU, BarItem.BACK, BarItem.PLAYED, BarItem.RESULT, BarItem.TITLE, BarItem.CLOCK, BarItem.ZOOM,
     BarItem.MODE, BarItem.UI, BarItem.PROGRESS, BarItem.POINTS, BarItem.PIECES,
 )
 
 /** About how wide each item is at the medium size, in dp. */
 private fun baseWidth(item: BarItem): Float = when (item) {
-    BarItem.MENU -> 56f; BarItem.BACK -> 92f; BarItem.TITLE -> 110f; BarItem.TIMER -> 84f; BarItem.PROGRESS -> 104f
+    BarItem.MENU -> 56f; BarItem.BACK -> 92f; BarItem.TITLE -> 110f; BarItem.CLOCK -> 84f; BarItem.PROGRESS -> 104f
     BarItem.POINTS -> 150f; BarItem.PIECES -> 200f; BarItem.ZOOM -> 176f; BarItem.RESULT -> 100f; BarItem.PLAYED -> 124f
     BarItem.MODE -> 112f; BarItem.UI -> 104f
 }
@@ -137,8 +138,9 @@ fun PlayerBar(
                         data.title, Modifier.weight(1f), fontSize = (sp + 2).sp, fontWeight = FontWeight.Bold, color = Palette.Ink,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    BarItem.TIMER -> CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                        Text(data.elapsed, fontSize = sp.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = data.elapsed })
+                    BarItem.CLOCK -> CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        val said = stringResource(R.string.clock_desc, data.clock)
+                        Text(data.clock, fontSize = sp.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = said })
                     }
                     BarItem.PROGRESS -> {
                         val d = stringResource(R.string.panel_progress_full, data.info.done, data.info.total)

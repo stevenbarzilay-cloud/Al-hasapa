@@ -388,8 +388,7 @@ class WebPageNav(private val web: () -> WebView?) : PageNav {
         val w = web() ?: return
         val t = SystemClock.uptimeMillis()
         fun send(action: Int, at: Long) {
-            val ev = MotionEvent.obtain(t, at, action, x, y, 0)
-            ev.source = InputDevice.SOURCE_TOUCHSCREEN
+            val ev = Touches.finger(t, at, action, x, y)
             runCatching { w.dispatchTouchEvent(ev) }; ev.recycle()
         }
         send(MotionEvent.ACTION_DOWN, t)

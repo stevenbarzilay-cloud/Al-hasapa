@@ -137,6 +137,36 @@ class TvPreviewTest {
         shot("tv-home-more.png")
     }
 
+    /** The TV's settings over the home, with the picture made a little smaller (the red corners at its edges), and each cursor. */
+    @Test
+    fun drawTheSettingsAndTheCursors() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val model = app.couch.alhasapa.home.HomeModel.from(app.couch.alhasapa.data.CouchState.empty(), catalog, pieces, java.time.LocalDate.of(2026, 11, 27))
+        app.couch.alhasapa.home.warmHomeArt(ApplicationProvider.getApplicationContext<Context>())
+        c.pictureScale = 0.96f
+        rule.setContent {
+            AlHasapaTheme { TvLayer(c) { app.couch.alhasapa.home.TvHome(model, phoneConnected = false, nav = app.couch.alhasapa.home.HomeNav(), onPlay = {}, onAccounts = {}, onMore = {}, onInfo = {}) } }
+        }
+        rule.waitForIdle()
+        rule.runOnIdle { c.openPanel(TvPanel.SETTINGS) }
+        rule.runOnIdle { c.navigate(Dir.DOWN); c.navigate(Dir.DOWN) }
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        fun shot(name: String) {
+            val img = rule.onRoot().captureToImage().asAndroidBitmap()
+            File(dir, name).outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        shot("tv-settings.png")
+        rule.runOnIdle { c.closePanel(); c.togglePaw(); c.cursorShape = CursorShape.ARROW; c.placeCursor(700f, 480f) }
+        rule.waitForIdle()
+        shot("tv-cursor-arrow.png")
+        rule.runOnIdle { c.cursorShape = CursorShape.MOUSE; c.cursorSize = CursorSize.LARGE }
+        rule.waitForIdle()
+        shot("tv-cursor-mouse.png")
+    }
+
     /** The home with two other colours chosen (teal and mustard), at the end of the shelf, where the games played this evening are. */
     @Test
     fun drawTheHomeInOtherColours() {

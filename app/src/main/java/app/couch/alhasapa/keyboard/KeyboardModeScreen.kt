@@ -74,6 +74,7 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
@@ -301,6 +302,9 @@ private fun StatusLine(text: String, bold: String?, live: Boolean, modifier: Mod
 // Connected: the keyboard, and the paw's touchpad pulled out from the right edge
 // ---------------------------------------------------------------------------------------------------------------------------------------
 
+/** A finger held this long without moving on the touchpad grabs (the TV's finger goes down). */
+const val HOLD_TO_GRAB_MS = 380L
+
 /** The pull tab at the right edge (the paw is in it): flush with the edge when the touchpad is away, at the cushion's edge when it is out. */
 private val TabWidth = 40.dp
 private val TabHeight = 76.dp
@@ -394,7 +398,9 @@ private fun Connected(sink: KeySink) {
 
 /**
  * The touchpad, a couch cushion: one finger moves the TV's paw (faster swipes go further), a short touch taps where the paw is (a print
- * appears where the finger was), two fingers scroll the page under the paw. Under it, a tap and a drag that holds the finger down.
+ * appears where the finger was), two fingers scroll the page under the paw. A finger held still for a moment grabs (the TV's finger
+ * goes down where the paw is, the phone buzzes): moving it then drags, and lifting it lets go, as a finger does on a phone (1.9.6;
+ * until then a drag needed the button under the pad, pressed before and after). The button is still there, for long drags.
  */
 @Composable
 private fun Cushion(sink: KeySink, dragging: Boolean, onDragging: (Boolean) -> Unit, onClose: () -> Unit, modifier: Modifier) {
@@ -418,8 +424,9 @@ private fun Cushion(sink: KeySink, dragging: Boolean, onDragging: (Boolean) -> U
                 ) { Text("✕", fontSize = 16.sp, color = Palette.Ink) }
             }
         }
+        var grabbing by remember { mutableStateOf(false) }
         Box(
-            Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)).background(Palette.Pink.copy(alpha = 0.5f))
+            Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(22.dp)).background(if (grabbing) Palette.Red.copy(alpha = 0.35f) else Palette.Pink.copy(alpha = 0.5f))
                 .drawBehind {
                     // the cushion's stitching
                     val inset = 7.dp.toPx()
@@ -450,11 +457,14 @@ private fun Cushion(sink: KeySink, dragging: Boolean, onDragging: (Boolean) -> U
                             if (scroll != 0f) { sink.pointer(KeyLink.Msg.Scroll(scroll / density)); scroll = 0f }
                             sentAt = now
                         }
-                        while (true) {
+                        val slop = 8.dp.toPx()
+                        var lifted = false
+                        /** One event of the gesture: what moved, sent on at most every 16 ms. False when the last finger lifted. */
+                        suspend fun AwaitPointerEventScope.next(): Boolean {
                             val event = awaitPointerEvent()
                             val down = event.changes.filter { it.pressed }
                             end = event.changes.maxOf { it.uptimeMillis }
-                            if (down.isEmpty()) break
+                            if (down.isEmpty()) { lifted = true; return false }
                             fingers = maxOf(fingers, down.size)
                             if (down.size >= 2) {
                                 scroll += down.map { it.position.y - it.previousPosition.y }.average().toFloat()
@@ -464,9 +474,26 @@ private fun Cushion(sink: KeySink, dragging: Boolean, onDragging: (Boolean) -> U
                             }
                             event.changes.forEach { it.consume() }
                             if (end - sentAt >= 16) flush(end)
+                            return true
                         }
-                        flush(end)
-                        if (fingers == 1 && travel < 8.dp.toPx() && end - start < 300) {
+                        // A finger that stays where it touched for a moment grabs; one that moves, or a second finger, does not.
+                        val still = withTimeoutOrNull(HOLD_TO_GRAB_MS) {
+                            while (next()) { if (fingers >= 2 || travel > slop) return@withTimeoutOrNull false }
+                            false
+                        } == null
+                        val grabbed = still && !lifted && !draggingNow
+                        if (grabbed) {
+                            grabbing = true
+                            sink.pointer(KeyLink.Msg.Drag(true))
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        }
+                        try {
+                            if (!lifted) while (next()) { /* moving, or dragging when grabbed */ }
+                        } finally {
+                            flush(end)
+                            if (grabbed) { grabbing = false; sink.pointer(KeyLink.Msg.Drag(false)) }
+                        }
+                        if (!grabbed && fingers == 1 && travel < slop && end - start < 300) {
                             sink.pointer(KeyLink.Msg.Click)
                             view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                             if (draggingNow) onDragging(false)

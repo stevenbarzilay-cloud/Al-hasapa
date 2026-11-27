@@ -150,6 +150,7 @@ class MainActivity : ComponentActivity() {
                         // The hub is a page: the arrows begin inside it, as they did when the TV opened on it.
                         onMore = { Flight.log("home: the full hub"); tv.controller.pageFirst(); webHub = true },
                         onInfo = { tv.controller.openPanel(TvPanel.INFO) },
+                        onSettings = { tv.controller.openPanel(TvPanel.SETTINGS) },
                     )
                 } else {
                     // On a TV the web hub is a step away from the home (the cats cover it until it is ready), and Back from it goes
