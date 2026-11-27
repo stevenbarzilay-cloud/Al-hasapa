@@ -324,7 +324,6 @@
     <string name="solo_crown">👑 הכתר: %1$s</string>
     <string name="solo_tie">🤝 תיקו! הכתר נשאר באמצע</string>
     <string name="solo_ok">יופי</string>
-    <string name="solo_badge">⚔️ לבד</string>
     <string name="solo_marked_toast">סומן: שוחק לבד. את התוצאה שומרים בכפתור התוצאה.</string>
     <string name="play_mode_question">ביחד או לבד?</string>
     <string name="play_mode_challenge">%1$s כבר שיחק את זה היום לבד</string>

@@ -46,7 +46,11 @@ class SoloJob : JobService() {
         const val JOB_ID = 4711
         const val EVERY_MS = 15 * 60 * 1000L
 
-        /** On a phone with the relay: the look, every quarter of an hour, kept across restarts. Once is enough (it is kept). */
+        /**
+         * On a phone with the relay: the look, every quarter of an hour, kept across restarts. Once is enough (it is kept). The phone's
+         * manifest asks for the restart permission; the TV's has none and never gets here (hence the lint note).
+         */
+        @android.annotation.SuppressLint("MissingPermission")
         fun schedule(context: Context) {
             if (app.couch.alhasapa.BuildConfig.TV || RelayStore(context).config == null) return
             val js = context.getSystemService(JobScheduler::class.java) ?: return
@@ -79,6 +83,8 @@ object SoloNews {
         (Build.VERSION.SDK_INT < 33 || context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
             NotificationManagerCompat.from(context).areNotificationsEnabled()
 
+    /** Only on a phone, whose manifest asks for the permission it checks here first (the TV's has none and never says anything). */
+    @android.annotation.SuppressLint("MissingPermission", "NotificationPermission")
     fun notify(context: Context, app: CouchApp, news: List<SoloRelay.News>) {
         if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
