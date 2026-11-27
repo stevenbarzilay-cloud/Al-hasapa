@@ -197,6 +197,13 @@ server.listen(0, '127.0.0.1', async () => {
     ok(/1[0-9]/.test(merged.pts), `the evening's points count both (${merged.pts})`);
     await p3.click('.row[data-id="connections"] [data-act="mark"]'); await p3.waitForTimeout(200);
     ok((await p3.evaluate(() => window.__saves)).join() === '3,5', 'and the next save is from the revision it read');
+    // What arrives while something is being typed on the settings page waits for the page to be left.
+    await p3.click('.tab[data-view="settings"]'); await p3.waitForTimeout(250);
+    const typed = await p3.evaluate(() => { const f = document.getElementById('uf'); f.focus(); f.value = 'wor'; window.__reloadState();
+      return { value: document.getElementById('uf').value, waits: reloadPending, focused: document.activeElement === document.getElementById('uf') }; });
+    ok(typed.value === 'wor' && typed.waits && typed.focused, `the typing stays, the reading waits (${JSON.stringify(typed)})`);
+    await p3.click('.tab[data-view="home"]'); await p3.waitForTimeout(200);
+    ok(await p3.evaluate(() => reloadPending === false), 'and it is read when the page is left');
     ok(errs3.length === 0, 'no errors (' + (errs3.join(' | ') || 'none') + ')');
     await ctx3.close();
   }

@@ -538,7 +538,15 @@ state=loadState();
 let view="lib", filter="all";
 function reloadState(){state=loadState();applyTheme();render()}
 /* The app calls this when it comes back to the front, after something else (the player) may have changed the state. */
-window.__reloadState=()=>{ if(!document.getElementById("overlay").classList.contains("show")) reloadState() };
+/* Not while a sheet is open, nor while something is being typed on the settings page (1.12: what the TV or the other phone changed
+   arrives at any moment, and must not take the typing away): it waits (reloadPending) for the sheet to close or the page to be left.
+   A save made meanwhile is merged by the app, and reads the state again itself. */
+let reloadPending=false;
+const typing=()=>document.getElementById("overlay").classList.contains("show")||
+  (view==="settings"&&(!!document.querySelector("#v-settings input:focus,#v-settings textarea:focus,#v-settings select:focus")||
+    ["ngName","ngUrl","manyTxt"].some(id=>{const e=document.getElementById(id);return !!(e&&e.value.trim())})));
+window.__reloadState=()=>{ if(typing()){reloadPending=true;return} reloadPending=false; reloadState() };
+const reloadIfWaiting=()=>{ if(reloadPending&&!typing()) window.__reloadState() };
 
 const pad=n=>String(n).padStart(2,"0");
 const key=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
@@ -561,7 +569,7 @@ function save(){
   if(NATIVE){
     let n=-1,merged=false; try{const r=String(NATIVE.saveState(json,String(stateRev)));merged=r[0]==="~";n=Number(merged?r.slice(1):r)}catch(e){(window.__errors||[]).push("saveState: "+e)}
     /* "~": kept, and merged with what the TV or the other phone changed meanwhile (1.12): read it all again, quietly. */
-    if(n>=0&&merged){state=loadState();applyTheme()} else if(n>=0) stateRev=n; else {reloadState();toast("הנתונים התעדכנו מבחוץ. נסו שוב.")}
+    if(n>=0&&merged){state=loadState();applyTheme();reloadPending=false} else if(n>=0) stateRev=n; else {reloadState();toast("הנתונים התעדכנו מבחוץ. נסו שוב.")}
   } else { try{localStorage.setItem(LS,json)}catch(e){} }
 }
 
@@ -1064,7 +1072,7 @@ function renderSide(){renderMast()}
 /* ================= sheets ================= */
 let onSheetClose=null;
 function openSheet(html){onSheetClose=null;document.getElementById("sheet").innerHTML=html;document.getElementById("overlay").classList.add("show");const f=document.querySelector("#sheet textarea, #sheet input");if(f&&!matchMedia("(pointer:coarse)").matches)f.focus()}
-function closeSheet(){document.getElementById("overlay").classList.remove("show");if(onSheetClose){const f=onSheetClose;onSheetClose=null;f()}}
+function closeSheet(){document.getElementById("overlay").classList.remove("show");if(onSheetClose){const f=onSheetClose;onSheetClose=null;f()} reloadIfWaiting()}
 /* Android back: close an open sheet first, otherwise let the app leave */
 window.__back=()=>document.getElementById("overlay").classList.contains("show")?(closeSheet(),"closed"):"none";
 document.getElementById("overlay").addEventListener("click",e=>{if(e.target.id==="overlay"||e.target.dataset.act==="close")closeSheet()});
@@ -1192,7 +1200,7 @@ document.getElementById("who").addEventListener("click",()=>{
 });
 
 /* ================= interactions ================= */
-function setView(v){view=v;document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.view===v));
+function setView(v){view=v;reloadIfWaiting();document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected",t.dataset.view===v));
   ["home","disc","stats","settings"].forEach(x=>document.getElementById("v-"+x).hidden=x!==v);render();document.getElementById("scroller").scrollTo({top:0,left:0})}
 document.querySelector(".tabs").addEventListener("click",e=>{const b=e.target.closest(".tab");if(b)setView(b.dataset.view)});
 document.querySelector("main").addEventListener("click",e=>{

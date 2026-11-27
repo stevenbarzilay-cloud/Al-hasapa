@@ -60,6 +60,8 @@ object HomeArt {
      * every pixel keeps its brightness, so the shading and the lines stay; skin, ink, hair and cream are never touched. Drawn once per
      * pair of colours, off the main thread; the plain picture when both are the drawing's own (red and pink), or before Android 10.
      */
+    // (The TV's build runs from Android 8; the phone's from 10, where the check below is always true.)
+    @android.annotation.SuppressLint("ObsoleteSdkInt")
     fun tinted(context: Context, picture: Picture, heightPx: Int, a: app.couch.alhasapa.data.PieceStyle, b: app.couch.alhasapa.data.PieceStyle): Art? {
         val base = load(context, picture, heightPx) ?: return null
         val tintA = a.colorId != "red"; val tintB = b.colorId != "pink"
@@ -68,7 +70,7 @@ object HomeArt {
         tinted[key]?.let { return it }
         return runCatching {
             val src = base.image.asAndroidBitmap()
-            val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+            val out = androidx.core.graphics.createBitmap(src.width, src.height)
             val c = android.graphics.Canvas(out)
             c.drawBitmap(src, 0f, 0f, null)
             val whole = android.graphics.Rect(0, 0, src.width, src.height)
