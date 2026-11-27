@@ -51,7 +51,8 @@ object HebrewResult {
     private val HINT_ONE = Regex("(?:רמז|צעד) אחד")
     private val HINTS_NONE = Regex("(?:בלי|ללא|אפס|0)\\s*רמזים|(?:בלי|ללא)\\s*רמז")
     private val TIME = Regex("(?<![0-9:])([0-9]{1,2}):([0-9]{2})(?![0-9:])")
-    private val SCORE = Regex("(?<![0-9])([0-9]{1,3})\\s*(?:/|מתוך)\\s*([0-9]{1,3})(?![0-9])")
+    /** A score out of a whole, decimals and all ("45.11 מתוך 50", Dialed); never from inside a number ("45.11" is not 11, 1.11.2). */
+    private val SCORE = Regex("(?<![0-9.])([0-9]{1,4}(?:\\.[0-9]{1,3})?)\\s*(?:/|מתוך)\\s*([0-9]{1,4}(?:\\.[0-9]{1,3})?)(?![0-9.])")
     private val PERCENT = Regex("([0-9]{1,3}(?:\\.[0-9]+)?)\\s*%")
     /** Words that make a percentage ours against the others ("better than 82% of the players", "faster than ..."). */
     private val BETTER = Regex("טוב|טובים|טובה|מהר|מהירים|מהירה|יותר|עקפ|ניצח|הקדמ|לפני")

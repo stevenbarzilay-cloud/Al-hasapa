@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -227,6 +228,39 @@ class TvPreviewTest {
         val dir = File("build/previews").apply { mkdirs() }
         val img = rule.onRoot().captureToImage().asAndroidBitmap()
         File(dir, "tv-result-sheet.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    /**
+     * 1.11.2: Dialed's "45.11 מתוך 50" was read as 11 of 50, and the TV's − and + could not mend it (what was read won). A number set
+     * with the buttons now wins, ten at a time for a score, and stays out of the 50.
+     */
+    @Test
+    fun aMisreadScoreIsMendedWithTheTvsButtonsAndStaysOutOfItsWhole() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val game = catalog.game("dialed")!!
+        val support = app.couch.alhasapa.results.ResultSupport(game, app.couch.alhasapa.data.CouchState.empty(), "2026-11-27")
+        val couple = app.couch.alhasapa.results.Couple("סטיב", "רוני", pieces.styleFor(null, "a"), pieces.styleFor(null, "b"))
+        var saved: app.couch.alhasapa.results.ResultInput? = null
+        rule.setContent {
+            AlHasapaTheme {
+                TvLayer(c) {
+                    app.couch.alhasapa.results.ResultSheet(support, couple, null, "11/50", captured = true, onSave = { saved = it }, onClear = null, onCancel = {})
+                }
+            }
+        }
+        rule.waitForIdle()
+        rule.onNode(androidx.compose.ui.test.hasText("11/50", substring = true) and androidx.compose.ui.test.hasText("זוהה", substring = true)).assertExists()
+        repeat(3) { rule.onNode(androidx.compose.ui.test.hasContentDescription("עוד 10")).performClick(); rule.waitForIdle() }
+        repeat(4) { rule.onNode(androidx.compose.ui.test.hasContentDescription("להגדיל")).performClick(); rule.waitForIdle() }
+        rule.onNode(androidx.compose.ui.test.hasText("45/50", substring = true) and androidx.compose.ui.test.hasText("זוהה", substring = true)).assertExists()
+        rule.onNode(androidx.compose.ui.test.hasText("שמירה")).performClick(); rule.waitForIdle()
+        val input = saved!!
+        val d = app.couch.alhasapa.results.ResultDraft.evaluate(game, input.text, input.manual, input.fail, org.json.JSONObject(), "2026-11-27")
+        org.junit.Assert.assertEquals(45.0, d.parsed!!.v, 0.0)
+        org.junit.Assert.assertEquals(50, d.parsed!!.max)
+        org.junit.Assert.assertEquals("what was misread is not kept with it", "", d.result!!.raw)
     }
 
     /** A note Roni left Steve for after Krillion: a few words and a heart drawn with a finger. */

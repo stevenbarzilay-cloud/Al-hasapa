@@ -208,6 +208,22 @@ class ResultsTest {
         assertEquals("read off the end screen too", 6, HebrewResult.read("כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים").hints)
     }
 
+    /** 1.11.2: the number set by hand wins over what was read, and stays out of what that was out of. */
+    @Test
+    fun aNumberSetByHandWinsOverWhatWasReadAndKeepsItsWhole() {
+        val dialed = catalog.game("dialed")!!
+        val wordle = catalog.game("wordle")!!
+        val log = org.json.JSONObject()
+        val read = ResultDraft.evaluate(dialed, "45.11/50", "", false, log, "2026-11-27")
+        assertEquals(45.11, read.parsed!!.v, 0.0); assertEquals(50, read.parsed!!.max); assertEquals("45.11/50", read.result!!.raw)
+        val mended = ResultDraft.evaluate(dialed, "11/50", "45", false, log, "2026-11-27")
+        assertEquals(45.0, mended.parsed!!.v, 0.0); assertEquals(50, mended.parsed!!.max); assertEquals("", mended.result!!.raw)
+        assertEquals("scored by the 45", ResultDraft.evaluate(dialed, "45/50", "", false, log, "2026-11-27").points, mended.points)
+        val guesses = ResultDraft.evaluate(wordle, "Wordle 1,618 5/6", "3", false, log, "2026-11-27")
+        assertEquals(3.0, guesses.parsed!!.v, 0.0); assertEquals(6, guesses.parsed!!.max)
+        assertEquals("nothing set by hand: what was read", 5.0, ResultDraft.evaluate(wordle, "Wordle 1,618 5/6", "", false, log, "2026-11-27").parsed!!.v, 0.0)
+    }
+
     @Test
     fun whatItCannotTellItDoesNotGuess() {
         assertNull(GameDetector.detect("just some text", catalog))

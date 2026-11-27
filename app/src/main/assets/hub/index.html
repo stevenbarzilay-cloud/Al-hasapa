@@ -1047,7 +1047,8 @@ function manualField(kind,id,val){
   if(kind==="time") return `<input id="${id}" inputmode="numeric" placeholder="דקות:שניות, למשל 1:24" value="${val!==undefined?esc(fmtT(val)):""}">`;
   return `<input id="${id}" inputmode="numeric" placeholder="מספר ${KIND_LABEL[kind]}" value="${val!==undefined?esc(val):""}">`;
 }
-function readManual(kind,el){const v=el.value.trim(); if(!v) return null; if(kind==="time"){return parseResult(v,"time")} if(kind==="score"){const p=parseResult(v,"score"); if(p) return p} const n=parseFloat(v); return isNaN(n)?null:{v:n,fail:false,max:kind==="guesses"?6:undefined}}
+/* The number set by hand (1.11.2): it wins over the text, and stays out of what the text's result was out of ("45" of 50). */
+function readManual(kind,el,max){const v=el.value.trim(); if(!v) return null; if(kind==="time"){return parseResult(v,"time")} if(kind==="score"){const p=parseResult(v,"score"); if(p) return p} const n=parseFloat(v); return isNaN(n)?null:{v:n,fail:false,max:kind==="guesses"?(max||6):kind==="score"?max:undefined}}
 
 function openResult(id){
   const g=byId[id], t=TODAY(), e=state.log[t]&&state.log[t][id]; let kind=metricOf(g); if(kind==="none") kind="guesses";
@@ -1060,12 +1061,14 @@ function openResult(id){
     <label class="inline"><input type="checkbox" id="fail" ${r&&r.fail?"checked":""}> לא הצלחנו הפעם</label>
     <div class="row-btns"><button class="btn primary main" id="saveR" type="button">שמירה</button>${r?`<button class="btn ghost" id="clearR" type="button">למחוק תוצאה</button>`:""}<button class="tbtn" data-act="close" type="button">ביטול</button></div>`);
   const pv=document.getElementById("pv"), ta=document.getElementById("paste"), man=document.getElementById("man"), fail=document.getElementById("fail");
-  const current=()=>{let p=parseResult(ta.value,kind); if(!p) p=readManual(kind,man); if(fail.checked) p={v:(p&&p.v)||0,max:p&&p.max,fail:true}; return p};
+  const current=()=>{const t=parseResult(ta.value,kind); let p=readManual(kind,man,t&&t.max)||t; if(fail.checked) p={v:(p&&p.v)||0,max:p&&p.max,fail:true}; return p};
+  const byHand=()=>!!readManual(kind,man);
+  ta.addEventListener("input",()=>{man.value=""});
   const upd=()=>{const p=current(); if(!p){pv.textContent=ta.value.trim()?"לא זיהיתי תוצאה. אפשר להקליד ידנית.":"";return} const rr={...p,kind}; pv.innerHTML=`זוהה: <b>${esc(fmtVal(kind,rr))}</b> · ${2+resultPts(id,rr,t)} נקודות ספה`};
   [ta,man,fail].forEach(x=>x.addEventListener("input",upd)); upd();
   document.getElementById("saveR").onclick=()=>{
     const p=current(); state.log[t]=state.log[t]||{}; const cur=state.log[t][id]||{w:""};
-    if(p){cur.r={v:p.v,max:p.max,fail:!!p.fail,kind,raw:ta.value.trim().slice(0,400)}} cur.t=Date.now(); state.log[t][id]=cur;
+    if(p){cur.r={v:p.v,max:p.max,fail:!!p.fail,kind,raw:byHand()?"":ta.value.trim().slice(0,400)}} cur.t=Date.now(); state.log[t][id]=cur;
     save();closeSheet();render();toast(p?"נשמר. "+(2+resultPts(id,cur.r,t))+" נקודות ספה.":"סומן בלי תוצאה.");
   };
   const c=document.getElementById("clearR"); if(c) c.onclick=()=>{delete state.log[t][id].r;save();closeSheet();render();toast("התוצאה נמחקה.")};
@@ -1101,9 +1104,11 @@ function openDuel(id){
     <div class="duelgrid">${side("a",PIECE.s)}${side("b",PIECE.r)}</div>
     <div class="preview" id="pv"></div>
     <div class="row-btns"><button class="btn primary main" id="saveD" type="button">שמירה</button>${e?`<button class="btn ghost" id="clearD" type="button">למחוק</button>`:""}<button class="tbtn" data-act="close" type="button">ביטול</button></div>`);
-  const get=w=>{const ta=document.getElementById("p"+w),m=document.getElementById("m"+w),f=document.getElementById("f"+w);let p=parseResult(ta.value,kind)||readManual(kind,m);if(f.checked)p={v:(p&&p.v)||0,fail:true};return p?{...p,raw:ta.value.trim().slice(0,400)}:null};
+  const get=w=>{const ta=document.getElementById("p"+w),m=document.getElementById("m"+w),f=document.getElementById("f"+w);const t=parseResult(ta.value,kind),h=readManual(kind,m,t&&t.max);let p=h||t;if(f.checked)p={v:(p&&p.v)||0,fail:true};return p?{...p,raw:h?"":ta.value.trim().slice(0,400)}:null};
   const pv=document.getElementById("pv");
   const upd=()=>{const a=get("a"),b=get("b");const w=duelWinner({d:{a,b}},kind);pv.innerHTML=[a?`${PIECE.s} ${esc(fmtVal(kind,a))}`:"",b?`${PIECE.r} ${esc(fmtVal(kind,b))}`:"",w?(w==="t"?"<b>תיקו</b>":`<b>${esc(nm(w))} לוקח את זה</b>`):""].filter(Boolean).join(" · ")};
+  // What was touched last wins: new text to read clears that side's number set by hand (1.11.2).
+  ["a","b"].forEach(w=>{const ta=document.getElementById("p"+w),m=document.getElementById("m"+w); if(ta&&m) ta.addEventListener("input",()=>{m.value=""})});
   document.querySelectorAll("#sheet textarea, #sheet input").forEach(x=>x.addEventListener("input",upd)); upd();
   document.getElementById("saveD").onclick=()=>{const a=get("a"),b=get("b"); if(!a&&!b){closeSheet();return}
     state.log[t]=state.log[t]||{}; const now=Date.now(); state.log[t][id]={w:"",t:now,d:{...(a?{a:{...a,t:now}}:{}),...(b?{b:{...b,t:now}}:{})}}; save();closeSheet();render();

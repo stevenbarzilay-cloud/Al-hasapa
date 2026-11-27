@@ -116,7 +116,8 @@ fun ResultSheet(
     val existingResult: Result? = if (solo) soloSide?.asResult() else if (duel) null else Result.fromJson(existing?.optJSONObject("r"))
 
     var text by remember { mutableStateOf(initialText) }
-    var manual by remember { mutableStateOf(existingResult?.takeIf { it.raw.isNullOrEmpty() }?.let { if (kind == "time") Scoring.fmtT(it.v) else jsNumber(it.v).toString() }.orEmpty()) }
+    // A result saved by hand comes back in the number, unless the sheet opens on something new to read (the number would win over it).
+    var manual by remember { mutableStateOf(existingResult?.takeIf { it.raw.isNullOrEmpty() && initialText.isBlank() }?.let { if (kind == "time") Scoring.fmtT(it.v) else jsNumber(it.v).toString() }.orEmpty()) }
     var fail by remember { mutableStateOf(existingResult?.fail == true) }
     var credit by remember { mutableStateOf(existing?.optString("w").orEmpty()) }
 
@@ -215,7 +216,8 @@ fun ResultSheet(
 
         Field(
             label = stringResource(R.string.result_paste_label), help = stringResource(R.string.result_paste_help),
-            value = text, onChange = { text = it }, singleLine = false, keyboard = KeyboardType.Text, minHeight = 96.dp,
+            // What was touched last wins: new text to read clears the number set by hand (which otherwise wins, 1.11.2).
+            value = text, onChange = { text = it; manual = "" }, singleLine = false, keyboard = KeyboardType.Text, minHeight = 96.dp,
         )
         if (preview.isNotEmpty()) Text(preview, fontSize = SheetText, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.semantics { contentDescription = preview })
 
@@ -338,9 +340,13 @@ private fun ManualSteppers(kind: String, manual: String, parsed: app.couch.alhas
                     val v = manual.trim().toDoubleOrNull() ?: parsed?.v ?: 0.0
                     val top = when (kind) { "guesses" -> (parsed?.max ?: 6) + 1; "mistakes" -> 4; else -> 100_000 }
                     fun set(n: Double) = onChange(app.couch.alhasapa.scoring.jsNumber(n.coerceIn(0.0, top.toDouble())).toString())
+                    // A score of tens (Dialed's 50): ten at a time too (1.11.2), so a misread "11" becomes "45" in a few presses.
+                    val tens = kind == "score" || kind == "words"
+                    if (tens) Step("less10", "−10", stringResource(R.string.result_tv_less10)) { set(kotlin.math.floor(v) - 10) }
                     Step("less", "−", stringResource(R.string.tvset_smaller)) { set(kotlin.math.floor(v) - 1) }
                     Text(app.couch.alhasapa.scoring.jsNumber(v).toString(), fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
                     Step("more", "+", stringResource(R.string.tvset_larger)) { set(kotlin.math.floor(v) + 1) }
+                    if (tens) Step("more10", "+10", stringResource(R.string.result_tv_more10)) { set(kotlin.math.floor(v) + 10) }
                 }
             }
         }

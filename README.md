@@ -504,11 +504,21 @@ want to play on, starting with Krillion and NYT:
     flow with a stand-in reader (the camera app asked for the app's own file, the result in the sheet, saved alone, the photo gone; a
     photo with no result, then typed). **Not tried on the devices:** ML Kit itself (it runs in Google Play services), and how well a
     photo of a screen reads (glare, an angle).
-- **1.11.2: Haaretz's "מי אני?" share understood.** Its share is "כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים" and the game's
-  link: it named no game the app knew, and counted in steps, a word no reader knew. A share that names no game is now matched by the
-  game's link in it (ours or the catalogue's; the same page however the link is dressed, or by the page's id), and steps are read as
-  the game's hints ("6 צעדים" is 6, "צעד אחד" is 1), by the app, the home's page and the end-screen reader alike (`GameDetector`,
-  `Scoring`, `HebrewResult`, `ResultWatch`). Tried here with that very share, through the share target to a saved result.
+- **1.11.2: Haaretz's "מי אני?" share understood; Dialed's score read whole, and a number set by hand wins.**
+  - *Dialed's "45.11 מתוך 50" was read as 11 of 50*: the end-screen reader took whole numbers only and started inside the decimal.
+    Scores are read with their decimals now, never from inside a number (`HebrewResult`).
+  - *Mending it with the TV's − and + did not count*: the sheet's result was what it read whenever the text could be read, so the
+    number set by hand only moved on the screen. The number set by hand (typed on the phone, the phone's keys on the TV, the TV's −
+    and +) now wins, stays out of what the read result was out of ("45" of 50, "3" of a five-guess game), and the misread text is
+    not kept with it; new text to read clears the number again (what was touched last wins), on the phone's sheet and the home's
+    page alike (`ResultDraft`, the hub's sheets). A score on the TV also steps ten at a time ("−10", "+10").
+  - *Haaretz's "מי אני?" was not understood*: its share is "כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים" and the game's link; it
+    named no game the app knew, and counted in steps, a word no reader knew. A share that names no game is now matched by the
+    game's link in it (ours or the catalogue's; the same page however the link is dressed, or by the page's id), and steps are read
+    as the game's hints ("6 צעדים" is 6, "צעד אחד" is 1), by the app, the home's page and the end-screen reader alike
+    (`GameDetector`, `Scoring`, `HebrewResult`, `ResultWatch`).
+  - *Tried here:* that very share, through the share target to a saved result; Dialed's misread mended with the TV's buttons (three
+    "+10" and four "+": 45 of 50, scored by it), and on the home's page (read, mended by hand, read again, saved by the hand's number).
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

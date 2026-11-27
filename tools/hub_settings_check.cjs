@@ -149,6 +149,22 @@ server.listen(0, '127.0.0.1', async () => {
     // 1.11.2: Haaretz's "מי אני?" counts its hints in steps, and the home reads them as the app does.
     const steps = await p2.evaluate(() => [parseResult('כל הכבוד! הצלחת לזהות את הדמות תוך 6 צעדים\n\nhttps://www.haaretz.co.il/riddles/x', 'hints'), parseResult('תוך צעד אחד', 'hints')]);
     ok(steps[0] && steps[0].v === 6 && steps[1] && steps[1].v === 1, `steps are read as hints (${JSON.stringify(steps)})`);
+    // 1.11.2: the number set by hand wins over what was read and stays out of its whole; new text clears it again.
+    const mend = await p2.evaluate(() => {
+      openResult('dialed');
+      const ta = document.getElementById('paste'), man = document.getElementById('man'), pv = () => document.getElementById('pv').textContent;
+      const fire = el => el.dispatchEvent(new Event('input', { bubbles: true }));
+      ta.value = '11/50'; fire(ta); const read = pv();
+      man.value = '45'; fire(man); const byHand = pv();
+      ta.value = '45.11/50'; fire(ta); const again = pv(), cleared = man.value;
+      man.value = '44'; fire(man); document.getElementById('saveR').click();
+      const pad = n => String(n).padStart(2, '0'), d = new Date(), k = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      const r = state.log[k] && state.log[k].dialed && state.log[k].dialed.r;
+      return { read, byHand, again, cleared, saved: r && { v: r.v, max: r.max, raw: r.raw } };
+    });
+    ok(mend.read.includes('11/50') && mend.byHand.includes('45/50') && mend.again.includes('45.11/50') && mend.cleared === '',
+      `the home's sheet: read, mended by hand, read again (${JSON.stringify(mend)})`);
+    ok(mend.saved && mend.saved.v === 44 && mend.saved.max === 50 && mend.saved.raw === '', `saved by the hand's number, out of 50, without the text (${JSON.stringify(mend.saved)})`);
     ok(errs.length === 0, 'no errors with the others (' + (errs.join(' | ') || 'none') + ')');
     await ctx2.close();
   }

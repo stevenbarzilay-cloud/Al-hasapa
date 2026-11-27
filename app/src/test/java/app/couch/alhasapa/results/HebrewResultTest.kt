@@ -23,6 +23,16 @@ class HebrewResultTest {
         assertEquals(5, read("5 ניחושים").tries)
     }
 
+    /** 1.11.2: Dialed's end screen in Hebrew; the score was read from inside the decimal ("11 of 50"). */
+    @Test
+    fun aScoreWithDecimalsIsReadWhole() {
+        val r = read("45.11 מתוך 50")
+        assertEquals(45.11, r.score!!, 0.0); assertEquals(50.0, r.scoreMax!!, 0.0)
+        assertEquals("45.11/50", HebrewResult.summary(r, "score", null))
+        assertEquals(8.0, read("ניקוד: 8/10").score!!, 0.0)
+        assertNull("a score bigger than its whole is not one", read("51 מתוך 50").score)
+    }
+
     @Test
     fun mistakesHintsTimesAndScores() {
         assertEquals(2, read("הצלחתם עם 2 טעויות").mistakes)
