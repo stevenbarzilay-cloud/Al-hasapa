@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -40,6 +41,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.aspectRatio
+import app.couch.alhasapa.data.Doodles
+import app.couch.alhasapa.ui.DoodleArt
 import app.couch.alhasapa.R
 import app.couch.alhasapa.data.Note
 import app.couch.alhasapa.data.PieceStyle
@@ -80,19 +84,34 @@ fun NoteCard(view: NoteView, onDone: () -> Unit) {
         onDispose { tv.endModal() }
     }
     BackHandler { done() }
+    // A drawing made since 1.12 has its own paper (three to two), shown whole and large: beside the words when there are words, or
+    // alone under the names. One from before is a strip under the words, as it was.
+    val paper = note.doodle.isNotEmpty() && note.ink != null
+    val beside = paper && note.text.isNotEmpty()
     Box(Modifier.fillMaxSize().background(Palette.Ink.copy(alpha = 0.55f)), contentAlignment = Alignment.Center) {
         Column(
-            Modifier.widthIn(max = 620.dp).padding(24.dp).rotate(-1.5f).clip(RoundedCornerShape(18.dp)).background(Color(0xFFFFF8E1))
+            Modifier.widthIn(max = if (beside) 860.dp else 620.dp).padding(24.dp).rotate(-1.5f).clip(RoundedCornerShape(18.dp)).background(DoodleArt.PAPER)
                 .border(BorderStroke(2.dp, Palette.Ink), RoundedCornerShape(18.dp)).padding(horizontal = 26.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PieceIcon(piece, 34.dp, label = "")
-                Text(stringResource(R.string.note_from, view.fromName, view.toName), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+            val words: @Composable () -> Unit = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PieceIcon(piece, 34.dp, label = "")
+                    Text(stringResource(R.string.note_from, view.fromName, view.toName), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+                }
+                if (view.gameName != null) Text(stringResource(R.string.note_after_game, view.gameName), fontSize = 16.sp, color = Palette.Ink2)
+                if (note.text.isNotEmpty()) Text(note.text, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, lineHeight = 36.sp)
             }
-            if (view.gameName != null) Text(stringResource(R.string.note_after_game, view.gameName), fontSize = 16.sp, color = Palette.Ink2)
-            if (note.text.isNotEmpty()) Text(note.text, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, lineHeight = 36.sp)
-            if (note.doodle.isNotEmpty()) Doodle(note.doodle, piece.accent, Modifier.fillMaxWidth().height(200.dp))
+            if (beside) {
+                Row(horizontalArrangement = Arrangement.spacedBy(22.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { words() }
+                    Doodle(note.doodle, piece.accent, Modifier.width(390.dp).aspectRatio(Doodles.ASPECT), note.ink)
+                }
+            } else {
+                words()
+                if (paper) Doodle(note.doodle, piece.accent, Modifier.align(Alignment.CenterHorizontally).width(420.dp).aspectRatio(Doodles.ASPECT), note.ink)
+                else if (note.doodle.isNotEmpty()) Doodle(note.doodle, piece.accent, Modifier.fillMaxWidth().height(200.dp))
+            }
             val ok = stringResource(R.string.note_ok)
             Box(
                 Modifier.align(Alignment.End).height(52.dp).widthIn(min = 160.dp).clip(RoundedCornerShape(26.dp)).background(Palette.Ink)
@@ -103,21 +122,11 @@ fun NoteCard(view: NoteView, onDone: () -> Unit) {
     }
 }
 
-/** The drawing: each stroke through its points (thousandths of the box), in [color], round at the ends. */
+/**
+ * The drawing: each stroke through its points (thousandths of the box), round at the ends. With [ink] (1.12) each stroke in its own
+ * colour and width ([color] is the writer's own); without, all of them in [color], as a note from before was drawn.
+ */
 @Composable
-fun Doodle(strokes: List<IntArray>, color: Color, modifier: Modifier) {
-    Canvas(modifier) {
-        val w = 4.dp.toPx()
-        for (s in strokes) {
-            if (s.size < 2) continue
-            if (s.size == 2) { drawCircle(color, radius = w / 2, center = Offset(s[0] / 1000f * size.width, s[1] / 1000f * size.height)); continue }
-            val p = Path()
-            for (i in 0 until s.size / 2) {
-                val x = s[2 * i] / 1000f * size.width
-                val y = s[2 * i + 1] / 1000f * size.height
-                if (i == 0) p.moveTo(x, y) else p.lineTo(x, y)
-            }
-            drawPath(p, color, style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
-        }
-    }
+fun Doodle(strokes: List<IntArray>, color: Color, modifier: Modifier, ink: List<Int>? = null) {
+    Canvas(modifier) { with(DoodleArt) { doodle(strokes, ink, color) } }
 }

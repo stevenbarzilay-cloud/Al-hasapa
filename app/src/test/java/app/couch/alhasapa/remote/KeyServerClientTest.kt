@@ -212,6 +212,79 @@ class KeyServerClientTest {
         store.me = null
     }
 
+    private class MemoryState : app.couch.alhasapa.data.StateStore {
+        var text: String? = null
+        override fun read() = text
+        override fun write(json: String) { text = json }
+    }
+
+    /**
+     * 1.12: the TV and a phone keep the same evenings, library and looks. When they meet, each tells the other what it keeps (the first
+     * time every evening, however old); after that every change made on one reaches the other at once, while they are connected.
+     */
+    @Test
+    fun theTvAndThePhoneKeepTheSameEveningsAndEveryChangeReachesTheOther() {
+        context.getSharedPreferences("remote", Context.MODE_PRIVATE).edit().clear().commit()
+        val today = java.time.LocalDate.now()
+        fun key(daysAgo: Long) = app.couch.alhasapa.data.CouchState.dayKey(today.minusDays(daysAgo))
+        fun entry(v: Int, t: Long) = org.json.JSONObject().put("w", "").put("t", t)
+            .put("r", org.json.JSONObject().put("v", v).put("max", 6).put("fail", false).put("kind", "guesses"))
+        fun pts(r: app.couch.alhasapa.data.StateRepository, day: String) =
+            app.couch.alhasapa.scoring.Scoring.dayPts(r.snapshot().optJSONObject("log") ?: org.json.JSONObject(), day)
+        val now = System.currentTimeMillis()
+        val tvRepo = app.couch.alhasapa.data.StateRepository(MemoryState()).also { it.onLocalChange = { ShareBus.changed() } }
+        val phoneRepo = app.couch.alhasapa.data.StateRepository(MemoryState()).also { it.onLocalChange = { ShareBus.changed() } }
+        tvRepo.update { s ->
+            app.couch.alhasapa.data.CouchState.setEntry(s, key(1), "wordle", entry(3, now - 86_400_000))
+            app.couch.alhasapa.data.CouchState.setEntry(s, key(40), "connections", entry(2, now - 40 * 86_400_000L))
+            s.put("prefs", org.json.JSONObject().put("pips", "no"))
+        }
+        phoneRepo.update { s ->
+            app.couch.alhasapa.data.CouchState.setEntry(s, key(0), "bandle", entry(2, now - 60_000))
+            app.couch.alhasapa.data.CouchState.setEntry(s, key(50), "strands", entry(1, now - 50 * 86_400_000L))
+            app.couch.alhasapa.data.Couple.put(s, app.couch.alhasapa.data.Person("b", "רוני", "star", "blue", now - 30_000))
+        }
+        val tv = KeyServer(
+            context, onInput = {}, preferredPort = 0, advertise = false, tvName = "MiBOX4", onLogins = { null },
+            onLinked = {}, frameSource = { null }, onMirroring = {}, book = RepoCoupleBook { tvRepo }, relay = { null },
+        )
+        tv.start()
+        try {
+            val phone = KeyClient(context, phoneName = "Pixel 8", find = { "127.0.0.1:${tv.port}" }, book = RepoCoupleBook { phoneRepo }).also { clients += it }
+            phone.start()
+            waitFor("the TV asks for a code") { phone.state.value is KeyClient.State.NeedCode }
+            phone.sendCode(tv.ui.value.code!!)
+            waitFor("connected") { phone.state.value is KeyClient.State.Connected }
+            // They meet for the first time: every evening kept, however old, both ways; the library and the looks too.
+            waitFor("the phone has the TV's evenings, the old one too") {
+                val s = phoneRepo.snapshot()
+                app.couch.alhasapa.data.CouchState.entry(s, key(1), "wordle") != null && app.couch.alhasapa.data.CouchState.entry(s, key(40), "connections") != null
+            }
+            waitFor("the TV has the phone's") {
+                val s = tvRepo.snapshot()
+                app.couch.alhasapa.data.CouchState.entry(s, key(0), "bandle") != null && app.couch.alhasapa.data.CouchState.entry(s, key(50), "strands") != null
+            }
+            waitFor("said once: all of it is alike now") { !phone.awaitingAll && RemoteStore(context).sharedAll(RemoteStore(context).tvId) }
+            assertEquals("no", phoneRepo.snapshot().getJSONObject("prefs").getString("pips"))
+            assertEquals("blue", app.couch.alhasapa.data.Couple.person(tvRepo.snapshot(), "b").color)
+            assertEquals(pts(tvRepo, key(0)), pts(phoneRepo, key(0)))
+            assertEquals(pts(tvRepo, key(1)), pts(phoneRepo, key(1)))
+            // A result saved on the TV: on the phone at once, the same points.
+            tvRepo.update { s -> app.couch.alhasapa.data.CouchState.setEntry(s, key(0), "wordle", entry(4, System.currentTimeMillis())) }
+            waitFor("the TV's new result is on the phone") { app.couch.alhasapa.data.CouchState.entry(phoneRepo.snapshot(), key(0), "wordle") != null }
+            assertEquals(pts(tvRepo, key(0)), pts(phoneRepo, key(0)))
+            assertTrue(pts(phoneRepo, key(0)) > 0)
+            // A tick taken back on the phone: gone on the TV; a game put on the shelf there: on the TV's shelf.
+            phoneRepo.update { s ->
+                app.couch.alhasapa.data.CouchState.setEntry(s, key(0), "bandle", null)
+                s.getJSONObject("prefs").put("tiles", "yes")
+            }
+            waitFor("taken back on the TV too") { app.couch.alhasapa.data.CouchState.entry(tvRepo.snapshot(), key(0), "bandle") == null }
+            waitFor("and the shelf") { tvRepo.snapshot().optJSONObject("prefs")?.optString("tiles") == "yes" }
+            assertEquals(pts(tvRepo, key(0)), pts(phoneRepo, key(0)))
+        } finally { tv.stop() }
+    }
+
     /** 1.11: the TV hands each paired phone the solo relay, sealed under that connection's key; the phone keeps it and looks by itself. */
     @Test
     fun theTvHandsAPairedPhoneTheSoloRelay() {
@@ -300,7 +373,7 @@ class KeyServerClientTest {
         // What the two tell each other is the version at which they last had to be updated together (raised by 1.9.7, the end of a
         // game, by 1.9.8, touch mode, and by 1.9.9, each of us on our own phone): two apps of releases after it that changed only one
         // of the two have nothing to say to each other about versions.
-        assertEquals("raised only by a release that needs both", 36, KeyLink.TOGETHER_SINCE)
+        assertEquals("raised only by a release that needs both", 39, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()

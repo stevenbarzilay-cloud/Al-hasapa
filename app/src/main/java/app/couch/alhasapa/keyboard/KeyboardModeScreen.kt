@@ -142,8 +142,8 @@ interface KeySink {
     /** Who holds this phone and how they look (1.9.9): kept here and told to the TV. */
     fun saveMe(p: app.couch.alhasapa.data.Person) {}
 
-    /** A note for [to]: kept here until the TV has it. */
-    fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>) {}
+    /** A note for [to]: kept here until the TV has it. [ink]: how each stroke of its drawing is drawn (1.12). */
+    fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>, ink: List<Int>) {}
 
     /** One of the others removed (1.10): here, and on the TV and the other phones at the next connection. */
     fun removePerson(who: String) {}
@@ -211,7 +211,7 @@ fun KeyboardModeScreen(
         if (noteOpen && couple && mine != null) NoteDialog(
             recipients = people.filter { it.who != me }, initialTo = noteFor(me), pieces = pieces!!, color = pieces.styleOf(mine).accent,
             games = noteGames, initialGame = noteGames.firstOrNull { it.name == connected?.screen }?.id,
-            onSend = { to, game, text, doodle -> sink.sendNote(to, game, text, doodle); noteOpen = false }, onDismiss = { noteOpen = false },
+            onSend = { to, game, text, doodle, ink -> sink.sendNote(to, game, text, doodle, ink); noteOpen = false }, onDismiss = { noteOpen = false },
         )
         TopStrip(
             state, onGame, onLogins = { loginsOpen = true }, touch = if (connected != null) touchView else null, onTouch = { touchView = it },

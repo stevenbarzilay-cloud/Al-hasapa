@@ -49,6 +49,13 @@ import org.json.JSONObject
  *                                                         the removed ones as marks
  *     phone → TV     note {note}                          a note for the other one: words and a drawing, tied to a game or none
  *     TV    → phone  note-ok {id}                         the TV keeps it (the phone stops keeping it to send)
+ *     both ways      share {s}                            what the devices keep alike (1.12, see Shared): an evening's log with its
+ *                                                         removals, or the library, links, our games, jokes and looks, with the
+ *                                                         times that decide which is newer; sent as a connection opens (two weeks of
+ *                                                         evenings, one per line) and after every change made while connected
+ *     both ways      share-all {}                         phone → TV: "and every evening you keep, once" (the first time the two meet
+ *                                                         since 1.12; the phone sends all of its own before it); TV → phone: "that
+ *                                                         was all of them"
  *     TV    → phone  relay {s}                            where the phones tell each other of the games they play alone (1.11): the
  *                                                         relay's address, its topic and its key, AES-GCM under the connection's key
  *                                                         (see SoloRelay); a phone app from before 1.11 ignores it
@@ -80,7 +87,7 @@ object KeyLink {
      * Not simply the app's own version number: a release that changes only one of the two (the TV's home got a new look in 1.9.5)
      * must not send the people to update the other for nothing. It is raised only when a release needs both.
      */
-    const val TOGETHER_SINCE = 36
+    const val TOGETHER_SINCE = 39
 
     /** What the solo relay's configuration is sealed for, under the connection's key (`relay`, 1.11). */
     const val RELAY_AAD = "couch-relay-config v1"
@@ -197,6 +204,10 @@ object KeyLink {
         data class NoteOk(val id: String) : Msg
         /** The solo relay's address, topic and key (1.11), sealed under the connection's key ([RelayCrypto]). */
         data class Relay(val sealed: String) : Msg
+        /** What the devices keep alike (1.12): a part of a state (see [app.couch.alhasapa.data.Shared.share]). */
+        data class Share(val share: JSONObject) : Msg
+        /** Every evening kept is asked for (phone to TV), or was all sent (TV to phone). */
+        data object ShareAll : Msg
 
         /** The sign-in handoff: the phone's fresh public key; the TV's, signed with the pairing token; the logins; the answer. */
         data class LoginsKey(val key: String) : Msg
@@ -253,6 +264,8 @@ object KeyLink {
         is Msg.NoteMsg -> JSONObject().put("t", "note").put("note", m.note.toJson())
         is Msg.NoteOk -> JSONObject().put("t", "note-ok").put("id", m.id)
         is Msg.Relay -> JSONObject().put("t", "relay").put("s", m.sealed)
+        is Msg.Share -> JSONObject().put("t", "share").put("s", m.share)
+        Msg.ShareAll -> JSONObject().put("t", "share-all")
     }
 
     private fun frameLine(m: Msg.Frame): String = StringBuilder(m.data.length + 140)
@@ -317,6 +330,8 @@ object KeyLink {
             "note" -> Note.fromJson(o.optJSONObject("note"))?.let { Msg.NoteMsg(it) }
             "note-ok" -> s("id").takeIf { it.isNotEmpty() }?.let { Msg.NoteOk(it) }
             "relay" -> s("s").takeIf { it.isNotEmpty() && it.length <= 2_000 }?.let { Msg.Relay(it) }
+            "share" -> o.optJSONObject("s")?.takeIf { it.optInt("v") == 1 }?.let { Msg.Share(it) }
+            "share-all" -> Msg.ShareAll
             else -> null
         }
     }

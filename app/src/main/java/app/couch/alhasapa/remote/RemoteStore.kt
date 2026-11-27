@@ -70,6 +70,15 @@ class RemoteStore(context: Context) {
         set(value) { prefs.edit { if (value == null) remove("me") else putString("me", value) } }
 
     /** The newest change to how any of us looks that the TV has been told of (see PhoneSync). */
+    /** Whether this phone and the TV [tv] have told each other of every evening they keep (once, 1.12; two weeks of them after that). */
+    fun sharedAll(tv: String): Boolean = prefs.getBoolean("shared_all_$tv", false)
+    fun setSharedAll(tv: String) { prefs.edit { putBoolean("shared_all_$tv", true) } }
+
+    /** When this phone and the TV last told each other what they keep alike (1.12, as a connection opened). */
+    var sharedAt: Long
+        get() = prefs.getLong("shared_at", 0L)
+        set(v) = prefs.edit { putLong("shared_at", v) }
+
     var syncedAt: Long
         get() = prefs.getLong("synced_at", 0L)
         set(value) { prefs.edit { putLong("synced_at", value) } }

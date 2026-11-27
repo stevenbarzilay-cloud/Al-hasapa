@@ -34,8 +34,11 @@ class PhoneSync(
     /** Whether anything waits for the TV (or the TV has something for the phone: the solo relay, 1.11). */
     fun waiting(): Boolean {
         val store = RemoteStore(context)
-        return store.pendingNotes().isNotEmpty() || newest() > store.syncedAt || needsRelay()
+        return store.pendingNotes().isNotEmpty() || newest() > store.syncedAt || needsRelay() || shareDue(store)
     }
+
+    /** The evenings the TV kept since the phone last heard (1.12): asked for each time the app comes to the front, at most this often. */
+    private fun shareDue(store: RemoteStore): Boolean = System.currentTimeMillis() - store.sharedAt > SHARE_EVERY_MS
 
     private fun needsRelay(): Boolean {
         val r = RelayStore(context)
@@ -70,8 +73,9 @@ class PhoneSync(
             val st = c.state.value
             if (st is KeyClient.State.Connected) {
                 if (connectedAt == 0L) connectedAt = now
-                if (c.notesWaiting.value == 0 && now - connectedAt >= SETTLE_MS) {
+                if (c.notesWaiting.value == 0 && !c.awaitingAll && now - connectedAt >= SETTLE_MS) {
                     RemoteStore(context).syncedAt = target
+                    RemoteStore(context).sharedAt = System.currentTimeMillis()
                     Flight.log("sync: handed over to the TV")
                     stop(); onDone(); return
                 }
@@ -89,6 +93,8 @@ class PhoneSync(
         const val LIMIT_MS = 20_000L
         /** A phone without the solo relay asks the TV for it at most this often. */
         const val RELAY_ASK_MS = 24 * 60 * 60 * 1000L
+        /** The phone asks the TV for what it kept at most this often (each time the app comes to the front, otherwise). */
+        const val SHARE_EVERY_MS = 2 * 60 * 1000L
         private const val LOOK_MS = 400L
     }
 }

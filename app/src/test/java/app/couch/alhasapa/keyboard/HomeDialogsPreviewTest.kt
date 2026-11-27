@@ -96,6 +96,13 @@ class HomeDialogsPreviewTest {
         File(File("build/previews").apply { mkdirs() }, "phone-photo-sheet.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    /** 1.12: the drawing at the size of the whole screen, upright as on the home: the pens under the paper. */
+    @Test fun doodleEditorUpright() {
+        val drawing = DoodleSamples.state()
+        rule.setContent { AlHasapaTheme { DoodleEditor(drawing, pieces.styleFor(null, "b").accent) {} } }
+        saveDialog("phone-doodle-editor-upright.png")
+    }
+
     /** A note from the home, for anyone here. */
     @Test fun noteForAnyone() {
         rule.setContent {
@@ -103,7 +110,7 @@ class HomeDialogsPreviewTest {
                 NoteDialog(
                     recipients = people.filter { it.who != "b" }, initialTo = "a", pieces = pieces,
                     color = pieces.styleOf(people[1]).accent, games = listOf(NoteGame("wordle", "Wordle"), NoteGame("krillion", "Krillion")),
-                    initialGame = null, onSend = { _, _, _, _ -> }, onDismiss = {},
+                    initialGame = null, onSend = { _, _, _, _, _ -> }, onDismiss = {},
                 )
             }
         }

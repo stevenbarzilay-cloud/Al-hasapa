@@ -51,10 +51,32 @@ class StateRepository(
     /** Emits whenever the state changes, so native screens can recompose. */
     val revision: StateFlow<Long> get() = _revision
 
+    /**
+     * Told after every change made on this device (not after what another device's copy brought, see [mergeShared]): the TV and the
+     * phones are then told of it (1.12). Called outside the lock, on the thread that made the change.
+     */
+    @Volatile var onLocalChange: (() -> Unit)? = null
+
+    /** The clock the changes are stamped with (1.12), replaceable in tests. */
+    @Volatile var clock: () -> Long = System::currentTimeMillis
+
+    private val _merged = MutableStateFlow(0L)
+
+    /** Counts the times another device's copy changed the state here (1.12): the hub's page then reads the state again. */
+    val merged: StateFlow<Long> get() = _merged
+
+    /**
+     * The last few states by revision, and which of those revisions were another device's copy merged in: a save from the hub's page
+     * that is behind only by such merges is not refused, its own changes are merged in as the newest (1.12).
+     */
+    private val history = ArrayDeque<Pair<Long, JSONObject>>()
+    private val mergeRevs = HashSet<Long>()
+
     init {
         val stored = CouchState.parse(store.read())
         hadStoredState = stored != null
         state = stored ?: CouchState.empty()
+        history.addLast(0L to state)
     }
 
     /** True until anything has ever been stored: the very first run. */
@@ -66,16 +88,46 @@ class StateRepository(
 
     fun currentRevision(): Long = synchronized(lock) { rev }
 
+    /** Reads something small out of the state without copying all of it ([block] must not change it, nor keep hold of it). */
+    fun <T> peek(block: (JSONObject) -> T): T = synchronized(lock) { block(state) }
+
+    /** What a save from the hub's page came to: the new revision ([rev], -1 when refused), and whether the page must read the state again. */
+    data class HubSave(val rev: Long, val reload: Boolean)
+
     /**
      * The hub saves its whole in-memory state. Returns the new revision, or -1 if [baseRevision] is stale (something else changed
      * the state since the hub loaded it) or the document is invalid; the hub must then reload.
      */
-    fun saveFromHub(raw: String, baseRevision: Long): Long = synchronized(lock) {
-        if (baseRevision != rev) return -1
-        val incoming = CouchState.parse(raw) ?: return -1
-        // A name or a piece changed in the hub: stamped, so it travels to the TV and the other phone (see Couple).
-        Couple.stampChanges(state, incoming, System.currentTimeMillis())
-        commit(incoming)
+    fun saveFromHub(raw: String, baseRevision: Long): Long = saveFromHubMerging(raw, baseRevision).rev
+
+    /**
+     * As [saveFromHub]. A page that is behind only by what other devices brought since it read the state (their changes arrive at any
+     * moment, 1.12: while a result is being typed, say) is not refused: what it changed since is found against the state it read,
+     * stamped as made now, and merged in as the newest; the page is then told to read the state again ([HubSave.reload]).
+     */
+    fun saveFromHubMerging(raw: String, baseRevision: Long): HubSave {
+        var reload = false
+        val r = synchronized(lock) {
+            if (baseRevision != rev) {
+                val then = history.firstOrNull { it.first == baseRevision }?.second
+                if (then == null || !((baseRevision + 1)..rev).all { it in mergeRevs }) return HubSave(-1, true)
+                val incoming = CouchState.parse(raw) ?: return HubSave(-1, true)
+                val now = clock()
+                Couple.stampChanges(then, incoming, now)
+                Shared.stampChanges(then, incoming, now)
+                val next = CouchState.copy(state)
+                Shared.merge(next, Shared.share(incoming, null), now)
+                reload = true
+                commit(next, local = true)
+            } else {
+                val incoming = CouchState.parse(raw) ?: return HubSave(-1, true)
+                // A name or a piece changed in the hub: stamped, so it travels to the TV and the other phone (see Couple).
+                Couple.stampChanges(state, incoming, clock())
+                commit(incoming, local = true)
+            }
+        }
+        onLocalChange?.invoke()
+        return HubSave(r, reload)
     }
 
     /** First-run migration of what the hub kept in localStorage. Only accepted while nothing has been stored yet. */
@@ -85,12 +137,30 @@ class StateRepository(
         commit(incoming)
     }
 
-    /** A native change (result saved from the player, a share received...). */
-    fun update(block: (JSONObject) -> Unit): Long = synchronized(lock) {
-        val next = CouchState.copy(state)
-        block(next)
-        commit(next)
+    /** A native change made on this device (a result saved in the player, a share received, a setting...). */
+    fun update(block: (JSONObject) -> Unit): Long {
+        val r = synchronized(lock) {
+            val next = CouchState.copy(state)
+            block(next)
+            commit(next, local = true)
+        }
+        onLocalChange?.invoke()
+        return r
     }
+
+    /**
+     * What another device's copy brought (1.12): [block] merges it and says whether anything changed; only then is the state written,
+     * and nothing is stamped anew (the times are the other device's) nor told on.
+     */
+    fun mergeIf(block: (JSONObject) -> Boolean): Boolean = synchronized(lock) {
+        val next = CouchState.copy(state)
+        if (!block(next)) return false
+        commit(next, local = false)
+        true
+    }
+
+    /** Another device's share (see [Shared.share]) into this state: the newer of each thing wins. True when anything changed. */
+    fun mergeShared(incoming: JSONObject?): Boolean = mergeIf { s -> Shared.merge(s, incoming, clock()) }
 
     fun exportBackup(now: java.time.Instant = java.time.Instant.now()): String = Backup.export(snapshot(), now)
 
@@ -106,12 +176,23 @@ class StateRepository(
         }
     }
 
-    private fun commit(next: JSONObject): Long {
+    private fun commit(next: JSONObject, local: Boolean = true): Long {
+        // A change made here is stamped, so it wins where it should when the copies meet (1.12).
+        if (local) Shared.stampChanges(state, next, clock())
         CouchState.prune(next, today())
+        Shared.prune(next, CouchState.dayKey(today().minusDays(CouchState.KEEP_DAYS)))
         store.write(next.toString())
         state = next
         rev += 1
+        history.addLast(rev to next)
+        while (history.size > HISTORY) history.removeFirst().let { mergeRevs.remove(it.first) }
+        if (!local) { mergeRevs.add(rev); _merged.value = _merged.value + 1 }
         _revision.value = rev
         return rev
+    }
+
+    private companion object {
+        /** How many revisions back a page's copy may be and still be merged. */
+        const val HISTORY = 24
     }
 }

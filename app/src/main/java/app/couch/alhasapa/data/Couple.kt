@@ -159,10 +159,15 @@ data class Note(
     val seen: Long = 0L,
     /** Who it is for (1.10); null: the other of the two of us (a note from before). */
     val to: String? = null,
+    /**
+     * How each stroke is drawn (1.12, see [Ink]), one number a stroke; with it the drawing is on a paper of [Doodles.ASPECT]. Null: a
+     * drawing from before, all in the writer's colour, on the box it was drawn in.
+     */
+    val ink: List<Int>? = null,
 ) {
     // The drawing's arrays compare by what is in them.
     override fun equals(other: Any?): Boolean = other is Note && id == other.id && from == other.from && game == other.game &&
-        text == other.text && at == other.at && seen == other.seen && to == other.to && doodle.size == other.doodle.size &&
+        text == other.text && at == other.at && seen == other.seen && to == other.to && ink == other.ink && doodle.size == other.doodle.size &&
         doodle.indices.all { doodle[it].contentEquals(other.doodle[it]) }
 
     override fun hashCode(): Int = id.hashCode()
@@ -170,6 +175,7 @@ data class Note(
     fun toJson(): JSONObject = JSONObject().put("id", id).put("from", from).put("text", text).put("at", at)
         .apply { if (game != null) put("game", game); if (seen > 0) put("seen", seen); if (to != null) put("to", to) }
         .put("d", JSONArray().apply { for (s in doodle) put(JSONArray().apply { for (v in s) put(v) }) })
+        .apply { if (ink != null) put("ink", JSONArray().apply { for (i in ink) put(i) }) }
 
     companion object {
         /** Null for anything that is not a note: no id, nobody of us, nothing in it. Over-long parts are cut to [Notes]' limits. */
@@ -190,10 +196,13 @@ data class Note(
                     points += n
                 }
             }
-            if (text.isEmpty() && strokes.isEmpty()) return null
+            val seen = o.optLong("seen", 0L)
+            // (A note that was read keeps nothing of its drawing, see [Notes.markSeen]: it stays, so it is not taken for a new one.)
+            if (text.isEmpty() && strokes.isEmpty() && seen == 0L) return null
+            val ink = o.optJSONArray("ink")?.let { a -> strokes.indices.map { i -> a.optInt(i, Ink.DEFAULT).let { Ink.of(it / 10, it % 10) } } }
             return Note(
-                id, from, o.optString("game").takeIf { it.isNotBlank() }?.take(40), text, strokes, o.optLong("at", 0L), o.optLong("seen", 0L),
-                to = o.optString("to").takeIf { Couple.isId(it) && it != from },
+                id, from, o.optString("game").takeIf { it.isNotBlank() }?.take(40), text, strokes, o.optLong("at", 0L), seen,
+                to = o.optString("to").takeIf { Couple.isId(it) && it != from }, ink = ink,
             )
         }
     }
@@ -201,8 +210,9 @@ data class Note(
 
 object Notes {
     const val MAX_TEXT = 140
-    const val MAX_STROKES = 60
-    const val MAX_POINTS = 1_500
+    /** A drawing's most (1.12: five times what it was): as a note it still fits a line of the link several times over. */
+    const val MAX_STROKES = 300
+    const val MAX_POINTS = 4_500
     /** The TV keeps at most this many notes; the oldest seen ones go first. */
     const val KEEP = 60
 
@@ -224,8 +234,9 @@ object Notes {
         return true
     }
 
+    /** Read: it is not shown again, so its drawing (the heavy part of it) is let go; the note itself stays, to be known if it comes again. */
     fun markSeen(state: JSONObject, id: String, now: Long) {
-        write(state, all(state).map { if (it.id == id && it.seen == 0L) it.copy(seen = now) else it })
+        write(state, all(state).map { if (it.id == id && it.seen == 0L) it.copy(seen = now, doodle = emptyList(), ink = null) else it })
     }
 
     /** The notes waiting for [game] (not shown yet), oldest first. */

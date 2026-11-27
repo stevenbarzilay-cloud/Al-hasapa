@@ -158,11 +158,15 @@ class MainActivity : ComponentActivity() {
         }, "solo-look").start()
     }
 
-    /** On a TV (1.11): the relay is read while the app is in front, every few minutes, for the reveals on the home. */
+    /**
+     * While the app is in front, the relay is read every couple of minutes (1.11, 1.12): on a TV for the reveals and what the phones
+     * changed; on a phone for the challenges and what the TV and the other phone changed (the home's points with them).
+     */
     private val tvLook = object : Runnable {
         override fun run() {
             val app = application as CouchApp
-            Thread({ runCatching { SoloRelay(applicationContext, app.repo).receive(null) } }, "solo-look").start()
+            if (TvMode.isTelevision(this@MainActivity)) Thread({ runCatching { SoloRelay(applicationContext, app.repo).sync(null) } }, "solo-look").start()
+            else soloLook()
             tvLookHandler.postDelayed(this, TV_LOOK_MS)
         }
     }
@@ -202,8 +206,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (!TvMode.isTelevision(this)) { phoneSync.start(); soloLook() }
-        else if (RelayStore(this).config != null) tvLookHandler.post(tvLook)
+        if (!TvMode.isTelevision(this)) phoneSync.start()
+        tvLookHandler.post(tvLook)
     }
 
     override fun onStop() {
@@ -269,8 +273,8 @@ class MainActivity : ComponentActivity() {
             NoteDialog(
                 recipients = people.filter { it.who != me }, initialTo = noteFor(me), pieces = pieces,
                 color = pieces.styleOf(mine).accent, games = games, initialGame = null,
-                onSend = { to, game, text, doodle ->
-                    store.keepNote(Note(RemoteStore.randomHex(8), mine.who, game, text, doodle, System.currentTimeMillis(), to = to))
+                onSend = { to, game, text, doodle, ink ->
+                    store.keepNote(Note(RemoteStore.randomHex(8), mine.who, game, text, doodle, System.currentTimeMillis(), to = to, ink = ink))
                     noteOpen = false; hubReloads++
                     android.widget.Toast.makeText(this, R.string.note_kept, android.widget.Toast.LENGTH_LONG).show()
                     Flight.log("notes: one written on the home${if (game != null) " for a game" else ""}; it goes to the TV when it is reached")
@@ -318,6 +322,9 @@ class MainActivity : ComponentActivity() {
         if (crash != null || stopped != null) Flight.log("showing the report of the previous run (${if (crash != null) "crash" else "stopped in use"})")
         setContent {
             AlHasapaTheme {
+              // What the TV or the other phone changed arrived (1.12): the hub's page reads the state again (the points with it).
+              val brought by app.repo.merged.collectAsState()
+              LaunchedEffect(brought) { if (brought > 0) hubReloads++ }
               tv.Layer {
                 val report = crash ?: stopped
                 if (report != null) {
@@ -406,7 +413,7 @@ class MainActivity : ComponentActivity() {
         /** Together or alone, as kept for a game and a day (see [RelayStore.mode]). */
         const val SOLO = "solo"
         const val TOGETHER = "together"
-        /** How often a TV in front reads the relay (for the reveals on its home). */
-        const val TV_LOOK_MS = 5 * 60 * 1000L
+        /** How often the app in front reads the relay (the TV for its reveals, both for what the others changed). */
+        const val TV_LOOK_MS = 2 * 60 * 1000L
     }
 }

@@ -379,7 +379,7 @@ private fun Hero(detail: Detail?, model: HomeModel) {
                 textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth().testTag(DETAIL_SUMMARY),
             )
         }
-        Picture(HomeArt.Picture.COUPLE, PictureHeight, stringResource(R.string.home_couple, model.nameA, model.nameB))
+        Picture(HomeArt.Picture.COUPLE, PictureHeight, stringResource(R.string.home_couple, model.nameA, model.nameB), pieces = model.pieceA to model.pieceB)
     }
 }
 
@@ -388,11 +388,17 @@ private fun Hero(detail: Detail?, model: HomeModel) {
  * itself is read off the main thread and appears when it is ready (at once, when the app read it while starting: see [warmHomeArt]).
  */
 @Composable
-private fun Picture(picture: HomeArt.Picture, height: Dp, description: String, modifier: Modifier = Modifier) {
+private fun Picture(
+    picture: HomeArt.Picture, height: Dp, description: String, modifier: Modifier = Modifier,
+    /** The two people's pieces, for a picture in their colours (1.12); null: as drawn. */
+    pieces: Pair<app.couch.alhasapa.data.PieceStyle, app.couch.alhasapa.data.PieceStyle>? = null,
+) {
     val context = LocalContext.current
     val px = with(LocalDensity.current) { height.roundToPx() }
-    val art by produceState(HomeArt.cached(picture), picture) {
+    val colours = pieces?.let { it.first.colorId + "|" + it.second.colorId }
+    val art by produceState(HomeArt.cached(picture), picture, colours) {
         if (value == null) value = withContext(Dispatchers.IO) { HomeArt.load(context, picture, px) }
+        if (pieces != null) withContext(Dispatchers.IO) { HomeArt.tinted(context, picture, px, pieces.first, pieces.second) }?.let { value = it }
     }
     val aspect = art?.aspect ?: picture.aspect
     Canvas(modifier.height(height).width(height * aspect).semantics { contentDescription = description; role = Role.Image }) {

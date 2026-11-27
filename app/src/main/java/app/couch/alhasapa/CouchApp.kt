@@ -1,5 +1,6 @@
 package app.couch.alhasapa
 
+import kotlinx.coroutines.launch
 import android.app.Activity
 import android.app.Application
 import android.content.ComponentCallbacks2
@@ -49,6 +50,23 @@ class CouchApp : Application() {
         }
         Flight.log(Diagnostics.memory(this))
         if (tv) Flight.log(Diagnostics.screen(this))
+        followPieces()
+    }
+
+    /**
+     * The app's two colours follow the two pieces (1.12), as the hub's page does: now, and whenever the state changes (a piece chosen
+     * here, on the other phone, or on the TV, and brought over). Read off the main thread (the start of the app waits for nothing of
+     * it), and only the two pieces are looked at, not a copy of the whole state.
+     */
+    private fun followPieces() {
+        val main = android.os.Handler(mainLooper)
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            val pieces = runCatching { app.couch.alhasapa.data.PiecesConfig.load(this@CouchApp) }.getOrNull() ?: return@launch
+            repo.revision.collect {
+                val (a, b) = repo.peek { s -> pieces.styleFor(s, "a") to pieces.styleFor(s, "b") }
+                main.post { app.couch.alhasapa.ui.theme.Palette.follow(a, b) }
+            }
+        }
     }
 
     /** The app's screens, for the standby and the draw guard (null before onCreate, and in tests that build no app). */
@@ -133,6 +151,8 @@ class CouchApp : Application() {
     val repo: StateRepository by lazy {
         // The first thing done with the state: what a new catalogue asks of the choices made here before (see CatalogUpdate).
         StateRepository(FileStateStore(File(filesDir, "state.json"))).also { app.couch.alhasapa.catalog.CatalogUpdate.apply(this, it) }
+            // A change made here goes to the other devices (1.12): the ones connected at once, and through the relay from anywhere.
+            .also { it.onLocalChange = { app.couch.alhasapa.remote.ShareBus.changed(); app.couch.alhasapa.remote.RelayOut.schedule(this) } }
     }
 
     private val base: Catalog by lazy { Catalog.load(this) }

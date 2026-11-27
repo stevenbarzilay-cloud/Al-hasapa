@@ -261,7 +261,7 @@ class TvController(val enabled: Boolean, density: Float) {
 
     fun releaseWeb(view: WebView) { if (webRef?.get() === view) webRef = null }
 
-    var pageNav: PageNav = PageNavOverride ?: WebPageNav { web }
+    var pageNav: PageNav = PageNavOverride ?: WebPageNav(web = { web })
 
     /** A question to the page is on its way. Never for long: an answer that does not come in [PAGE_TIMEOUT_MS] is given up on. */
     private var busy = false

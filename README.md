@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.11.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.12.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -519,6 +519,58 @@ want to play on, starting with Krillion and NYT:
     (`GameDetector`, `Scoring`, `HebrewResult`, `ResultWatch`).
   - *Tried here:* that very share, through the share target to a saved result; Dialed's misread mended with the TV's buttons (three
     "+10" and four "+": 45 of 50, scored by it), and on the home's page (read, mended by hand, read again, saved by the hand's number).
+- **1.12: one couch on every screen.** The TV and the phones keep the same evenings; the TV wears the colours chosen on the phones;
+  the settings page is walked with the remote; and a note has a real paper to draw on. From an evening with 1.11.2 ("the points we
+  got on the TV must be in the app: full interfacing between the apps is a must").
+  - *The TV and the phones keep alike* the evenings' log (what was played, the results, who cracked it: so the couch points are the
+    same everywhere), the library (which games are on our shelf), our own links and games, the jokes, how each of us looks, and
+    the games played alone. Each device keeps its own copy; every change made on one is stamped with its time (a log entry has its
+    own; one taken back leaves a mark of when, so an older copy does not bring it back; the library, links, games and jokes are
+    stamped key by key), wherever it was made (the hub's page, a game, the settings); where two copies meet, the newer of each thing
+    wins (`Shared`, `StateRepository`). Old choices that were never stamped end up alike too (a game on one's shelf is on the shelf).
+    - *At home*, over the link the phone types through (`share`): when a phone and the TV connect, each tells the other its last two
+      weeks of evenings and the rest, one evening a message; the first time they meet, every evening they keep (`share-all`), so the
+      months before are alike too. While connected, every change goes at once, both ways, and on to the other phone.
+    - *The phone connects by itself* each time the app comes to the front (at most every two minutes; nothing shows, nothing happens
+      away from home), so the evening on the TV is on the phone without keyboard mode (`PhoneSync`).
+    - *From anywhere*, through the relay of 1.11: a few seconds after a change, what changed in the last two days goes sealed, in
+      parts each within the relay's limit, without the texts results were read from (`SoloRelay.sendShare`). The app in front reads
+      the relay every two minutes (the TV too), the phone's background look every quarter of an hour.
+    - *The page keeps up*: when another device's changes arrive, the hub's page reads the state again, and the TV's home draws
+      again. A save from the page made while such changes arrived (a result being typed) is no longer refused with "הנתונים התעדכנו
+      מבחוץ": the page's own changes are found against what it had read, stamped, and merged in (`saveFromHubMerging`).
+    - Both apps must be updated together (`TOGETHER_SINCE` 39).
+  - *The TV wears what was chosen on the phones.* The cushions already took the two colours; now everything does: the app's two
+    accent colours follow the two pieces on every native screen (the focus, the threads around a cushion, the buttons, the plain
+    arrow), the picture of the two of us on the TV's home is drawn in the two colours (each colour family through its mask, its
+    shading kept, once per pair of colours and off the main thread: `HomeArt.tinted`), the hub's page on the TV draws its pictures
+    in them too (once, onto a canvas: no blend layers for the box's graphics chip), and the remote's focus on a web page wears the
+    accent.
+  - *"הגדרות ועוד" with the remote.* Two faults in the script that walks a page: scrolled down, the top of the list (the picture
+    with it) could not be gone back to, as what it found there was the header covering it, so the focus leapt to the header and the
+    list stayed scrolled; and the tabs were always passed over, for a button far above in the same column. Now a thing inside a
+    scrolling box counts as shown only when it shows in the box; up and down go to the nearest row first, as a TV moves between its
+    tiles; and the focus goes on through a list, scrolling it, before it leaves it for what is pinned around it (`TvNavScript` 3,
+    `tools/hub_tvnav_check.cjs` on the real page). The phone's own buttons (who holds it, the notes) are no longer on the TV's page.
+  - *A paper to draw on* ("I manage nothing beyond a crooked heart there, and I draw well enough in games like Drawful"). The old
+    pad was a strip 150 high that took a point every four pixels and joined them with straight lines, in one colour, with no way
+    back. Now: "✏️ מסך מלא" opens the drawing at the size of the whole screen (the pens beside the paper sideways, under it upright);
+    every point the screen reports is taken, from the first touch (a dot is a dot), and the line is drawn smooth; ten colours (the
+    writer's own first), three widths, an eraser, "↶ ביטול" for the last stroke, "ניקוי". The paper is three to two on the phone and
+    on the TV, so a drawing is shown as it was drawn, each stroke in its colour and width (widths are shares of the paper's width);
+    on the TV it stands beside the words. A drawing may be five times what it was (300 strokes, 4,500 points; the points that add
+    nothing are left out when a stroke ends), and still fits a line of the link; once a note was read, its drawing is let go
+    (`DoodlePad`, `DoodleArt`, `Ink`, `Doodles`).
+  - *Tried here:* two states meeting in every way (a result on one, the points alike on both; a tick taken back and an older copy
+    not bringing it back; the newer of two results; the library, links, our games and jokes; old unstamped choices ending alike;
+    a very full evening in parts); the TV and a phone over a real socket (the first meeting with old evenings both ways, then a
+    result saved on the TV on the phone at once, a tick taken back on the phone gone from the TV); three devices through the relay
+    in memory (sealed, each message within the relay's limit, what came from the relay not said back, changes waiting when it
+    cannot be reached); the hub's page merging a save, in Chromium; the TV's home in teal and mustard (the picture's red gone, the
+    focus teal); the hub's page on a TV-sized screen walked down and all the way back up with the TV's own script; a drawing made on
+    the whole screen with colours, widths, the eraser and undo, and shown on the TV. **Not tried on the devices:** all of it on the
+    box and the phones: how soon the phone finds the TV when the app opens, the relay (ntfy.sh cannot be reached from where this is
+    built), the remote on the real page, and how the drawing feels under a finger.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

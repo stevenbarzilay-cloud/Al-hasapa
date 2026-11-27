@@ -15,7 +15,7 @@ object CouchState {
     const val VERSION = 1
     const val DEFAULT_A = "סטיב"
     const val DEFAULT_B = "רוני"
-    private const val KEEP_DAYS = 400L
+    const val KEEP_DAYS = 400L
     private val DAY_KEY = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
     fun empty(): JSONObject = JSONObject()

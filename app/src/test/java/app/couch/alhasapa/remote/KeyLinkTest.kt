@@ -51,12 +51,33 @@ class KeyLinkTest {
                 app.couch.alhasapa.data.Person("u9a9a9a9", "", "", "", 7, removed = true),
             )),
             Msg.NoteMsg(app.couch.alhasapa.data.Note("n3", "u1a2b3c4", null, "לרוני", emptyList(), 5L, to = "b")),
+            // From 1.12: a drawing with its pens, the relay, and what the devices keep alike.
+            Msg.NoteMsg(app.couch.alhasapa.data.Note("n4", "b", null, "", listOf(intArrayOf(0, 0, 500, 500), intArrayOf(7, 9)), 6L, ink = listOf(21, 102))),
+            Msg.Relay("c2VhbGVk"),
+            Msg.ShareAll,
         )
         for (m in all) {
             val line = KeyLink.encode(m)
             assertFalse("one line each: $line", line.contains('\n'))
             assertEquals(m, KeyLink.decode(line))
         }
+        // A share is a part of a state: what it holds comes back as it went.
+        val share = org.json.JSONObject().put("v", 1).put("log", org.json.JSONObject().put("2026-11-27", org.json.JSONObject().put("wordle", org.json.JSONObject().put("t", 5))))
+        val back = KeyLink.decode(KeyLink.encode(Msg.Share(share))) as Msg.Share
+        assertEquals(share.toString(), back.share.toString())
+        assertNull("another version's share is not taken", KeyLink.decode(KeyLink.encode(Msg.Share(org.json.JSONObject().put("v", 2)))))
+    }
+
+    /** 1.12: the largest drawing a note may hold still fits a line of the link, with room to spare. */
+    @Test
+    fun theLargestDrawingStillFitsALine() {
+        val per = app.couch.alhasapa.data.Notes.MAX_POINTS / app.couch.alhasapa.data.Notes.MAX_STROKES
+        val strokes = List(app.couch.alhasapa.data.Notes.MAX_STROKES) { IntArray(per * 2) { 1000 } }
+        val note = app.couch.alhasapa.data.Note("n", "u1a2b3c4d5e6", "a-game-with-a-long-name", "א".repeat(app.couch.alhasapa.data.Notes.MAX_TEXT), strokes, 1_764_000_000_000L,
+            to = "u9a9a9a9a9a9", ink = List(strokes.size) { 102 })
+        val line = KeyLink.encode(Msg.NoteMsg(note))
+        assertTrue("${line.length} characters", line.length < KeyLink.MAX_LINE * 8 / 10)
+        assertEquals(note, (KeyLink.decode(line) as Msg.NoteMsg).note)
     }
 
     @Test

@@ -131,6 +131,79 @@ class SoloRelayTest {
         assertEquals(setOf("a", "b"), Solo.sides(tvRepo.snapshot(), key, "bandle").map { it.who }.toSet())
     }
 
+    /**
+     * 1.12: what the devices keep alike travels through the relay too, from anywhere: a result saved on the TV is on the phones' pages
+     * with the same points; a tick taken back on a phone goes from the TV; a busy evening goes in parts, each within the relay's limit.
+     */
+    @Test
+    fun aResultSavedOnTheTvReachesThePhonesThroughTheRelayAndBackAgain() {
+        val cfg = RelayConfig.create()
+        val net = FakeNtfy()
+        var clock = 1_764_000_000_000L
+        fun device(name: String): Pair<StateRepository, SoloRelay> {
+            val r = repo().also { it.clock = { clock } }
+            return r to SoloRelay(context, r, net, { clock }, { day }, RelayStore(context, name).apply { config = cfg })
+        }
+        fun entry(v: Int, raw: String = "") = JSONObject().put("w", "").put("t", clock)
+            .put("r", JSONObject().put("v", v).put("max", 6).put("fail", false).put("kind", "guesses").apply { if (raw.isNotEmpty()) put("raw", raw) })
+        fun pts(r: StateRepository) = app.couch.alhasapa.scoring.Scoring.dayPts(r.snapshot().optJSONObject("log") ?: JSONObject(), key)
+        val (tvRepo, tv) = device("relay-s-tv"); val (roniRepo, roni) = device("relay-s-b"); val (steveRepo, steve) = device("relay-s-a")
+
+        // The evening on the TV: three results, a game taken off the shelf.
+        tvRepo.update { s ->
+            app.couch.alhasapa.data.CouchState.setEntry(s, key, "wordle", entry(3, "Wordle 1,618 3/6"))
+            app.couch.alhasapa.data.CouchState.setEntry(s, key, "bandle", entry(2))
+            app.couch.alhasapa.data.CouchState.setEntry(s, key, "connections", entry(1))
+            s.put("prefs", JSONObject().put("pips", "no"))
+        }
+        assertTrue(tv.sendShare("tv"))
+        assertTrue("sealed: nothing of it readable on the wire", net.messages.none { it.second.contains("wordle") || it.second.contains("Wordle") })
+        assertTrue("each message within the relay's limit", net.messages.all { it.second.length <= 4096 })
+        // Each phone reads the relay, wherever it is: the same evening, the same points, the same shelf.
+        roni.receive("b"); steve.receive("a")
+        assertTrue(pts(tvRepo) > 0)
+        assertEquals(pts(tvRepo), pts(roniRepo)); assertEquals(pts(tvRepo), pts(steveRepo))
+        assertEquals("no", roniRepo.snapshot().getJSONObject("prefs").getString("pips"))
+        assertFalse("the text of a result stays home", roniRepo.snapshot().toString().contains("1,618"))
+        assertEquals("what came from the relay is not said back to it", 0L, RelayStore(context, "relay-s-b").shareSentAt)
+
+        // Roni takes a tick back on the phone: it goes from the TV and from Steve's phone.
+        clock += 60_000
+        roniRepo.update { s -> app.couch.alhasapa.data.CouchState.setEntry(s, key, "bandle", null) }
+        val before = net.messages.size
+        assertTrue(roni.sendShare("b"))
+        assertTrue(net.messages.size > before)
+        tv.receive(null); steve.receive("a")
+        assertNull(app.couch.alhasapa.data.CouchState.entry(tvRepo.snapshot(), key, "bandle"))
+        assertNull(app.couch.alhasapa.data.CouchState.entry(steveRepo.snapshot(), key, "bandle"))
+        assertEquals(pts(roniRepo), pts(tvRepo)); assertEquals(pts(roniRepo), pts(steveRepo))
+        // Nothing new: nothing is sent.
+        val quiet = net.messages.size
+        assertTrue(roni.sendShare("b"))
+        assertEquals(quiet, net.messages.size)
+
+        // A very busy evening goes in parts.
+        clock += 60_000
+        tvRepo.update { s -> for (i in 1..40) app.couch.alhasapa.data.CouchState.setEntry(s, key, "game$i", entry(4)) }
+        val at = net.messages.size
+        assertTrue(tv.sendShare("tv"))
+        assertTrue("in more than one message", net.messages.size - at > 1)
+        assertTrue(net.messages.all { it.second.length <= 4096 })
+        roni.receive("b")
+        assertEquals(pts(tvRepo), pts(roniRepo))
+
+        // The relay cannot be reached: the changes wait, and go with the next look.
+        clock += 60_000
+        net.down = true
+        tvRepo.update { s -> app.couch.alhasapa.data.CouchState.setEntry(s, key, "strands", entry(1)) }
+        assertFalse(tv.sendShare("tv"))
+        assertTrue(RelayStore(context, "relay-s-tv").sharePending)
+        net.down = false
+        tv.sync(null)
+        roni.receive("b")
+        assertNotNull(app.couch.alhasapa.data.CouchState.entry(roniRepo.snapshot(), key, "strands"))
+    }
+
     @Test
     fun whatCouldNotBeSentWaitsAndTodaysSidesAreSaidAgainBeforeTheRelayLetsThemGo() {
         val cfg = RelayConfig.create()

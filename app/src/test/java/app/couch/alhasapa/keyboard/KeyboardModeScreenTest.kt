@@ -12,6 +12,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import app.couch.alhasapa.data.Ink
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
@@ -64,8 +65,13 @@ class KeyboardModeScreenTest {
         override fun frameShown(n: Int) { sent += "shown:$n" }
         override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) { sent += "touch:${a.name.lowercase()}"; touches += Offset(x, y) }
         override fun saveMe(p: app.couch.alhasapa.data.Person) { sent += "me:${p.who}:${p.name}:${p.shape}:${p.color}" }
-        override fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>) { sent += "note:$to:$game:$text:${doodle.size}" }
+        override fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>, ink: List<Int>) {
+            sent += "note:$to:$game:$text:${doodle.size}"
+            notes += doodle to ink
+        }
     }
+    /** The drawings sent: their strokes and how each is drawn. */
+    private val notes = ArrayList<Pair<List<IntArray>, List<Int>>>()
     private val pieces = app.couch.alhasapa.data.PiecesConfig.parse(java.io.File("src/main/assets/hub/pieces.json").readText())
     private val people = listOf(app.couch.alhasapa.data.Person("a", "סטיב", "", "", 0), app.couch.alhasapa.data.Person("b", "רוני", "", "", 0))
     private var me by mutableStateOf<String?>(null)
@@ -203,6 +209,43 @@ class KeyboardModeScreenTest {
         rule.onNodeWithText("שליחה לטלוויזיה").performClick()
         // The game on the TV is the one it waits for, unless another is chosen; one stroke drawn.
         assertEquals(listOf("note:b:krillion:כל הכבוד לנו:1"), sent.filter { it.startsWith("note:") })
+    }
+
+    /**
+     * 1.12: the drawing at the size of the whole screen, with pens: a dot is a dot, a stroke keeps its colour and its width, the last
+     * stroke can be taken back, and what was drawn on the big paper is on the note's small one too.
+     */
+    @Test
+    fun aDrawingIsMadeOnTheWholeScreenWithColoursWidthsAndUndo() {
+        withCouple = true; me = "a"
+        state = KeyClient.State.Connected("MiTV", "עמוד הבית"); show()
+        rule.onNode(hasContentDescription("השארת פתק")).performClick()
+        rule.onNodeWithText("✏️ מסך מלא").performClick(); rule.waitForIdle()
+        val big = rule.onNodeWithTag(DOODLE_BIG_TAG)
+        big.assertIsDisplayed()
+        // A dot in my own colour, the middle width.
+        big.performTouchInput { down(Offset(width * 0.2f, height * 0.3f)); up() }
+        // A blue, thick line across.
+        rule.onNode(hasContentDescription("כחול")).performClick()
+        rule.onNode(hasContentDescription("קו עבה")).performClick()
+        big.performTouchInput { down(Offset(width * 0.1f, height * 0.8f)); moveTo(Offset(width * 0.5f, height * 0.6f)); moveTo(Offset(width * 0.9f, height * 0.8f)); up() }
+        // One too many, taken back.
+        big.performTouchInput { down(Offset(width * 0.5f, height * 0.5f)); moveBy(Offset(30f, 30f)); up() }
+        rule.onNodeWithText("↶ ביטול").performClick()
+        // The eraser, thin, through the middle.
+        rule.onNodeWithText("מחק").performClick()
+        rule.onNode(hasContentDescription("קו דק")).performClick()
+        big.performTouchInput { down(Offset(width * 0.4f, height * 0.4f)); moveBy(Offset(40f, 0f)); up() }
+        rule.onNodeWithText("סיום").performClick(); rule.waitForIdle()
+        rule.onNodeWithTag(DOODLE_BIG_TAG).assertDoesNotExist()
+        rule.onNodeWithText("שליחה לטלוויזיה").performClick()
+        val (strokes, ink) = notes.single()
+        assertEquals(3, strokes.size)
+        assertEquals("a dot is one point", 2, strokes[0].size)
+        assertEquals(200, strokes[0][0]); assertEquals(300, strokes[0][1])
+        assertEquals(listOf(Ink.DEFAULT, Ink.of(Ink.COLORS.indexOf("blue"), 2), Ink.of(Ink.PAPER, 0)), ink)
+        assertTrue("the line goes from one side to the other", strokes[1].first() in 95..105 && strokes[1][strokes[1].size - 2] in 895..905)
+        assertTrue("all of it on the paper", strokes.all { s -> s.all { it in 0..1000 } })
     }
 
     @Test

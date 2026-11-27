@@ -156,14 +156,31 @@ class KeyClient(
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
+        ShareBus.add(pushShare)
         Thread({ loop() }, "keys-link").apply { isDaemon = true }.start()
     }
 
     fun stop() {
         if (!running.compareAndSet(true, false)) return
+        ShareBus.remove(pushShare)
         closeSocket()
         wake.offer(Unit)
     }
+
+    /** A change made on this phone (1.12): its recent share goes to the TV, when connected. */
+    private val pushShare: () -> Unit = { if (_state.value is State.Connected) ShareBus.recent(book).forEach { write(Msg.Share(it)) } }
+
+    /** How many times the TV brought something new (1.12): the screens showing the state read it again. */
+    private val _shared = MutableStateFlow(0)
+    val shared: StateFlow<Int> get() = _shared
+
+    /** Every evening the TV keeps was asked for and is still on its way (the first time the two meet since 1.12). */
+    @Volatile var awaitingAll = false
+        private set
+
+    /** When this phone last sent the TV its share (as a connection opened). */
+    @Volatile var sharedAt = 0L
+        private set
 
     /** Look again now (after "not found"). */
     fun retry() { wake.offer(Unit) }
@@ -307,6 +324,12 @@ class KeyClient(
                         // Both of us as this phone knows us, and the notes still waiting for the TV.
                         sendCouple()
                         for (n in store.pendingNotes()) write(Msg.NoteMsg(n))
+                        // Everything this phone keeps alike with the TV (1.12): two weeks of evenings, and the rest. The first time the
+                        // two meet, every evening kept, both ways, so the months before are alike on both too.
+                        val all = tvId.isNotEmpty() && !store.sharedAll(tvId)
+                        for (s in ShareBus.opening(book, all)) write(Msg.Share(s))
+                        if (all) { awaitingAll = true; write(Msg.ShareAll) }
+                        sharedAt = System.currentTimeMillis()
                     }
                     is Msg.Screen -> (_state.value as? State.Connected)?.let { _state.value = it.copy(screen = m.screen, result = m.result, touch = m.touch) }
                     is Msg.Frame -> {
@@ -324,6 +347,8 @@ class KeyClient(
                     is Msg.CoupleMsg -> runCatching { book.offer(m.people) }
                     is Msg.NoteOk -> { store.noteKept(m.id); _notesWaiting.value = store.pendingNotes().size }
                     is Msg.Relay -> takeRelay(m.sealed)
+                    is Msg.Share -> { if (runCatching { book.takeShare(m.share) }.getOrDefault(false)) _shared.value = _shared.value + 1 }
+                    Msg.ShareAll -> { awaitingAll = false; if (tvId.isNotEmpty()) store.setSharedAll(tvId); Flight.log("sync: every evening kept is alike on the TV and this phone now") }
                     is Msg.Bye -> { if (m.why == "wait") _state.value = State.Wait; break }
                     else -> {}
                 }

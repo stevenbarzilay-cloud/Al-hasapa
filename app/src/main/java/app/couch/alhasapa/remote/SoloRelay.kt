@@ -3,6 +3,7 @@ package app.couch.alhasapa.remote
 import android.content.Context
 import androidx.core.content.edit
 import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.data.Shared
 import app.couch.alhasapa.data.Solo
 import app.couch.alhasapa.data.StateRepository
 import app.couch.alhasapa.diag.Flight
@@ -156,6 +157,14 @@ class RelayStore(context: Context, name: String = "relay") {
         get() = prefs.getBoolean("notify_asked", false)
         set(v) = prefs.edit { putBoolean("notify_asked", v) }
 
+    /** What this device changed was last said through the relay up to this time (1.12), and whether a change waits to be said. */
+    var shareSentAt: Long
+        get() = prefs.getLong("share_sent_at", 0L)
+        set(v) = prefs.edit { putLong("share_sent_at", v) }
+    var sharePending: Boolean
+        get() = prefs.getBoolean("share_pending", false)
+        set(v) = prefs.edit { putBoolean("share_pending", v) }
+
     /** The id of the last message read (null: never read). */
     var lastId: String?
         get() = prefs.getString("last_id", null)
@@ -253,10 +262,17 @@ class SoloRelay(
                 }
             }
         }
+        // What another device kept alike changed (1.12): merged message by message, the newer of each thing winning.
+        var shared = 0
+        for (m in msgs) {
+            val o = RelayCrypto.open(c.key, aad(c), m.text)?.let { runCatching { JSONObject(String(it, Charsets.UTF_8)) }.getOrNull() } ?: continue
+            o.optJSONObject("share")?.let { if (repo.mergeShared(it)) shared++ }
+        }
+        if (shared > 0) Flight.log("sync: the others' changes from the relay ($shared)")
         msgs.lastOrNull()?.let { store.lastId = it.id }
         if (incoming.length() > 0) {
             var changed = false
-            repo.update { s -> changed = Solo.merge(s, incoming, now()) }
+            changed = repo.mergeIf { s -> Solo.merge(s, incoming, now()) }
             if (changed) Flight.log("solo: news from the relay")
         }
         if (me == null) return emptyList()
@@ -281,9 +297,36 @@ class SoloRelay(
         return news
     }
 
+    /**
+     * What this device changed since it last said so (1.12): the log of today and yesterday with its removals, and the library, links,
+     * our games, jokes and looks that changed, without the texts results were read from, in parts each well within the relay's limit
+     * for a message. [from] names the sender ("a", "b", "tv"...). True when the relay took it all (or there was nothing to say).
+     */
+    fun sendShare(from: String): Boolean {
+        val c = store.config ?: return false
+        val upTo = now()
+        val since = store.shareSentAt.takeIf { it > 0 } ?: (upTo - FIRST_SHARE_MS)
+        val share = Shared.share(repo.snapshot(), days(), since = since, raw = false, rest = true)
+        val parts = parts(share)
+        if (parts.isEmpty()) { store.shareSentAt = upTo; store.sharePending = false; return true }
+        val client = RelayClient(c, http)
+        for (p in parts) {
+            val plain = JSONObject().put("v", 1).put("who", from).put("share", p).toString().toByteArray()
+            if (!client.publish(RelayCrypto.seal(c.key, aad(c), plain))) {
+                store.sharePending = true
+                Flight.log("sync: the relay was not reached; the changes wait")
+                return false
+            }
+        }
+        store.shareSentAt = upTo; store.sharePending = false
+        Flight.log("sync: told the relay of the changes (${parts.size})")
+        return true
+    }
+
     /** Sends what waits (or what the relay may have let go of), then reads. The news for [me]. */
     fun sync(me: String?): List<News> {
         if (store.config == null) return emptyList()
+        if (store.sharePending) sendShare(me ?: "tv")
         if (me != null) {
             val day = days().first()
             val hasToday = Solo.games(repo.snapshot(), day).any { Solo.side(repo.snapshot(), day, it, me) != null }
@@ -295,5 +338,57 @@ class SoloRelay(
     companion object {
         /** A side of today is said again after this long (the relay keeps a message for twelve hours). */
         const val RESEND_MS = 6 * 60 * 60 * 1000L
+        /** The first time a device says its changes: those of the last day. */
+        const val FIRST_SHARE_MS = 24 * 60 * 60 * 1000L
+        /** A message of the relay is at most 4096 bytes; a part this big, sealed and in Base64, stays under it. */
+        const val MAX_PART = 2_600
+
+        private fun size(o: JSONObject) = o.toString().toByteArray().size
+
+        /**
+         * [share] in parts small enough for the relay: as it is when it fits; else its evenings entry by entry, then each of the rest
+         * on its own (something that alone is too big, a very long list of jokes say, is left to the home network).
+         */
+        fun parts(share: JSONObject): List<JSONObject> {
+            val keys = share.keys().asSequence().filter { it != "v" }.toList()
+            if (keys.isEmpty()) return emptyList()
+            if (size(share) <= MAX_PART) return listOf(share)
+            val out = ArrayList<JSONObject>()
+            var cur = JSONObject().put("v", 1)
+            fun flush() { if (cur.length() > 1) out += cur; cur = JSONObject().put("v", 1) }
+            share.optJSONObject("log")?.let { log ->
+                for (day in log.keys().asSequence().toList()) {
+                    val d = log.optJSONObject(day) ?: continue
+                    for (id in d.keys().asSequence().toList()) {
+                        val e = d.optJSONObject(id) ?: continue
+                        val one = JSONObject().put("v", 1).put("log", JSONObject().put(day, JSONObject().put(id, e)))
+                        if (size(one) > MAX_PART) continue
+                        val l = cur.optJSONObject("log") ?: JSONObject().also { cur.put("log", it) }
+                        val dd = l.optJSONObject(day) ?: JSONObject().also { l.put(day, it) }
+                        dd.put(id, e)
+                        if (size(cur) > MAX_PART) { dd.remove(id); if (dd.length() == 0) l.remove(day); flush(); cur.put("log", JSONObject().put(day, JSONObject().put(id, e))) }
+                    }
+                }
+            }
+            flush()
+            for (k in keys) {
+                if (k == "log") continue
+                val one = JSONObject().put("v", 1).put(k, share.get(k))
+                // A stamp travels with what it stamps: the library's and the links' stamps go with them.
+                if (k == "prefs" || k == "urls" || k == "custom" || k == "jokes") continue
+                if (k == Shared.STAMPS) {
+                    val all = share.optJSONObject(Shared.STAMPS) ?: continue
+                    for (name in listOf("prefs", "urls", "custom", "jokes")) {
+                        val st = JSONObject().apply { for (s in all.keys().asSequence().filter { it == name || it.startsWith("$name|") }) put(s, all.optLong(s)) }
+                        if (st.length() == 0) continue
+                        val part = JSONObject().put("v", 1).put(Shared.STAMPS, st).apply { if (share.has(name)) put(name, share.get(name)) }
+                        if (size(part) <= MAX_PART) out += part
+                    }
+                    continue
+                }
+                if (size(one) <= MAX_PART) out += one
+            }
+            return out
+        }
     }
 }

@@ -62,10 +62,15 @@ class HubBridge(
         }.toString()
     }
 
-    /** Returns the new revision, or "-1" if the page's copy was stale (it then reloads). */
+    /**
+     * Returns the new revision, or "-1" if the page's copy was stale (it then reloads and says so). "~" before the revision (1.12): the
+     * save was kept, merged with what other devices brought meanwhile, and the page reads the state again, quietly.
+     */
     @JavascriptInterface
-    fun saveState(json: String, baseRevision: String): String =
-        repo.saveFromHub(json, baseRevision.toLongOrNull() ?: -2).toString()
+    fun saveState(json: String, baseRevision: String): String {
+        val r = repo.saveFromHubMerging(json, baseRevision.toLongOrNull() ?: -2)
+        return if (r.rev >= 0 && r.reload) "~" + r.rev else r.rev.toString()
+    }
 
     @JavascriptInterface
     fun migrateState(json: String): String = repo.migrateFromHub(json).toString()

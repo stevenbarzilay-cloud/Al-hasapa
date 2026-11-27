@@ -79,7 +79,7 @@ class CoupleTest {
     fun aNoteIsKeptSmallAndTheOldestSeenGoFirst() {
         assertNull("nothing in it", Note.fromJson(JSONObject().put("id", "x").put("from", "a")))
         assertNull("nobody of us", Note.fromJson(JSONObject().put("id", "x").put("from", "c").put("text", "hi")))
-        val big = org.json.JSONArray().apply { repeat(100) { put(org.json.JSONArray().apply { repeat(100) { put(2_000) } }) } }
+        val big = org.json.JSONArray().apply { repeat(400) { put(org.json.JSONArray().apply { repeat(40) { put(2_000) } }) } }
         val n = Note.fromJson(JSONObject().put("id", "x").put("from", "a").put("text", "א".repeat(500)).put("d", big))!!
         assertEquals(Notes.MAX_TEXT, n.text.length)
         assertTrue(n.doodle.size <= Notes.MAX_STROKES)

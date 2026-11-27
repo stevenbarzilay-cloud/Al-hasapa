@@ -169,6 +169,38 @@ server.listen(0, '127.0.0.1', async () => {
     await ctx2.close();
   }
 
+  // 1.12: a save while the TV's changes arrived is kept and merged by the app ("~" before the revision): the page reads the state
+  // again, quietly, and shows both its own change and what the TV brought, the same points.
+  {
+    const ctx3 = await browser.newContext({ viewport: { width: 400, height: 780 }, locale: 'he-IL' });
+    await ctx3.addInitScript(({ catalog }) => {
+      const pad = n => String(n).padStart(2, '0'), d = new Date(), day = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+      let rev = 3, st = { v: 1, names: { a: 'סטיב', b: 'רוני' }, prefs: {}, log: {} };
+      window.__saves = [];
+      window.couchNative = {
+        loadState() { return JSON.stringify({ rev, fresh: false, state: st }) },
+        // The app's side: the page's copy is kept, and what the TV brought meanwhile (a result of Bandle) is merged into it.
+        saveState(json, base) { window.__saves.push(base); st = JSON.parse(json); st.log[day] = st.log[day] || {};
+          st.log[day].bandle = { w: '', r: { v: 2, max: 6, fail: false, kind: 'guesses' }, t: Date.now() }; rev += 2; return '~' + rev },
+        migrateState() { return '-1' }, loadCatalog() { return catalog }, play() {}, openAccounts() {}, exportBackup() { return '{}' }, copyText() { return 'ok' },
+        importBackup() { return '{}' }, diagnostics() { return '' }, keyboardMode() { return 'yes' },
+      };
+    }, { catalog });
+    const p3 = await ctx3.newPage();
+    const errs3 = []; p3.on('pageerror', e => errs3.push(String(e)));
+    await p3.goto(`http://127.0.0.1:${port}/hub/index.html`); await p3.waitForTimeout(700);
+    await p3.click('.row[data-id="wordle"] [data-act="mark"]'); await p3.waitForTimeout(300);
+    const merged = await p3.evaluate(() => ({ rows: ['wordle', 'bandle'].map(id => document.querySelector(`.row[data-id="${id}"]`).classList.contains('done')),
+      rev: stateRev, toast: document.getElementById('toast').textContent, pts: document.querySelector('.count .pts').textContent, saves: window.__saves }));
+    ok(merged.rows[0] && merged.rows[1], `the page's own tick and the TV's result are both there (${JSON.stringify(merged.rows)})`);
+    ok(merged.rev === 5 && !merged.toast.includes('התעדכנו'), `read again quietly, at the app's revision (${merged.rev}, "${merged.toast}")`);
+    ok(/1[0-9]/.test(merged.pts), `the evening's points count both (${merged.pts})`);
+    await p3.click('.row[data-id="connections"] [data-act="mark"]'); await p3.waitForTimeout(200);
+    ok((await p3.evaluate(() => window.__saves)).join() === '3,5', 'and the next save is from the revision it read');
+    ok(errs3.length === 0, 'no errors (' + (errs3.join(' | ') || 'none') + ')');
+    await ctx3.close();
+  }
+
   await browser.close(); server.close();
   console.log(bad ? `\n${bad} FAILED` : '\nall passed'); process.exit(bad ? 1 : 0);
 });

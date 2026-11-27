@@ -70,9 +70,6 @@ import app.couch.alhasapa.ui.PieceIcon
 import app.couch.alhasapa.ui.theme.Palette
 import kotlin.math.roundToInt
 
-/** The drawing pad of a note, for the tests. */
-const val DOODLE_TAG = "doodle"
-
 /**
  * Who holds this phone, and how they look everywhere (1.9.9): one of us, their name, their shape and their colour. Saved here and sent
  * to the TV, which hands it on to the other phones. From 1.10 also the others: someone who comes often ("+ משתמש", kept until removed)
@@ -212,15 +209,17 @@ internal fun NoteDialog(
     color: androidx.compose.ui.graphics.Color,
     games: List<NoteGame>,
     initialGame: String?,
-    onSend: (to: String, game: String?, text: String, doodle: List<IntArray>) -> Unit,
+    /** [ink]: how each stroke of the drawing is drawn (1.12, see [app.couch.alhasapa.data.Ink]). */
+    onSend: (to: String, game: String?, text: String, doodle: List<IntArray>, ink: List<Int>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var to by remember { mutableStateOf(initialTo?.takeIf { w -> recipients.any { it.who == w } } ?: recipients.firstOrNull()?.who.orEmpty()) }
     val toName = recipients.firstOrNull { it.who == to }?.name.orEmpty()
     var game by remember { mutableStateOf(initialGame) }
     var text by remember { mutableStateOf("") }
-    val strokes = remember { mutableStateListOf<List<Offset>>() }
-    var size by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    val drawing = remember { DoodleState() }
+    var editing by remember { mutableStateOf(false) }
+    if (editing) DoodleEditor(drawing, color) { editing = false }
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(
             Modifier.padding(12.dp).widthIn(max = 880.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Cream)
@@ -249,57 +248,44 @@ internal fun NoteDialog(
                     )
                 }
                 Column(Modifier.widthIn(min = 280.dp).weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    // The drawing (1.12): a small paper to draw on at once, and the whole screen for more than a heart ("⤢").
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(stringResource(R.string.note_doodle), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, modifier = Modifier.weight(1f))
-                        if (strokes.isNotEmpty()) Text(
-                            stringResource(R.string.note_clear), fontSize = 15.sp, color = Palette.Red, fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { strokes.clear() }.padding(horizontal = 8.dp, vertical = 4.dp),
-                        )
-                    }
-                    val description = stringResource(R.string.note_doodle)
-                    Canvas(
-                        Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(14.dp)).background(androidx.compose.ui.graphics.Color(0xFFFFF8E1))
-                            .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(14.dp)).testTag(DOODLE_TAG)
-                            .semantics { contentDescription = description }
-                            .pointerInput(Unit) {
-                                awaitEachGesture {
-                                    val down = awaitFirstDown()
-                                    down.consume()
-                                    if (strokes.size >= Notes.MAX_STROKES) return@awaitEachGesture
-                                    val points = mutableStateListOf(down.position)
-                                    strokes += points
-                                    while (true) {
-                                        val ev = awaitPointerEvent()
-                                        val ch = ev.changes.firstOrNull { it.id == down.id } ?: break
-                                        if (!ch.pressed) break
-                                        ch.consume()
-                                        // A point every few pixels: enough for a drawing, few enough to send.
-                                        if ((ch.position - points.last()).getDistance() >= 4f && strokes.sumOf { it.size } < Notes.MAX_POINTS) points += ch.position
-                                    }
-                                }
-                            },
-                    ) {
-                        size = this.size
-                        val w = 3.5.dp.toPx()
-                        for (s in strokes) {
-                            if (s.size == 1) { drawCircle(color, radius = w / 2, center = s[0]); continue }
-                            val p = Path().apply { s.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) } }
-                            drawPath(p, color, style = Stroke(w, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        // (Not while the whole-screen paper is up: it has its own.)
+                        if (drawing.strokes.isNotEmpty() && !editing) {
+                            PadLink(stringResource(R.string.doodle_undo), Palette.Ink) { drawing.undo() }
+                            PadLink(stringResource(R.string.note_clear), Palette.Red) { drawing.clear() }
                         }
+                    }
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DoodlePad(drawing, color, Modifier.weight(1f).widthIn(max = 300.dp))
+                        Text(
+                            stringResource(R.string.doodle_expand), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = Palette.Cream,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                            modifier = Modifier.widthIn(max = 110.dp).clip(RoundedCornerShape(14.dp)).background(Palette.Ink)
+                                .clickable { editing = true }.semantics { role = Role.Button }.padding(horizontal = 12.dp, vertical = 12.dp),
+                        )
                     }
                 }
             }
           }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Action(stringResource(R.string.note_send), primary = true, enabled = to.isNotEmpty() && (text.isNotBlank() || strokes.isNotEmpty()), modifier = Modifier.weight(2f)) {
-                    val w = size.width.coerceAtLeast(1f); val h = size.height.coerceAtLeast(1f)
-                    val doodle = strokes.map { s -> IntArray(s.size * 2) { i -> val o = s[i / 2]; ((if (i % 2 == 0) o.x / w else o.y / h) * 1000f).roundToInt().coerceIn(0, 1000) } }
-                    onSend(to, game, text.trim(), doodle)
+                Action(stringResource(R.string.note_send), primary = true, enabled = to.isNotEmpty() && (text.isNotBlank() || drawing.strokes.isNotEmpty()), modifier = Modifier.weight(2f)) {
+                    onSend(to, game, text.trim(), drawing.doodle(), drawing.inks())
                 }
                 Action(stringResource(R.string.result_cancel), modifier = Modifier.weight(1f), onClick = onDismiss)
             }
         }
     }
+}
+
+/** A small word to press beside the drawing's title ("undo", "clear"). */
+@Composable
+private fun PadLink(label: String, color: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
+    Text(
+        label, fontSize = 15.sp, color = color, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable(onClick = onClick).semantics { role = Role.Button }.padding(horizontal = 8.dp, vertical = 6.dp),
+    )
 }
 
 @Composable

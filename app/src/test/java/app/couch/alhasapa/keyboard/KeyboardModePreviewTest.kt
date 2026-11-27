@@ -133,6 +133,13 @@ class KeyboardModePreviewTest {
         saveDialog("phone-note.png")
     }
 
+    /** 1.12: the drawing at the size of the whole screen, sideways as in keyboard mode: the pens beside the paper. */
+    @Test fun doodleEditor() {
+        val drawing = DoodleSamples.state().apply { color = app.couch.alhasapa.data.Ink.COLORS.indexOf("blue"); width = 2 }
+        rule.setContent { AlHasapaTheme { DoodleEditor(drawing, pieces.styleFor(null, "b").accent) {} } }
+        saveDialog("phone-doodle-editor.png")
+    }
+
     @Test fun pairing() { show(KeyClient.State.NeedCode("MiTV", left = 2)); save("phone-keyboard-code.png") }
     @Test fun notFound() { show(KeyClient.State.NotFound(KeyClient.NO_TV)); save("phone-keyboard-notfound.png") }
     @Test fun loginsDialog() {

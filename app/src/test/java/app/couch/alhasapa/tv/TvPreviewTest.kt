@@ -263,6 +263,23 @@ class TvPreviewTest {
         org.junit.Assert.assertEquals("what was misread is not kept with it", "", d.result!!.raw)
     }
 
+    /** 1.12: a note with a drawing made with pens, as the TV shows it: the paper beside the words, each stroke in its colour and width. */
+    @Test
+    fun drawANoteWithAPaintedDrawingOnTheTv() {
+        val c = TvController(true, 2f)
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val sample = app.couch.alhasapa.keyboard.DoodleSamples.state()
+        val note = app.couch.alhasapa.data.Note("n9", "b", null, "בוקר טוב, אהוב. השארתי לך שמש.", sample.doodle(), 1_000, ink = sample.inks())
+        val view = NoteView(note, "רוני", "סטיב", pieces.styleFor(null, "b"), null)
+        rule.setContent { AlHasapaTheme { TvLayer(c) { Box(Modifier.fillMaxSize().background(Palette.Cream)); NoteCard(view) {} } } }
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "tv-note-drawing.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        // Drawn alone, without words: the paper under the names.
+        org.junit.Assert.assertEquals(sample.strokes.size, note.ink!!.size)
+    }
+
     /** A note Roni left Steve for after Krillion: a few words and a heart drawn with a finger. */
     @Test
     fun drawANoteOnTheTv() {
@@ -306,11 +323,28 @@ class TvPreviewTest {
             AlHasapaTheme { TvLayer(c) { app.couch.alhasapa.home.TvHome(model, phoneConnected = false, nav = nav, onPlay = {}, onAccounts = {}, onMore = {}, onInfo = {}) } }
         }
         rule.waitForIdle()
-        repeat(model.tonight.size - 4) { rule.runOnIdle { c.navigate(Dir.LEFT) }; rule.waitForIdle() }
-        val dir = File("build/previews").apply { mkdirs() }
-        val img = rule.onRoot().captureToImage().asAndroidBitmap()
-        File(dir, "tv-home-colours.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
-        org.junit.Assert.assertTrue(File(dir, "tv-home-colours.png").length() > 5_000)
+        // The app's own colours follow the pieces (1.12): the focus's threads, the picture of the two of us.
+        val red = Palette.Red; val pink = Palette.Pink
+        try {
+            rule.runOnIdle { Palette.follow(model.pieceA, model.pieceB) }
+            org.junit.Assert.assertEquals(model.pieceA.accent, Palette.Red); org.junit.Assert.assertEquals(model.pieceB.soft, Palette.Pink)
+            repeat(model.tonight.size - 4) { rule.runOnIdle { c.navigate(Dir.LEFT) }; rule.waitForIdle() }
+            // The picture is drawn in the two colours off the main thread: wait for it.
+            val until = System.currentTimeMillis() + 5_000
+            while (System.currentTimeMillis() < until) { rule.waitForIdle(); Thread.sleep(50) }
+            val dir = File("build/previews").apply { mkdirs() }
+            val img = rule.onRoot().captureToImage().asAndroidBitmap()
+            File(dir, "tv-home-colours.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            org.junit.Assert.assertTrue(File(dir, "tv-home-colours.png").length() > 5_000)
+            // Nothing of the drawing's own red is left in the picture's corner of the screen (Steve's shirt is teal now).
+            val px = IntArray(img.width * img.height).also { img.getPixels(it, 0, img.width, 0, 0, img.width, img.height) }
+            var reds = 0
+            for (y in 0 until img.height * 2 / 5) for (x in 0 until img.width / 4) {
+                val p = px[y * img.width + x]; val r = (p shr 16) and 255; val g = (p shr 8) and 255; val b = p and 255
+                if (r > 190 && g in 50..110 && b in 30..90) reds++
+            }
+            org.junit.Assert.assertTrue("$reds red pixels left in the picture", reds < 200)
+        } finally { rule.runOnIdle { Palette.follow(pieces.styleFor(null, "a"), pieces.styleFor(null, "b")) } ; org.junit.Assert.assertEquals(red, Palette.Red); org.junit.Assert.assertEquals(pink, Palette.Pink) }
     }
 
     private fun save(name: String) {

@@ -19,6 +19,15 @@ interface CoupleBook {
 
     /** A note from a phone, kept once. True when it is new. */
     fun note(n: Note): Boolean
+
+    /**
+     * What this device shares with the others (1.12, see [app.couch.alhasapa.data.Shared]), in messages small enough for the link: the
+     * evenings of the last [days] days (0: every evening it keeps), then the library, our links, our games, the jokes and the looks.
+     */
+    fun shares(days: Int): List<org.json.JSONObject> = emptyList()
+
+    /** Another device's share: kept where newer. True when anything here changed. */
+    fun takeShare(s: org.json.JSONObject): Boolean = false
 }
 
 /** The app's own state ([repo] null: none yet, so nothing is known or kept). */
@@ -32,16 +41,21 @@ class RepoCoupleBook(private val repo: () -> StateRepository?) : CoupleBook {
         val r = repo() ?: return false
         val now = r.snapshot()
         if (people.none { it.at > Couple.stamp(now, it.who) }) return false
-        var changed = false
-        r.update { s -> for (p in people) if (Couple.offer(s, p)) changed = true }
-        return changed
+        // What another device knows: merged, not a change made here (it is not stamped anew, nor told on).
+        return r.mergeIf { s -> people.map { Couple.offer(s, it) }.any { it } }
     }
 
     override fun note(n: Note): Boolean {
         val r = repo() ?: return false
         if (Notes.all(r.snapshot()).any { it.id == n.id }) return false
-        var added = false
-        r.update { s -> added = Notes.add(s, n) }
-        return added
+        return r.mergeIf { s -> Notes.add(s, n) }
     }
+
+    override fun shares(days: Int): List<org.json.JSONObject> {
+        val s = repo()?.snapshot() ?: return emptyList()
+        val which = if (days <= 0) app.couch.alhasapa.data.Shared.days(s) else ShareBus.lastDays(days)
+        return app.couch.alhasapa.data.Shared.chunks(s, which)
+    }
+
+    override fun takeShare(s: org.json.JSONObject): Boolean = repo()?.mergeShared(s) ?: false
 }

@@ -55,23 +55,27 @@ interface PageNav {
  */
 object TvNavScript {
     /** Bumped whenever the script changes, so a page that still has an older one gets the new one. */
-    const val VERSION = 2
+    const val VERSION = 3
 
     val JS: String = """
 (function(){
-  if(window.__tvnav&&window.__tvnav.v===2&&window.__tvnav.doc===document) return;
+  if(window.__tvnav&&window.__tvnav.v===3&&window.__tvnav.doc===document) return;
   var ATTR='data-couch-focus';
   var SEL='a[href],button,input:not([type=hidden]),select,textarea,summary,[tabindex]:not([tabindex="-1"]),[role=button],[role=link],[role=tab],[role=menuitem],[role=option],[role=checkbox],[role=radio],[role=switch],[contenteditable=""],[contenteditable=true],[onclick]';
   var NOTEXT={checkbox:1,radio:1,button:1,submit:1,reset:1,range:1,color:1,file:1,image:1,hidden:1};
   var cur=null,last=null,list=null,listAt=0,light=false,observer=null,observed=null,anims=[],collectMs=0,rtlModel=null;
   function now(){return (window.performance&&performance.now)?performance.now():Date.now()}
   function j(o){return JSON.stringify(o)}
+  /* The focus wears the colour of the app's interface (the first of us's, as chosen on the phones: version 3), which the app says with
+     each key ("r,g,b"); the app's red until it does. */
   function css(){
-    if(document.getElementById('couch-tv-style')) return;
-    var s=document.createElement('style'); s.id='couch-tv-style';
-    s.textContent='['+ATTR+']{outline:none!important;box-shadow:inset 0 0 0 3px rgba(217,78,56,.95),inset 0 0 0 999px rgba(217,78,56,.24)!important}'+
-      'img['+ATTR+'],video['+ATTR+'],canvas['+ATTR+'],iframe['+ATTR+'],svg['+ATTR+']{outline:4px solid rgba(217,78,56,.95)!important;outline-offset:-4px!important}';
-    (document.head||document.documentElement).appendChild(s);
+    var a=String(window.__couchAccent||''),c=(a.length<12&&a.split(',').length===3&&a.replace(/[0-9,]/g,'')==='')?a:'217,78,56';
+    var s=document.getElementById('couch-tv-style');
+    if(s&&s.getAttribute('data-c')===c) return;
+    if(!s){ s=document.createElement('style'); s.id='couch-tv-style'; (document.head||document.documentElement).appendChild(s); }
+    s.setAttribute('data-c',c);
+    s.textContent='['+ATTR+']{outline:none!important;box-shadow:inset 0 0 0 3px rgba('+c+',.95),inset 0 0 0 999px rgba('+c+',.24)!important}'+
+      'img['+ATTR+'],video['+ATTR+'],canvas['+ATTR+'],iframe['+ATTR+'],svg['+ATTR+']{outline:4px solid rgba('+c+',.95)!important;outline-offset:-4px!important}';
   }
   /* The list is made again when the page changes. A page that replaced its whole document gets watched afresh. */
   function watch(){
@@ -134,18 +138,24 @@ object TvNavScript {
     var x=Math.min(Math.max(r.cx,1),innerWidth-1),y=Math.min(Math.max(r.cy,1),innerHeight-1),top=document.elementFromPoint(x,y);
     return !!top&&(top===e||e.contains(top)||top.contains(e));
   }
-  /* Off screen it must be something that scrolls into view: inside a scrolling box that is itself on screen, or in the page itself; not cut
-     off by a box that does not scroll, and not in something pinned in place. */
+  /* Shown, it must be what is on top there. Not shown, it must be something that scrolls into view: inside a scrolling box that is itself
+     on screen, or in the page itself; not cut off by a box that does not scroll. In a scrolling box "shown" means shown in the box: a
+     list scrolled down hides its top under a fixed header, which is still on the screen (version 3: the hub's top could never be gone
+     back to with the remote, as all it found there was the header covering it). */
   function reachable(e,r){
-    if(inView(r)) return onTop(e,r);
     for(var n=e.parentElement;n&&n!==document.body&&n!==document.documentElement;n=n.parentElement){
       var s=getComputedStyle(n);
       var sy=(s.overflowY==='auto'||s.overflowY==='scroll')&&n.scrollHeight>n.clientHeight+1;
       var sx=(s.overflowX==='auto'||s.overflowX==='scroll')&&n.scrollWidth>n.clientWidth+1;
-      if(sy||sx) return inView(R(n));
-      if(s.position==='fixed') return false;
+      if(sy||sx){
+        var v=view(n);
+        if(r.cx>=v.l&&r.cx<=v.r&&r.cy>=v.t&&r.cy<=v.b) return onTop(e,r);
+        return inView(R(n));
+      }
+      if(s.position==='fixed') return inView(r)&&onTop(e,r);
       if(s.overflowX!=='visible'||s.overflowY!=='visible'){ var c=R(n); if(r.b<=c.t||r.t>=c.b||r.r<=c.l||r.l>=c.r) return false; }
     }
+    if(inView(r)) return onTop(e,r);
     return r.r>-2&&r.l<innerWidth+2;                               /* the page scrolls up and down; sideways it rarely does */
   }
   function usable(e,r){return shown(e)&&reachable(e,r)}
@@ -259,18 +269,40 @@ object TvNavScript {
   }
   /* How far away the next element may be and still be gone to directly: about a screen of the box that scrolls. */
   function reach(from,d){ var ax=(d==='up'||d==='down')?'y':'x',v=view(scrollerOf(from,ax)); return (ax==='y'?v.h:v.w)*1.1; }
+  /* The far side of [b] from [a]: how far the focus would go to reach all of it. */
+  function farGap(a,b,d){return d==='down'?Math.max(0,b.b-a.b):Math.max(0,a.t-b.t)}
   function nearest(ts,from,d){
-    var fr=F(from),lim=reach(from,d),c=[],i;
+    var fr=F(from),lim=reach(from,d),c=[],i,side=(d==='left'||d==='right');
     for(i=0;i<ts.length;i++){
       var e=ts[i]; if(e===from) continue;
       var r=F(e); if(r.w<8||r.h<8||!lies(fr,r,d)||gap(fr,r,d)>lim) continue;
       /* sideways means along the same line: nothing level with the focus that way, and the focus does not jump up or down to find something */
-      if((d==='left'||d==='right')&&overlap(fr,r,d)<=0&&Math.abs(r.cy-fr.cy)>Math.max(fr.h,r.h)*0.75) continue;
-      var tier=(overlap(fr,r,d)>0?0:2)+(clear(fr,r,d)?0:1);
-      c.push({e:e,k:tier*1e7+score(fr,r,d)});
+      if(side&&overlap(fr,r,d)<=0&&Math.abs(r.cy-fr.cy)>Math.max(fr.h,r.h)*0.75) continue;
+      if(side){ var tier=(overlap(fr,r,d)>0?0:2)+(clear(fr,r,d)?0:1); c.push({e:e,k:tier*1e7+score(fr,r,d)}); continue; }
+      /* Up and down go to the nearest row first, as a TV moves between its tiles (version 3): what is straight above or below wins only
+         when it is nearer than the far side of what is nearer but to the side (the hub's tabs were always passed over for a button far
+         up in the same column). */
+      var major=gap(fr,r,d),minor=Math.abs(r.cx-fr.cx);
+      c.push({e:e,k:(clear(fr,r,d)?0:1)*1e12+13*major*major+minor*minor,cl:clear(fr,r,d),beam:overlap(fr,r,d)>0,major:major,far:farGap(fr,r,d)});
     }
     c.sort(function(x,y){return x.k-y.k});
-    for(i=0;i<c.length&&i<24;i++){ if(usable(c[i].e,R(c[i].e))) return c[i].e; }
+    /* Inside a list that scrolls, the focus goes on through the list (scrolling it) before it leaves it for what is pinned around it
+       (version 3: up from the hub's list went to the tabs and left the top of the list, the picture with it, scrolled away). */
+    var box=scrollerOf(from,side?'x':'y')||(side?null:scrollerOf(from,'x'));
+    var pass=box?[function(x){return box.contains(x.e)},null]:[null];
+    for(var p=0;p<pass.length;p++){
+      var best=null,only=pass[p];
+      for(i=0;i<c.length&&i<24;i++){
+        if(only&&!only(c[i])) continue;
+        if(!usable(c[i].e,R(c[i].e))) continue;
+        if(side) return c[i].e;
+        if(!best){ best=c[i]; continue; }
+        var x=c[i];
+        if(x.cl!==best.cl) continue;                               /* the list is in order of these already */
+        if(x.beam&&!best.beam&&x.major<best.far) best=x;           /* straight that way, and nearer than the other's far side */
+      }
+      if(best) return best.e;
+    }
     return null;
   }
   /* Where to begin when nothing is focused: the first thing on screen in reading order for the way the arrow points. */
@@ -303,7 +335,7 @@ object TvNavScript {
   function pageScrolls(){ var rg=range(null,'y'); return rg[1]>rg[0]; }
 
   window.__tvnav={
-    v:2,doc:document,
+    v:3,doc:document,
     enter:function(d){
       css(); watch();
       var ts=collect();
@@ -355,7 +387,11 @@ object TvNavScript {
 }
 
 /** [PageNav] over a WebView. */
-class WebPageNav(private val web: () -> WebView?) : PageNav {
+class WebPageNav(
+    private val web: () -> WebView?,
+    /** The colour the focus wears on the page: the app's interface colour as it is now (1.12). */
+    private val accent: () -> androidx.compose.ui.graphics.Color = { app.couch.alhasapa.ui.theme.Palette.Red },
+) : PageNav {
     private val handler = Handler(Looper.getMainLooper())
 
     /**
@@ -364,7 +400,9 @@ class WebPageNav(private val web: () -> WebView?) : PageNav {
      */
     private fun call(expr: String, cb: (String?) -> Unit) {
         val w = web() ?: return cb(null)
-        val quick = "(function(){var n=window.__tvnav;if(!n||n.v!==${TvNavScript.VERSION}||n.doc!==document)return 'missing';return n.$expr})()"
+        val c = accent()
+        val rgb = "${(c.red * 255).toInt()},${(c.green * 255).toInt()},${(c.blue * 255).toInt()}"
+        val quick = "(function(){window.__couchAccent='$rgb';var n=window.__tvnav;if(!n||n.v!==${TvNavScript.VERSION}||n.doc!==document)return 'missing';return n.$expr})()"
         w.evaluateJavascript(quick) { raw ->
             if (raw == "\"missing\"") {
                 val again = web() ?: return@evaluateJavascript cb(null)

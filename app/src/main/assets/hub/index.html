@@ -559,8 +559,9 @@ function save(){
   for(const k of Object.keys(state.log)) if(k<cutoff) delete state.log[k];
   const json=JSON.stringify(state);
   if(NATIVE){
-    let n=-1; try{n=Number(NATIVE.saveState(json,String(stateRev)))}catch(e){(window.__errors||[]).push("saveState: "+e)}
-    if(n>=0) stateRev=n; else {reloadState();toast("הנתונים התעדכנו מבחוץ. נסו שוב.")}
+    let n=-1,merged=false; try{const r=String(NATIVE.saveState(json,String(stateRev)));merged=r[0]==="~";n=Number(merged?r.slice(1):r)}catch(e){(window.__errors||[]).push("saveState: "+e)}
+    /* "~": kept, and merged with what the TV or the other phone changed meanwhile (1.12): read it all again, quietly. */
+    if(n>=0&&merged){state=loadState();applyTheme()} else if(n>=0) stateRev=n; else {reloadState();toast("הנתונים התעדכנו מבחוץ. נסו שוב.")}
   } else { try{localStorage.setItem(LS,json)}catch(e){} }
 }
 
@@ -605,18 +606,43 @@ function applyTheme(){const p=piecesOf(),root=document.documentElement,r=root.st
   /* the pictures: Steve's family takes his piece colour, Roni's family takes her soft tone (it is a light surface);
      the original art is red and pink, so those need no layer at all and render exactly as drawn */
   r.setProperty("--art-steve",ca.base);r.setProperty("--art-lift",artLift(ca.base).toFixed(3));r.setProperty("--art-roni",cb.soft);
-  root.classList.toggle("tint-r",ca.id!=="red");root.classList.toggle("tint-p",cb.id!=="pink")}
+  root.classList.toggle("tint-r",ca.id!=="red");root.classList.toggle("tint-p",cb.id!=="pink");tintArt()}
+/* On a TV (1.12) the pictures follow the pieces too, without the blend layers a TV box's graphics chip finds heavy: each picture is
+   drawn once in the two colours onto a canvas, the same way (the family's mask, the new hue and saturation, the pixel's own brightness),
+   and shown as a plain image. */
+const TINTED={}; let tintKey="";
+function tintArt(){
+  if(!document.documentElement.classList.contains("tv")) return;
+  const p=piecesOf(),ca=colorOf(p.a.color),cb=colorOf(p.b.color),key=ca.id+"|"+cb.id;
+  if(key===tintKey) return; tintKey=key;
+  for(const k in TINTED) delete TINTED[k];
+  if(ca.id==="red"&&cb.id==="pink"){render();return}
+  const load=src=>new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=src});
+  Promise.all(["couple","cats","board"].map(name=>Promise.all([load("img/"+name+".webp"),load("img/"+name+"-r.webp"),load("img/"+name+"-p.webp")]).then(([base,mr,mp])=>{
+    const w=base.naturalWidth,h=base.naturalHeight,c=document.createElement("canvas"); c.width=w; c.height=h; const g=c.getContext("2d");
+    g.drawImage(base,0,0);
+    const layer=(m,color,lift)=>{
+      const L=document.createElement("canvas"); L.width=w; L.height=h; const x=L.getContext("2d");
+      if(lift>1.001){x.filter="brightness("+lift+")";x.drawImage(base,0,0);x.filter="none";x.globalCompositeOperation="destination-in";x.drawImage(m,0,0,w,h);g.drawImage(L,0,0);x.globalCompositeOperation="source-over";x.clearRect(0,0,w,h)}
+      x.fillStyle=color; x.fillRect(0,0,w,h); x.globalCompositeOperation="destination-in"; x.drawImage(m,0,0,w,h);
+      g.globalCompositeOperation="color"; g.drawImage(L,0,0); g.globalCompositeOperation="source-over";
+    };
+    if(ca.id!=="red") layer(mr,ca.base,artLift(ca.base));
+    if(cb.id!=="pink") layer(mp,cb.soft,1);
+    TINTED[name]=c.toDataURL("image/webp",0.9);
+  }))).then(()=>{if(tintKey===key)render()}).catch(()=>{});
+}
 const pcS=(c="pc")=>piece("a",c);
 const pcR=(c="pc")=>piece("b",c);
 const PIECE={get s(){return pcS()},get r(){return pcR()}};
 const bothHTML=()=>`<span class="both" aria-hidden="true">${pcS()}${pcR()}</span>`;
 const CHECK='<svg viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 7.5 5.6 10.4 11.5 3.8" fill="none" stroke="#F2EBDD" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const art=(name,cls,w,h,alt)=>{const m=n=>`style="-webkit-mask-image:url(img/${name}-${n}.webp);mask-image:url(img/${name}-${n}.webp)"`;
-  return `<span class="art ${cls}"><img src="img/${name}.webp" width="${w}" height="${h}" alt="${alt}"><i class="lift" style="background-image:url(img/${name}.webp);-webkit-mask-image:url(img/${name}-r.webp);mask-image:url(img/${name}-r.webp)"></i><i class="tint tr" ${m("r")}></i><i class="tint tp" ${m("p")}></i></span>`};
+  return `<span class="art ${cls}"><img src="${TINTED[name]||"img/"+name+".webp"}" width="${w}" height="${h}" alt="${alt}"><i class="lift" style="background-image:url(img/${name}.webp);-webkit-mask-image:url(img/${name}-r.webp);mask-image:url(img/${name}-r.webp)"></i><i class="tint tr" ${m("r")}></i><i class="tint tp" ${m("p")}></i></span>`};
 const IMG={
-  couple:art("couple","ill-couple",1100,715,"סטיב ורוני על הספה, משחקים בטאבלט, והחתול השחור ישן על המסעד"),
-  cats:art("cats","",1100,547,"שלושה חתולים ישנים על הספה, והשלט נעלם בין הכריות"),
-  board:art("board","ill-board",900,804,"סטיב ורוני על כריות, מזיזים כלים על לוח")
+  get couple(){return art("couple","ill-couple",1100,715,"סטיב ורוני על הספה, משחקים בטאבלט, והחתול השחור ישן על המסעד")},
+  get cats(){return art("cats","",1100,547,"שלושה חתולים ישנים על הספה, והשלט נעלם בין הכריות")},
+  get board(){return art("board","ill-board",900,804,"סטיב ורוני על כריות, מזיזים כלים על לוח")}
 };
 
 /* ================= scoring =================
@@ -752,7 +778,9 @@ function renderMast(){
   document.getElementById("who").innerHTML=`${PIECE.s}<span class="nmz">${esc(state.names.a)}</span><span class="gap"></span>${PIECE.r}<span class="nmz">${esc(state.names.b)}</span>`;
   // On a phone, in the app: who holds it (a user's mark by their piece; "מי אני?" until it is said), and a note for one of us.
   const meBtn=document.getElementById("me"), noteBtn=document.getElementById("noteBtn");
-  const canMe=!!(NATIVE&&NATIVE.openMe&&NATIVE.me), canNote=!!(NATIVE&&NATIVE.openNote);
+  // A phone's: the TV is everyone's, and its notes are read, not written (1.12).
+  const onTV=document.documentElement.classList.contains("tv");
+  const canMe=!onTV&&!!(NATIVE&&NATIVE.openMe&&NATIVE.me), canNote=!onTV&&!!(NATIVE&&NATIVE.openNote);
   meBtn.hidden=!canMe; noteBtn.hidden=!canNote;
   document.querySelector(".mast").classList.toggle("people",canMe||canNote);
   if(canMe){

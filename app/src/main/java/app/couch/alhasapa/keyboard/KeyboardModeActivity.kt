@@ -87,9 +87,9 @@ class KeyboardModeActivity : ComponentActivity() {
                 Flight.log("me: this phone is ${if (p.who == "a") "the first" else "the second"} of us")
             }
 
-            override fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>) {
+            override fun sendNote(to: String, game: String?, text: String, doodle: List<IntArray>, ink: List<Int>) {
                 val who = store.me ?: return
-                client.sendNote(app.couch.alhasapa.data.Note(app.couch.alhasapa.remote.RemoteStore.randomHex(8), who, game, text, doodle, System.currentTimeMillis(), to = to))
+                client.sendNote(app.couch.alhasapa.data.Note(app.couch.alhasapa.remote.RemoteStore.randomHex(8), who, game, text, doodle, System.currentTimeMillis(), to = to, ink = ink))
                 Flight.log("notes: one written${if (game != null) " for a game" else " for the home"}")
             }
 

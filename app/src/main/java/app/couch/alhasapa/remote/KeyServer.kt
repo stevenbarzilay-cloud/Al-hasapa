@@ -110,6 +110,7 @@ class KeyServer(
         if (s == null) { Flight.log("phone keyboard: could not listen on the home network"); return }
         server = s
         Thread({ accept(s) }, "keys-accept").apply { isDaemon = true }.start()
+        ShareBus.add(pushShares)
         if (advertise) announce(s.localPort)
         Flight.log("phone keyboard: waiting on ${addresses().joinToString()} port ${s.localPort}")
         publish()
@@ -118,12 +119,19 @@ class KeyServer(
     fun stop() {
         val s = server ?: return
         server = null
+        ShareBus.remove(pushShares)
         peers.forEach { it.close(bye = "the TV app went to the background") }
         runCatching { s.close() }
         withdraw()
         synchronized(lock) { code = null; codeFor = null }
         publish()
         Flight.log("phone keyboard: stopped")
+    }
+
+    /** A change made on the TV (1.12): its recent share goes to every phone connected. */
+    private val pushShares: () -> Unit = {
+        val shares = ShareBus.recent(book)
+        peers.forEach { p -> if (p.ready && !p.plain) shares.forEach { p.send(Msg.Share(it)) } }
     }
 
     private fun accept(s: ServerSocket) {
@@ -200,7 +208,8 @@ class KeyServer(
         private val nonce = RemoteStore.randomHex(16)
         /** The pairing token of this phone, once known; [plain] when it was sent as is (a phone app from before 1.9). */
         private var token: String? = null
-        private var plain = false
+        @Volatile var plain = false
+            private set
         /** The key of the sign-in handoff under way (one use). */
         private var handoffKey: ByteArray? = null
         private var tries = 3
@@ -277,6 +286,24 @@ class KeyServer(
                 }
                 true
             }
+            is Msg.Share -> {
+                // What a phone knows (1.12): kept where newer, and passed on to the other phones connected.
+                if (ready && !plain) {
+                    val changed = runCatching { book.takeShare(m.share) }.getOrDefault(false)
+                    if (changed) peers.forEach { if (it !== this && it.ready && !it.plain) it.send(m) }
+                }
+                true
+            }
+            Msg.ShareAll -> {
+                // The first time this phone and the TV meet since 1.12: every evening the TV keeps, then "that was all".
+                if (ready && !plain) {
+                    val all = ShareBus.opening(book, all = true)
+                    all.forEach { send(Msg.Share(it)) }
+                    send(Msg.ShareAll)
+                    Flight.log("sync: every evening kept was sent to ${shownName()} (${all.size} messages)")
+                }
+                true
+            }
             is Msg.NoteMsg -> {
                 if (ready) main.post {
                     // From whoever holds this phone, whatever the note says.
@@ -319,6 +346,8 @@ class KeyServer(
             if (!plain && key != null) runCatching { relay() }.getOrNull()?.let { c ->
                 send(Msg.Relay(RelayCrypto.seal(key, KeyLink.RELAY_AAD, c.toJson().toByteArray())))
             }
+            // Everything the TV keeps alike with the phones (1.12): two weeks of evenings, and the rest.
+            if (!plain) for (s in ShareBus.opening(book)) send(Msg.Share(s))
             Flight.log(
                 "phone keyboard: $name connected" +
                     if (app != appCode) " (its app is ${if (app < appCode) "older" else "newer"}: ${ver.ifEmpty { "before 1.9.4" }}; this TV has $appVer)" else "",

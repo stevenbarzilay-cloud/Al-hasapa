@@ -158,6 +158,25 @@ class HubBridgeTest {
         else { assertEquals("yes", b.keyboardMode()); assertEquals(1, opened) }
     }
 
+    /** 1.12: a save from a page that is behind only by what the TV brought meanwhile is kept, merged, and marked for the page to read again. */
+    @Test
+    fun aSaveBehindOnlyByWhatAnotherDeviceBroughtIsKeptAndMarked() {
+        val page = CouchState.empty()
+        assertEquals("1", bridge.saveState(page.toString(), "0"))
+        // The TV's evening arrives while the page is open.
+        assertTrue(repo.mergeShared(JSONObject().put("v", 1).put("log", JSONObject().put("2026-11-21", JSONObject().put("bandle", JSONObject().put("w", "").put("t", 5L))))))
+        // The page, still at revision 1, saves a joke: kept, with the TV's evening, and marked "~".
+        val r = bridge.saveState(page.put("jokes", org.json.JSONArray().put("מי שמפסיד מכין תה")).toString(), "1")
+        assertTrue(r, r.startsWith("~") && r.drop(1).toLong() > 2)
+        val s = repo.snapshot()
+        assertEquals("מי שמפסיד מכין תה", s.getJSONArray("jokes").getString(0))
+        assertNotNull(CouchState.entry(s, "2026-11-21", "bandle"))
+        // And then, up to date again, a plain revision.
+        val next = bridge.saveState(repo.json(), r.drop(1))
+        assertFalse(next.startsWith("~")); assertTrue(next.toLong() > 0)
+        assertEquals("a copy that is truly stale is still refused", "-1", bridge.saveState(page.toString(), "999"))
+    }
+
     /** 1.10: who holds the phone, as the home shows it; a guest holds it for their evening only. */
     @Test
     fun aGuestHoldsThePhoneForTheirEveningOnly() {

@@ -27,10 +27,26 @@ object Palette {
     val Tint = Color(0xFFEAE1CF)
     val Ink = Color(0xFF30232D)
     val Ink2 = Color(0xFF67565F)
-    val Red = Color(0xFFD94E38)
-    val Pink = Color(0xFFE8A5B5)
     val Line = Color(0x2130232D) // rgba(48,35,45,.13)
     val Line2 = Color(0x4D30232D) // rgba(48,35,45,.30)
+
+    private val red = androidx.compose.runtime.mutableStateOf(Color(0xFFD94E38))
+    private val pink = androidx.compose.runtime.mutableStateOf(Color(0xFFE8A5B5))
+
+    /**
+     * The first person's colour, their piece's accent (the hub's --red): the focus, the evening count, the stamps. It follows the pieces
+     * (1.12), on every screen at once (a screen reading it draws again when it changes); the first person's default is this red.
+     */
+    val Red: Color get() = red.value
+
+    /** The second person's soft tone (the hub's --pink): warm surfaces. Follows the pieces too; the second's default is this pink. */
+    val Pink: Color get() = pink.value
+
+    /** The colours of the first ([a]) and the second ([b]) of us, as the hub takes them (see its applyTheme). Main thread. */
+    fun follow(a: app.couch.alhasapa.data.PieceStyle, b: app.couch.alhasapa.data.PieceStyle) {
+        if (red.value != a.accent) red.value = a.accent
+        if (pink.value != b.soft) pink.value = b.soft
+    }
 }
 
 /** The one UI face. Bundled, never fetched. */
@@ -59,12 +75,13 @@ private fun Typography.withFamily(family: FontFamily) = copy(
     labelSmall = labelSmall.copy(fontFamily = family),
 )
 
-private val AppColors = lightColorScheme(
+/** The scheme for the two people's colours as they are now ([red], [pink]: see [Palette.follow]). */
+private fun appColors(red: Color, pink: Color) = lightColorScheme(
     primary = Palette.Ink,
     onPrimary = Palette.Cream,
-    secondary = Palette.Red,
+    secondary = red,
     onSecondary = Palette.Cream,
-    tertiary = Palette.Pink,
+    tertiary = pink,
     onTertiary = Palette.Ink,
     background = Palette.Cream,
     onBackground = Palette.Ink,
@@ -74,7 +91,7 @@ private val AppColors = lightColorScheme(
     onSurfaceVariant = Palette.Ink2,
     outline = Palette.Line2,
     outlineVariant = Palette.Line,
-    error = Palette.Red,
+    error = red,
     onError = Palette.Cream,
 )
 
@@ -84,8 +101,11 @@ fun AlHasapaTheme(content: @Composable () -> Unit) {
     // Referenced so a future dark scheme is a conscious decision, not an accident.
     @Suppress("UNUSED_VARIABLE") val systemDark = isSystemInDarkTheme()
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        // Read here, so every screen draws again when one of us picks another colour (1.12).
+        val red = Palette.Red
+        val pink = Palette.Pink
         MaterialTheme(
-            colorScheme = AppColors,
+            colorScheme = androidx.compose.runtime.remember(red, pink) { appColors(red, pink) },
             typography = Typography().withFamily(PlexSansHebrew),
             content = content,
         )
