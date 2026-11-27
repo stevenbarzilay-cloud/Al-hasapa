@@ -261,7 +261,7 @@
     <string name="tv_hint_result_ready">המשחק נגמר? OK על ״שמירת התוצאה״, בצד</string>
     <string name="tv_hint_played_auto">סימנו ששיחקנו ✓</string>
     <string name="tv_hint_phone_touch">נוגעים מהטלפון 👆</string>
-    <string name="me_title">מי מחזיק את הטלפון הזה?</string>
+    <string name="me_title">מי משחק מהטלפון הזה?</string>
     <string name="me_name">השם שלי</string>
     <string name="me_pick_first">בוחרים קודם מי אתם, ואז אפשר לשנות את השם, הצורה והצבע.</string>
     <string name="me_shape">הצורה שלי</string>
@@ -394,7 +394,7 @@
     <string name="couch_found_scan">מחפשים טלוויזיות…</string>
     <string name="couch_found_again">לחפש שוב</string>
     <string name="couch_found_new">טלוויזיה חדשה, עוד בלי ספה</string>
-    <string name="couch_found_is_home">📺 טלוויזיה של ספת הבית</string>
+    <string name="couch_found_is_home">🏠 הטלוויזיה של ספת הבית</string>
     <string name="couch_found_tv">📺 %1$s</string>
     <string name="couch_tv_of">הטלוויזיה %1$s</string>
     <string name="couch_connect_home">לחבר אותה לספת הבית שלי</string>
@@ -479,7 +479,6 @@
     <string name="setup_player_a">מי משחק? שם ראשון</string>
     <string name="setup_player_b">שם שני</string>
     <string name="setup_start">מקימים את הספה</string>
-    <string name="setup_me_title">מי מחזיק בטלפון הזה?</string>
     <string name="join_title">לאיזו ספה מצטרפים?</string>
     <string name="join_hint">פותחים את האפליקציה בטלוויזיה שבבית, ובוחרים אותה כאן. אחר כך מקלידים את הקוד שיופיע בה.</string>
     <string name="tv_welcome_title">ברוכים הבאים לספה</string>

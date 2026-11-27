@@ -189,19 +189,19 @@ class KeyboardModeScreenTest {
     fun whoHoldsThePhoneIsAskedOnceAndTheirLookIsSaved() {
         withCouple = true
         state = KeyClient.State.Connected("MiTV", "עמוד הבית"); show()
-        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertIsDisplayed()
+        rule.onNodeWithText("מי משחק מהטלפון הזה?").assertIsDisplayed()
         rule.onNode(hasContentDescription("רוני")).performClick()
         rule.onNode(hasContentDescription("לב")).performClick()
         rule.onNodeWithText("שמירה").performClick()
         assertEquals(listOf("me:b:רוני:heart:"), sent.filter { it.startsWith("me:") }.map { it.substringBeforeLast(':') + ":" })
-        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertDoesNotExist()
+        rule.onNodeWithText("מי משחק מהטלפון הזה?").assertDoesNotExist()
     }
 
     @Test
     fun aNoteForTheOtherOneGoesWithItsWordsDrawingAndGame() {
         withCouple = true; me = "a"
         state = KeyClient.State.Connected("MiTV", "Krillion"); show()
-        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertDoesNotExist()
+        rule.onNodeWithText("מי משחק מהטלפון הזה?").assertDoesNotExist()
         rule.onNode(hasContentDescription("השארת פתק")).performClick()
         rule.onNodeWithText("פתק לרוני").assertIsDisplayed()
         rule.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("כל הכבוד לנו")

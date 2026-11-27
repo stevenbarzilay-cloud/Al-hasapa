@@ -130,7 +130,8 @@ class CouchesActivity : ComponentActivity() {
                     )
                 }
                 CouchesScreen(view, actions)
-                Dialogs(state, tv, pieces)
+                // (Drawn again when the TV names its players, so the choice of who the holder is there shows them.)
+                Dialogs(state, tv, pieces, shared + tick)
                 // The TV let the phone in: what the connection was made for goes on.
                 LaunchedEffect(state, shared, revision) { onConnection(state) }
             }
@@ -139,7 +140,7 @@ class CouchesActivity : ComponentActivity() {
     }
 
     @androidx.compose.runtime.Composable
-    private fun Dialogs(state: KeyClient.State, tv: KeyClient.Tv?, pieces: PiecesConfig) {
+    private fun Dialogs(state: KeyClient.State, tv: KeyClient.Tv?, pieces: PiecesConfig, @Suppress("UNUSED_PARAMETER") round: Int) {
         val p = pending
         when (val s = step) {
             Step.None -> {}

@@ -64,9 +64,10 @@ fun VisitBar(
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen).padding(horizontal = 14.dp, vertical = 4.dp),
             )
         }
+        // A contest of that couch that can be joined: who is in it, and under it the press that joins (it says the couch itself).
         for (c in contests) {
-            Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.visit_contest, c.gameName, c.players), fontSize = 14.sp, color = Palette.Cream, modifier = Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 8.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(stringResource(R.string.visit_contest, c.gameName, c.players), fontSize = 14.sp, color = Palette.Cream, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 SmallButton(stringResource(R.string.visit_join, c.gameName, Couches.inCouch(visit.name)), dark = false, tag = "visit-join-${c.game}") { onJoin(c.game) }
             }
         }

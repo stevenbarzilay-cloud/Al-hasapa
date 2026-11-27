@@ -16,11 +16,15 @@ const server = http.createServer((req, res) => {
 });
 
 // The app around the page, holding the state the native side keeps: Roni holds this phone; Steve played Bandle alone (3 of 6).
-const MOCK = ({ catalog, roniToo }) => {
+const MOCK = ({ catalog, roniToo, guest }) => {
   const pad = n => String(n).padStart(2, '0'), d = new Date(), day = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
   const solo = { [day]: { bandle: { a: { v: 3, max: 6, kind: 'guesses', t: Date.now() - 60000 } } } };
   if (roniToo) solo[day].bandle.b = { v: 2, max: 6, kind: 'guesses', t: Date.now() - 1000 };
-  let rev = 1, st = { v: 1, names: { a: 'סטיב', b: 'רוני' }, prefs: {}, log: {}, solo };
+  // 2.0: a guest joined the contest too: still playing ('playing'), handed in ('in'), or left it ('out').
+  if (guest === 'playing') solo[day].bandle.u1234567 = { p: true, t: Date.now() - 500 };
+  if (guest === 'in') solo[day].bandle.u1234567 = { v: 1, max: 6, kind: 'guesses', t: Date.now() - 500 };
+  if (guest === 'out') solo[day].bandle.u1234567 = { out: true, t: Date.now() - 400 };
+  let rev = 1, st = { v: 1, names: { a: 'סטיב', b: 'רוני' }, prefs: {}, log: {}, solo, people: guest ? { u1234567: { name: 'דני', shape: 'star', color: 'green', at: 5 } } : {} };
   window.__calls = [];
   window.couchNative = {
     loadState() { return JSON.stringify({ rev, fresh: false, state: st }) }, saveState(j) { st = JSON.parse(j); rev++; return String(rev) },
@@ -89,6 +93,27 @@ server.listen(0, '127.0.0.1', async () => {
     const { page, ctx } = await open(null);
     ok(await page.evaluate(() => !document.querySelector('.solo-news')), 'not in a plain browser');
     await ctx.close();
+  }
+
+  // 2.0, a contest of three: while the guest who joined is still playing nobody is crowned; once they hand in (or leave), someone is.
+  {
+    const waiting = await open({ roniToo: true, guest: 'playing' });
+    ok(await waiting.page.evaluate(() => !document.querySelector('.solo-card.reveal')), 'three joined, one still playing: no reveal yet');
+    const row = await bandleRow(waiting.page);
+    ok(row !== null && !row.includes('👑'), `and no crown on the game's row (${row})`);
+    await waiting.ctx.close();
+    const done = await open({ roniToo: true, guest: 'in' });
+    const card = await done.page.evaluate(() => { const c = document.querySelector('.solo-card.reveal'); return c ? c.textContent : ''; });
+    ok(card.includes('חשיפה ב-Bandle!'), 'all three handed in: the reveal');
+    await done.page.click('.solo-card.reveal [data-act="solo-reveal"]'); await done.page.waitForTimeout(1800);
+    const rows = await done.page.evaluate(() => [...document.querySelectorAll('#sheet .rv')].map(r => r.textContent));
+    ok(rows.length === 3 && rows.some(r => r.includes('דני') && r.includes('1/6') && r.includes('👑')), `three results, the crown on the guest's (${JSON.stringify(rows)})`);
+    ok(done.errs.length === 0, 'no JavaScript errors' + (done.errs.length ? ': ' + done.errs.join(' | ') : ''));
+    await done.ctx.close();
+    const left = await open({ roniToo: true, guest: 'out' });
+    const card2 = await left.page.evaluate(() => { const c = document.querySelector('.solo-card.reveal'); return c ? c.textContent : ''; });
+    ok(card2.includes('חשיפה ב-Bandle!'), 'the guest left the contest: the two who handed in are not kept waiting');
+    await left.ctx.close();
   }
 
   await browser.close(); server.close();

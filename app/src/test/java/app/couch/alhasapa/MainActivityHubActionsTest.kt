@@ -92,7 +92,7 @@ class MainActivityHubActionsTest {
         rule.onNode(androidx.compose.ui.test.hasTestTag(app.couch.alhasapa.ui.PLAY_SOLO_TAG)).performClick()
         rule.waitForIdle()
         // Nobody holds the phone yet: who plays is asked first, then the game opens for them, alone.
-        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertIsDisplayed()
+        rule.onNodeWithText("מי משחק מהטלפון הזה?").assertIsDisplayed()
         rule.onNode(hasContentDescription("רוני")).performClick()
         rule.onNodeWithText("שמירה").performClick(); rule.waitForIdle()
         s.onActivity { a ->
@@ -199,7 +199,7 @@ class MainActivityHubActionsTest {
         // A note with nobody holding the phone yet: who holds it is asked first.
         scenario.onActivity { it.hubActions.openNote() }
         shadowOf(Looper.getMainLooper()).idle(); rule.waitForIdle()
-        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertIsDisplayed()
+        rule.onNodeWithText("מי משחק מהטלפון הזה?").assertIsDisplayed()
         // A guest for this evening: named, and saved as the one who holds this phone.
         rule.onNodeWithText("+ אורח").performClick()
         rule.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("מיה")

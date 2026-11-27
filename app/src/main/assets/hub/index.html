@@ -134,7 +134,7 @@ img{max-width:100%;height:auto;display:block}
 
 /* ---------- masthead ---------- */
 .mast .wrap{display:flex;align-items:center;gap:16px;padding-top:14px;padding-bottom:10px}
-.logo{margin:0;line-height:0}
+.logo{margin:0;line-height:0;flex:none}
 .logo img{height:64px;width:auto;aspect-ratio:900/444;object-fit:contain;object-position:100% 50%}
 .mast .spacer{flex:1}
 /* On the phone: the switch between playing here and being the TV's keyboard. */
@@ -144,16 +144,23 @@ img{max-width:100%;height:auto;display:block}
 .mode[aria-selected="true"]{background:var(--ink);color:var(--cream)}
 .mode svg{width:18px;height:18px;flex:none}
 @media (max-width:460px){.mode .long{display:none}.mode{padding:0 11px}}
-/* 2.0: the home couch by name (words and a mark, never colour alone); a press opens "הספות שלי". */
-.couchline{display:flex;align-items:center;gap:6px;min-height:40px;padding:0 13px;border-radius:999px;border:1px solid var(--line-2);font-weight:600;font-size:.88em;color:var(--ink);max-width:100%;min-width:0}
+/* 2.0: the home couch by name, under the logo (words and a mark, never colour alone); a press opens "הספות שלי". It adds no row
+   to the header: the logo gives it a little of its height. */
+.brand{display:flex;flex-direction:column;align-items:flex-start;gap:1px;flex:none;min-width:0}
+.couchline{display:flex;align-items:center;gap:4px;padding:5px 0;margin:-2px 0 -5px;max-width:min(46vw,340px);min-width:0;font-weight:600;font-size:.8em;color:var(--ink-2)}
 .couchline[hidden]{display:none}
-.couchline .cn{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
-.couchline .go{margin-inline-start:auto;color:var(--ink-2);flex:none}
+.couchline .cn{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0;color:var(--ink)}
+.couchline .go{flex:none}
+.couchline .w{display:none}
+.brand.couch .logo img{height:48px}
 /* In a row of its own the switch has room for its whole name again. */
 @media (max-width:720px){.mast.people .mode .long{display:inline}}
 .mast .date{color:var(--ink-2);font-size:.9em;white-space:nowrap}
 .who{display:flex;align-items:center;gap:6px;border:1px solid var(--line-2);border-radius:999px;padding:0 14px;min-height:44px;font-weight:500;font-size:.9em}
 .who:hover{background:var(--tint)}
+/* A long name gives way (2.0: any two names, not only ours), never the logo or the buttons beside it. */
+.who,.me{min-width:0}
+.who .nmz,.me .nmz{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:8em}
 .who .gap{width:6px}
 /* Who holds this phone (a user's mark beside their piece), and a note for one of us: on a phone, in the app (1.10) */
 .me{display:flex;align-items:center;gap:5px;border:1px solid var(--line-2);border-radius:999px;padding:0 12px;min-height:44px;font-size:.9em;font-weight:500}
@@ -362,7 +369,10 @@ footer .joke{font-style:italic}
   .mast.people .mode{flex:1;justify-content:center;min-height:36px}
   .mast.people .who{padding:0 11px}
   .mast.people .me{padding:0 10px}
-  .mast.people .couchline{order:6;flex:1 1 100%;min-height:36px}
+  /* On a phone the couch's name is a slim line of its own at the foot of the header, as wide as the screen (2.0). */
+  .mast.people .brand{display:contents}
+  .mast.people .couchline{order:6;flex:1 1 100%;max-width:none;margin:-3px 0 -2px;padding:3px 2px;min-height:26px}
+  .mast.people .couchline .w{display:inline}
   .navbar{order:4;background:var(--cream);border-top:1px solid var(--line-2)}
   .toast{bottom:calc(76px + env(safe-area-inset-bottom))}
   .navbar .wrap{padding:0 0 env(safe-area-inset-bottom);border:0}
@@ -453,7 +463,10 @@ footer .joke{font-style:italic}
 <div class="app">
 <header class="mast">
   <div class="wrap">
-    <h1 class="logo"><img src="img/logo.webp" alt="על הספה שלנו" width="900" height="444"></h1>
+    <div class="brand">
+      <h1 class="logo"><img src="img/logo.webp" alt="על הספה שלנו" width="900" height="444"></h1>
+      <button class="couchline" id="couchBtn" type="button" hidden></button>
+    </div>
     <span class="spacer"></span>
     <div class="modes" id="modes" role="tablist" aria-label="מעבר בין מצב משחק למצב מקלדת לטלוויזיה" hidden>
       <button class="mode" type="button" role="tab" aria-selected="true">
@@ -467,7 +480,6 @@ footer .joke{font-style:italic}
     <button class="who" id="who" type="button" aria-label="מי על הספה, והבדיחות שלנו"></button>
     <button class="me" id="me" type="button" hidden></button>
     <button class="me" id="noteBtn" type="button" hidden aria-label="השארת פתק"></button>
-    <button class="couchline" id="couchBtn" type="button" hidden></button>
   </div>
 </header>
 <nav class="navbar">
@@ -801,10 +813,10 @@ function renderMast(){
   meBtn.hidden=!canMe; noteBtn.hidden=!canNote;
   // 2.0: which couch this is (the phone's home), always in sight; a press opens "הספות שלי".
   const couchBtn=document.getElementById("couchBtn"), canCouch=!onTV&&!!(NATIVE&&NATIVE.couchName&&NATIVE.openCouches);
-  couchBtn.hidden=!canCouch;
+  couchBtn.hidden=!canCouch; couchBtn.parentElement.classList.toggle("couch",canCouch);
   if(canCouch){
     let cn=""; try{cn=String(NATIVE.couchName()||"")}catch(e){}
-    couchBtn.innerHTML=`<span aria-hidden="true">🏠</span><span class="cn">${esc(cn)}</span><span class="go" aria-hidden="true">הספות שלי ‹</span>`;
+    couchBtn.innerHTML=`<span aria-hidden="true">🏠</span><span class="cn">${esc(cn)}</span><span class="go" aria-hidden="true"><span class="w">· הספות שלי </span>‹</span>`;
     couchBtn.setAttribute("aria-label",`ספת הבית שלי: ${cn}. לפתיחת «הספות שלי»`);
   }
   document.querySelector(".mast").classList.toggle("people",canMe||canNote||canCouch);
@@ -812,7 +824,7 @@ function renderMast(){
     let me=""; try{me=String(NATIVE.me()||"")}catch(e){}
     const USER='<svg class="user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
     meBtn.innerHTML=me?`${USER}${pieceOfId(me)}<span class="nmz">${esc(nm(me))}</span>`:`${USER}<span>מי אני?</span>`;
-    meBtn.setAttribute("aria-label",me?`אני: ${nm(me)}. להחלפה, לשינוי, או להוספת משתמש או אורח`:"מי מחזיק את הטלפון הזה?");
+    meBtn.setAttribute("aria-label",me?`אני: ${nm(me)}. להחלפה, לשינוי, או להוספת משתמש או אורח`:"מי משחק מהטלפון הזה?");
   }
   if(canNote){
     let n=0; try{n=Number(NATIVE.notesWaiting&&NATIVE.notesWaiting())||0}catch(e){}
