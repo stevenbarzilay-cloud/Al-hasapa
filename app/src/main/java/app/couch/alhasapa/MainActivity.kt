@@ -43,6 +43,9 @@ import app.couch.alhasapa.tv.TvHost
 import app.couch.alhasapa.ui.AppRoot
 import app.couch.alhasapa.ui.animationsRemoved
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
+import app.couch.alhasapa.tv.NoteCard
+import app.couch.alhasapa.tv.NoteView
+import app.couch.alhasapa.data.Notes
 
 class MainActivity : ComponentActivity() {
     private lateinit var tv: TvHost
@@ -152,6 +155,15 @@ class MainActivity : ComponentActivity() {
                         onInfo = { tv.controller.openPanel(TvPanel.INFO) },
                         onSettings = { tv.controller.openPanel(TvPanel.SETTINGS) },
                     )
+                    // A note one of us left the other (1.9.9): one for no game, or for a game played since it was written.
+                    val homeNotes = remember(revision) { Notes.forHome(app.repo.snapshot(), CouchState.dayKey(LocalDate.now())) }
+                    homeNotes.firstOrNull()?.let { n ->
+                        val view = remember(n.id, revision) { NoteView.of(n, app.repo.snapshot(), pieces, app.catalog) }
+                        NoteCard(view) {
+                            app.repo.update { s -> Notes.markSeen(s, n.id, System.currentTimeMillis()) }
+                            Flight.log("notes: one was read on the home")
+                        }
+                    }
                 } else {
                     // On a TV the web hub is a step away from the home (the cats cover it until it is ready), and Back from it goes
                     // back to the home.

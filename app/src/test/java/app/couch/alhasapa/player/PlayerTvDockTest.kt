@@ -25,6 +25,9 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
+import app.couch.alhasapa.tv.NOTE_OK_ID
+import app.couch.alhasapa.data.Notes
+import app.couch.alhasapa.data.Note
 
 /** The game's frame on a television: ONE dock at the left edge (clock, score, zoom, shape, frame, paw, keyboard, menu, back, result, "we played"). */
 @RunWith(AndroidJUnit4::class)
@@ -171,6 +174,32 @@ class PlayerTvDockTest {
         rule.onNodeWithText(context.getString(R.string.cheer_points, 10)).assertIsDisplayed()
         rule.onNodeWithText(str(R.string.cheer_great)).assertIsDisplayed()
         scenario!!.onActivity { org.junit.Assert.assertNull("the sheet let go of the keys", it.remote.textSink) }
+    }
+
+    @Test
+    fun aNoteLeftForTheGameShowsAfterItsResultIsCelebratedAndIsReadOnce() {
+        app.repo.update { st ->
+            st.remove("notes")
+            Notes.add(st, Note("k1", "b", "catfishing", "ידעתי שתנצחו את הדגים", listOf(intArrayOf(0, 500, 1000, 500)), at = 1_000))
+        }
+        launch("catfishing")
+        button(str(R.string.player_result)).performClick()
+        rule.mainClock.advanceTimeBy(2_000); rule.waitForIdle()
+        scenario!!.onActivity { it.remote.remoteInput(TypedKeys.deliveries("9/10")) }
+        scenario!!.onActivity { it.remote.remoteInput(listOf(Delivery.Code(android.view.KeyEvent.KEYCODE_ENTER))) }
+        rule.waitForIdle()
+        rule.onNodeWithText(str(R.string.cheer_great)).assertIsDisplayed()
+        rule.onNodeWithText("ידעתי שתנצחו את הדגים").assertDoesNotExist()
+        // The celebration ends, and the note follows, from Roni to Steve, with the focus on its button.
+        rule.mainClock.advanceTimeBy(3_500); rule.waitForIdle()
+        rule.onNodeWithText("ידעתי שתנצחו את הדגים").assertIsDisplayed()
+        rule.onNodeWithText("פתק מרוני לסטיב").assertIsDisplayed()
+        scenario!!.onActivity { org.junit.Assert.assertEquals(NOTE_OK_ID, it.remote.focusedId) }
+        scenario!!.onActivity { it.remote.activate() }
+        rule.waitForIdle()
+        rule.onNodeWithText("ידעתי שתנצחו את הדגים").assertDoesNotExist()
+        assertTrue(Notes.all(app.repo.snapshot()).single().seen > 0)
+        app.repo.update { st -> st.remove("notes") }
     }
 
     @Test

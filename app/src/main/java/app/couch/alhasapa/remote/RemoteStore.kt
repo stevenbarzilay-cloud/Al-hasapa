@@ -64,8 +64,30 @@ class RemoteStore(context: Context) {
         get() = prefs.getString("last_address", null)
         set(value) { prefs.edit { putString("last_address", value) } }
 
+    /** Which of us holds this phone ("a", "b"), once said (1.9.9); null until then. */
+    var me: String?
+        get() = prefs.getString("me", null)?.takeIf { it in app.couch.alhasapa.data.Couple.WHO }
+        set(value) { prefs.edit { if (value == null) remove("me") else putString("me", value) } }
+
+    /** The notes written on this phone that the TV has not said it keeps yet (they go again at the next connection). */
+    fun pendingNotes(): List<app.couch.alhasapa.data.Note> {
+        val a = runCatching { org.json.JSONArray(prefs.getString("notes_out", "[]")) }.getOrElse { org.json.JSONArray() }
+        return (0 until a.length()).mapNotNull { app.couch.alhasapa.data.Note.fromJson(a.optJSONObject(it)) }
+    }
+
+    fun keepNote(n: app.couch.alhasapa.data.Note) = writeNotes((pendingNotes().filter { it.id != n.id } + n).takeLast(MAX_PENDING_NOTES))
+
+    fun noteKept(id: String) = writeNotes(pendingNotes().filter { it.id != id })
+
+    private fun writeNotes(list: List<app.couch.alhasapa.data.Note>) {
+        prefs.edit { putString("notes_out", org.json.JSONArray().apply { for (n in list) put(n.toJson()) }.toString()) }
+    }
+
     companion object {
         private val random = SecureRandom()
+
+        /** A phone keeps at most this many notes waiting for the TV (the oldest go first). */
+        const val MAX_PENDING_NOTES = 20
 
         fun randomHex(bytes: Int): String = ByteArray(bytes).also { random.nextBytes(it) }.joinToString("") { "%02x".format(it) }
 

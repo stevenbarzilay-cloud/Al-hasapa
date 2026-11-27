@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.remote.KeyClient
@@ -57,7 +58,13 @@ class KeyboardModeScreenTest {
         override fun mirror(on: Boolean, width: Int) { sent += "mirror:$on" + (if (on && width > 0) ":w" else "") }
         override fun frameShown(n: Int) { sent += "shown:$n" }
         override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) { sent += "touch:${a.name.lowercase()}"; touches += Offset(x, y) }
+        override fun saveMe(p: app.couch.alhasapa.data.Person) { sent += "me:${p.who}:${p.name}:${p.shape}:${p.color}" }
+        override fun sendNote(game: String?, text: String, doodle: List<IntArray>) { sent += "note:$game:$text:${doodle.size}" }
     }
+    private val pieces = app.couch.alhasapa.data.PiecesConfig.parse(java.io.File("src/main/assets/hub/pieces.json").readText())
+    private val people = listOf(app.couch.alhasapa.data.Person("a", "סטיב", "", "", 0), app.couch.alhasapa.data.Person("b", "רוני", "", "", 0))
+    private var me by mutableStateOf<String?>(null)
+    private var withCouple = false
     private val touches = ArrayList<Offset>()
     private var frame by mutableStateOf<KeyClient.MirrorFrame?>(null)
     private var frameNone by mutableStateOf<String?>(null)
@@ -70,7 +77,11 @@ class KeyboardModeScreenTest {
 
     private fun show() = rule.setContent {
         AlHasapaTheme {
-            KeyboardModeScreen(state, sink, onGame = { game++ }, handoff = handoff, versions = versions, openLogins = openLogins, frame = frame, frameNone = frameNone)
+            KeyboardModeScreen(
+                state, sink, onGame = { game++ }, handoff = handoff, versions = versions, openLogins = openLogins, frame = frame, frameNone = frameNone,
+                people = if (withCouple) people else emptyList(), me = me, pieces = if (withCouple) pieces else null,
+                noteGames = listOf(NoteGame("krillion", "Krillion"), NoteGame("wordle", "Wordle")),
+            )
         }
     }
     private fun key(d: String) = rule.onNode(hasContentDescription(d))
@@ -126,6 +137,32 @@ class KeyboardModeScreenTest {
         state = KeyClient.State.Connected("MiTV", "Dialed", touch = true); rule.waitForIdle()
         state = KeyClient.State.Connected("MiTV", "Wordle", touch = false); rule.waitForIdle()
         key("q").assertIsDisplayed()
+    }
+
+    @Test
+    fun whoHoldsThePhoneIsAskedOnceAndTheirLookIsSaved() {
+        withCouple = true
+        state = KeyClient.State.Connected("MiTV", "עמוד הבית"); show()
+        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertIsDisplayed()
+        rule.onNode(hasContentDescription("רוני")).performClick()
+        rule.onNode(hasContentDescription("לב")).performClick()
+        rule.onNodeWithText("שמירה").performClick()
+        assertEquals(listOf("me:b:רוני:heart:"), sent.filter { it.startsWith("me:") }.map { it.substringBeforeLast(':') + ":" })
+        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertDoesNotExist()
+    }
+
+    @Test
+    fun aNoteForTheOtherOneGoesWithItsWordsDrawingAndGame() {
+        withCouple = true; me = "a"
+        state = KeyClient.State.Connected("MiTV", "Krillion"); show()
+        rule.onNodeWithText("מי מחזיק את הטלפון הזה?").assertDoesNotExist()
+        rule.onNode(hasContentDescription("השארת פתק")).performClick()
+        rule.onNodeWithText("פתק לרוני").assertIsDisplayed()
+        rule.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("כל הכבוד לנו")
+        rule.onNodeWithTag(DOODLE_TAG).performTouchInput { down(Offset(20f, 20f)); moveBy(Offset(60f, 10f)); moveBy(Offset(40f, 40f)); up() }
+        rule.onNodeWithText("שליחה לטלוויזיה").performClick()
+        // The game on the TV is the one it waits for, unless another is chosen; one stroke drawn.
+        assertEquals(listOf("note:krillion:כל הכבוד לנו:1"), sent.filter { it.startsWith("note:") })
     }
 
     @Test

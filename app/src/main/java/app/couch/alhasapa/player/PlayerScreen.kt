@@ -132,6 +132,9 @@ fun PlayerScreen(
     onSaveResult: (ResultInput) -> app.couch.alhasapa.results.Cheer? = { null },
     /** The game was played long enough to count as played (it is marked by itself, see [AUTO_PLAYED_MS]). */
     onAutoPlayed: () -> Unit = {},
+    /** On a TV, after a result is saved and celebrated: the notes one of us left the other for this game (1.9.9), and one was read. */
+    notesFor: () -> List<app.couch.alhasapa.tv.NoteView> = { emptyList() },
+    onNoteSeen: (String) -> Unit = {},
     onClearResult: () -> Unit = {},
     onClose: () -> Unit,
     onOpenInChrome: (String) -> Unit,
@@ -360,7 +363,10 @@ fun PlayerScreen(
 
     // The little celebration when a result is saved on the TV: the points, a word about them, the evening so far.
     var cheer by remember { mutableStateOf<app.couch.alhasapa.results.Cheer?>(null) }
-    LaunchedEffect(cheer) { if (cheer != null) { delay(CHEER_MS); cheer = null } }
+    // After the celebration, the notes left for this game, one by one.
+    var notes by remember { mutableStateOf<List<app.couch.alhasapa.tv.NoteView>>(emptyList()) }
+    val latestNotesFor by androidx.compose.runtime.rememberUpdatedState(notesFor)
+    LaunchedEffect(cheer) { if (cheer != null) { delay(CHEER_MS); cheer = null; if (tv != null) notes = latestNotesFor() } }
 
     // On a TV the game's frame lives in the dock at the left edge.
     if (tv != null) {
@@ -584,6 +590,11 @@ fun PlayerScreen(
         AnimatedVisibility(visible = cheer != null && tv != null, modifier = Modifier.align(Alignment.Center), enter = enter, exit = exit) {
             val c = cheer
             if (c != null) CheerCard(c)
+        }
+
+        // Then a note one of us left the other for this game, if there is one (each read once).
+        notes.firstOrNull()?.let { v ->
+            app.couch.alhasapa.tv.NoteCard(v) { onNoteSeen(v.note.id); notes = notes.drop(1) }
         }
 
         if (loadError != null) {

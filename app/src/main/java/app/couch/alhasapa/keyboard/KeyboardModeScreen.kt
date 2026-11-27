@@ -138,6 +138,12 @@ interface KeySink {
 
     /** A finger on the picture: [a] at [x], [y], shares (0 to 1) of its width and height. */
     fun touch(a: KeyLink.TouchAction, x: Float, y: Float) {}
+
+    /** Who holds this phone and how they look (1.9.9): kept here and told to the TV. */
+    fun saveMe(p: app.couch.alhasapa.data.Person) {}
+
+    /** A note for the other one: kept here until the TV has it. */
+    fun sendNote(game: String?, text: String, doodle: List<IntArray>) {}
 }
 
 /**
@@ -158,6 +164,13 @@ fun KeyboardModeScreen(
     /** Touch mode: the latest picture of the TV's game, and why there is none when the TV said so. */
     frame: KeyClient.MirrorFrame? = null,
     frameNone: String? = null,
+    /** Each of us on our own phone (1.9.9): both of us as this phone knows us, which of us holds it, and the shapes and colours. */
+    people: List<app.couch.alhasapa.data.Person> = emptyList(),
+    me: String? = null,
+    pieces: app.couch.alhasapa.data.PiecesConfig? = null,
+    /** The games a note can wait for, and how many notes wait for the TV. */
+    noteGames: List<NoteGame> = emptyList(),
+    notesWaiting: Int = 0,
 ) {
     var loginsOpen by rememberSaveable { mutableStateOf(openLogins) }
     if (loginsOpen && state is KeyClient.State.Connected) {
@@ -177,7 +190,25 @@ fun KeyboardModeScreen(
         var touchView by rememberSaveable { mutableStateOf(false) }
         val suggested = connected?.touch
         LaunchedEffect(suggested) { if (suggested != null) touchView = suggested }
-        TopStrip(state, onGame, onLogins = { loginsOpen = true }, touch = if (connected != null) touchView else null, onTouch = { touchView = it })
+        // Who holds this phone: asked once, the first time it is connected without knowing; changed from the chip at the top.
+        var meOpen by rememberSaveable { mutableStateOf(false) }
+        var noteOpen by rememberSaveable { mutableStateOf(false) }
+        var askedWho by rememberSaveable { mutableStateOf(false) }
+        val couple = people.size == 2 && pieces != null
+        LaunchedEffect(connected != null, me, couple) { if (connected != null && couple && me == null && !askedWho) { askedWho = true; meOpen = true } }
+        if (meOpen && couple) IdentityDialog(people, me, pieces!!, onSave = { sink.saveMe(it); meOpen = false }, onDismiss = { meOpen = false })
+        val mine = people.firstOrNull { it.who == me }
+        val other = people.firstOrNull { it.who != me }
+        if (noteOpen && couple && mine != null && other != null) NoteDialog(
+            toName = other.name, color = pieces!!.styleOf(mine).accent, games = noteGames,
+            initialGame = noteGames.firstOrNull { it.name == connected?.screen }?.id,
+            onSend = { game, text, doodle -> sink.sendNote(game, text, doodle); noteOpen = false }, onDismiss = { noteOpen = false },
+        )
+        TopStrip(
+            state, onGame, onLogins = { loginsOpen = true }, touch = if (connected != null) touchView else null, onTouch = { touchView = it },
+            mine = if (couple) mine else null, pieces = pieces, notesWaiting = notesWaiting, showCouple = couple,
+            onMe = { meOpen = true }, onNote = { if (mine == null) meOpen = true else noteOpen = true },
+        )
         // A game's end screen is up on the TV: one press here saves its result there (the TV presses the game's own share for us).
         if (state is KeyClient.State.Connected && state.result) {
             val label = stringResource(R.string.kb_save_result)
@@ -213,8 +244,12 @@ fun KeyboardModeScreen(
 }
 
 @Composable
-private fun TopStrip(state: KeyClient.State, onGame: () -> Unit, onLogins: () -> Unit, touch: Boolean? = null, onTouch: (Boolean) -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().height(42.dp).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun TopStrip(
+    state: KeyClient.State, onGame: () -> Unit, onLogins: () -> Unit, touch: Boolean? = null, onTouch: (Boolean) -> Unit = {},
+    mine: app.couch.alhasapa.data.Person? = null, pieces: app.couch.alhasapa.data.PiecesConfig? = null, notesWaiting: Int = 0,
+    showCouple: Boolean = false, onMe: () -> Unit = {}, onNote: () -> Unit = {},
+) {
+    Row(Modifier.fillMaxWidth().height(42.dp).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         if (touch == null) ModeSwitch(keys = true, onGame = onGame, modifier = Modifier.width(280.dp).height(40.dp))
         else ModeSwitch(keys = !touch, onGame = onGame, modifier = Modifier.width(360.dp).height(40.dp), onKeys = { onTouch(false) }, touch = touch, onTouch = { onTouch(true) })
         val (text, bold, live) = when (state) {
@@ -223,6 +258,25 @@ private fun TopStrip(state: KeyClient.State, onGame: () -> Unit, onLogins: () ->
             else -> Triple("", null, false)
         }
         if (text.isNotEmpty()) StatusLine(text, bold, live, Modifier.weight(1f)) else Spacer(Modifier.weight(1f))
+        if (showCouple && pieces != null) {
+            // Who holds this phone (their piece and name), and a note for the other one.
+            val meLabel = mine?.name ?: stringResource(R.string.me_who)
+            val meDesc = stringResource(R.string.me_chip, meLabel)
+            Row(
+                Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(Palette.Tint).border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(19.dp))
+                    .clickable(onClick = onMe).padding(horizontal = 10.dp).semantics(mergeDescendants = true) { role = Role.Button; contentDescription = meDesc },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (mine != null) app.couch.alhasapa.ui.PieceIcon(pieces.styleOf(mine), 22.dp, label = "")
+                Text(meLabel, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Palette.Ink, maxLines = 1)
+            }
+            val noteDesc = if (notesWaiting > 0) stringResource(R.string.note_button_waiting, notesWaiting) else stringResource(R.string.note_button)
+            Box(
+                Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(Palette.Tint).border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(19.dp))
+                    .clickable(onClick = onNote).padding(horizontal = 12.dp).semantics { role = Role.Button; contentDescription = noteDesc },
+                contentAlignment = Alignment.Center,
+            ) { Text(if (notesWaiting > 0) "✉️ $notesWaiting" else "✉️", fontSize = 17.sp, color = Palette.Ink, maxLines = 1) }
+        }
         if (state is KeyClient.State.Connected) {
             val label = stringResource(R.string.logins_open)
             Box(

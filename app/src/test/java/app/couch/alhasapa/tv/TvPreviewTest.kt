@@ -191,6 +191,29 @@ class TvPreviewTest {
         File(dir, "tv-result-sheet.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    /** A note Roni left Steve for after Krillion: a few words and a heart drawn with a finger. */
+    @Test
+    fun drawANoteOnTheTv() {
+        val c = TvController(true, 2f)
+        val catalog = app.couch.alhasapa.catalog.Catalog.parse(File("src/main/assets/games.json").readText())
+        val pieces = app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText())
+        val state = app.couch.alhasapa.data.CouchState.empty()
+        // A heart, as a finger draws one: two arcs and a point.
+        val heart = (0..40).flatMap { i ->
+            val t = Math.PI * 2 * i / 40
+            val x = 16 * Math.pow(Math.sin(t), 3.0)
+            val y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)
+            listOf((500 + x * 14).toInt(), (480 - y * 26).toInt())
+        }.toIntArray()
+        val note = app.couch.alhasapa.data.Note("p1", "b", "krillion", "ידעתי שתנצח את הקריליון הזה 😉", listOf(heart, intArrayOf(150, 850, 300, 820, 450, 860)), at = 1)
+        val view = NoteView.of(note, state, pieces, catalog)
+        rule.setContent { AlHasapaTheme { TvLayer(c) { NoteCard(view) {} } } }
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(dir, "tv-note.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
     /** The home with two other colours chosen (teal and mustard), at the end of the shelf, where the games played this evening are. */
     @Test
     fun drawTheHomeInOtherColours() {

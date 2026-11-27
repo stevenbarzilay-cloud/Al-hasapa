@@ -73,6 +73,8 @@ class StateRepository(
     fun saveFromHub(raw: String, baseRevision: Long): Long = synchronized(lock) {
         if (baseRevision != rev) return -1
         val incoming = CouchState.parse(raw) ?: return -1
+        // A name or a piece changed in the hub: stamped, so it travels to the TV and the other phone (see Couple).
+        Couple.stampChanges(state, incoming, System.currentTimeMillis())
         commit(incoming)
     }
 

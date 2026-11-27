@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.8.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.9.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -382,6 +382,27 @@ want to play on, starting with Krillion and NYT:
     second touch lifting the first, the phone leaving mid-drag); the phone's screen (touch by itself and back, by hand, a picture
     drawn and acknowledged, a drag sent as shares of the picture). **Not tried on the devices:** how fast the pictures come over our
     Wi-Fi, what they cost the box while a game plays (its sound above all), and how a drag in Dialed feels from the phone.
+- **1.9.9: each of us on our own phone, and notes left in games.** From the same evening:
+  - *Who holds this phone.* The first time keyboard mode reaches the TV, the phone asks "מי מחזיק את הטלפון הזה?": the first of us
+    or the second. From then on a chip at the top (the person's piece and name) opens the same dialog: the name, the shape (six)
+    and the colour (eight). It is kept on the phone and sent to the TV, which keeps it and hands it to the other phone: each of us
+    changes their own look from their own phone. Every copy of the state (the TV's, each phone's) keeps the newer look of each of us,
+    person by person, by when it last changed (a change made in the hub's settings is stamped too) (`Couple`, `CoupleBook`).
+  - *Both phones at once*, as before (up to four), typing and touching into the same screen with one cursor; the TV now names each
+    connected phone by who holds it.
+  - *Notes.* "✉️" at the top of keyboard mode writes a note for the other one: a few words, a small drawing in the writer's colour,
+    and when it shows: after a game (the one open on the TV is chosen to start with), or on the TV's home. It goes to the TV, or
+    waits on the phone until the TV is reached (the ✉️ counts the ones waiting). On the TV a note for a game shows after that
+    game's result is saved and celebrated, or on the home once the game was played after the note was written (without a result);
+    a note for no game shows on the home. A paper note, a little askew, says who it is from and for whom; one OK ("❤️ קראנו") puts
+    it away for good. The TV keeps the latest 60 (`Notes`, `NoteCard`).
+  - Both apps must be updated together again (`TOGETHER_SINCE` 33).
+  - *Tried here:* over a real socket, the newer look winning both ways (the TV took Roni's newer one, the phone took the TV's newer
+    Steve, a later change going at once, the TV naming the phone by who holds it) and a note written away from the TV waiting on
+    the phone, then arriving once, from whoever holds that phone; the TV's home showing a note and putting it away with one OK (its
+    button has the focus, though the home keeps a focus of its own); a note after a game's celebration; the phone's dialogs (asked
+    once and saved; a note with words, a drawing and the game on the TV). **Not tried on the devices:** two phones connected to the
+    box at once (allowed, but only one ever was), and how a note reads from the couch.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24

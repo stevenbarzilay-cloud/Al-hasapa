@@ -51,6 +51,8 @@ class KeyServer(
     private val frameSource: () -> FrameSource? = { RemoteKeys.front?.frameSource },
     /** A phone shows the game in touch mode, or the last one stopped (main thread): the TV's paw stays away meanwhile. */
     private val onMirroring: (Boolean) -> Unit = { on -> RemoteKeys.touchModeChanged(on) },
+    /** Both of us as this TV knows us, and the notes the phones leave (1.9.9). */
+    private val book: CoupleBook = RepoCoupleBook { (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo },
 ) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -142,7 +144,7 @@ class KeyServer(
         state.value = RemoteKeys.Ui(
             listening = server != null,
             address = if (server != null) addresses().firstOrNull()?.let { "$it:$port" }.orEmpty() else "",
-            phones = ready.map { it.name },
+            phones = ready.map { it.shownName() },
             code = c, codeFor = f,
             older = ready.firstOrNull { it.app < appCode }?.ver,
             newer = ready.firstOrNull { it.app > appCode }?.ver,
@@ -177,6 +179,8 @@ class KeyServer(
         /** The phone's app version (0 and empty: before 1.9.4, which did not say). */
         @Volatile var app = 0
         @Volatile var ver = ""
+        /** Which of us holds this phone ("a", "b"; empty until it says, or from a phone app before 1.9.9). */
+        @Volatile var who = ""
         /** Touch mode: how wide the phone draws the pictures (0: it wants none), and the key they are sealed with (null: none for this phone). */
         @Volatile var mirrorWidth = 0
         @Volatile var frameKey: ByteArray? = null
@@ -199,6 +203,9 @@ class KeyServer(
         private var second = 0L
         private var inSecond = 0
         private val out = socket.getOutputStream().bufferedWriter(Charsets.UTF_8)
+
+        /** The phone's holder by name once it said who (the TV shows "סטיב" rather than "Pixel 8"), else the phone's own name. */
+        fun shownName(): String = who.takeIf { it.isNotEmpty() }?.let { w -> runCatching { book.couple() }.getOrNull()?.firstOrNull { it.who == w }?.name } ?: name
 
         /** Sending never happens on the main thread (Android forbids network there): one sender thread, in order. */
         fun send(m: Msg) {
@@ -247,6 +254,31 @@ class KeyServer(
                 true
             }
             is Msg.FrameOk -> { if (m.n == awaiting) { awaiting = -1; main.post { frameTick() } }; true }
+            is Msg.CoupleMsg -> {
+                if (ready) {
+                    if (m.who.isNotEmpty()) who = m.who
+                    main.post {
+                        // The newer of each of us is kept here, and every phone hears of a change (the other phone too).
+                        if (runCatching { book.offer(m.people) }.getOrDefault(false)) {
+                            val now = book.couple()
+                            peers.forEach { if (it.ready) it.send(Msg.CoupleMsg("", now)) }
+                            Flight.log("phone keyboard: ${shownName()} changed how one of us looks; every phone told")
+                        }
+                        publish()
+                    }
+                }
+                true
+            }
+            is Msg.NoteMsg -> {
+                if (ready) main.post {
+                    // From whoever holds this phone, whatever the note says.
+                    val n = if (who.isNotEmpty()) m.note.copy(from = who) else m.note
+                    val kept = runCatching { book.note(n) }.getOrDefault(false)
+                    send(Msg.NoteOk(n.id))
+                    if (kept) Flight.log("notes: one from ${shownName()} waits ${if (n.game != null) "for a game" else "on the home"}")
+                }
+                true
+            }
             is Msg.Text, is Msg.Press, is Msg.Pointer, is Msg.Move, Msg.Click, is Msg.Drag, is Msg.Scroll, Msg.SaveResult, is Msg.Touch -> {
                 if (ready && atHumanPace()) {
                     val at = SystemClock.uptimeMillis()
@@ -271,6 +303,9 @@ class KeyServer(
             ready = true
             send(Msg.Ok(screen))
             if (resultReady || touchGame) send(Msg.Screen(screen, resultReady, touchGame))
+            // Both of us as the TV knows us: the phone keeps what is newer (its own word comes back from it, see Msg.CoupleMsg).
+            // (Not to a phone app from before 1.9, which sends its token as is: it would not know what to do with it.)
+            if (!plain) runCatching { book.couple() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { send(Msg.CoupleMsg("", it)) }
             Flight.log(
                 "phone keyboard: $name connected" +
                     if (app != appCode) " (its app is ${if (app < appCode) "older" else "newer"}: ${ver.ifEmpty { "before 1.9.4" }}; this TV has $appVer)" else "",

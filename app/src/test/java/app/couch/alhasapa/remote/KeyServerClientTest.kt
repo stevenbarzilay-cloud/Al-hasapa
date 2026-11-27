@@ -30,11 +30,20 @@ class KeyServerClientTest {
     /** Touch mode: what the TV pictures (null: no game is open), and whether a phone shows it, as the TV was told. */
     @Volatile private var source: FrameSource? = null
     private val mirroring = CopyOnWriteArrayList<Boolean>()
+    /** Each of us as each side knows us, and the notes the TV kept (1.9.9). */
+    private class Book(vararg people: app.couch.alhasapa.data.Person) : CoupleBook {
+        val state: org.json.JSONObject = app.couch.alhasapa.data.CouchState.empty().also { s -> people.forEach { app.couch.alhasapa.data.Couple.put(s, it) } }
+        val notes = CopyOnWriteArrayList<app.couch.alhasapa.data.Note>()
+        @Synchronized override fun couple() = app.couch.alhasapa.data.Couple.WHO.map { app.couch.alhasapa.data.Couple.person(state, it) }
+        @Synchronized override fun offer(people: List<app.couch.alhasapa.data.Person>) = people.map { app.couch.alhasapa.data.Couple.offer(state, it) }.any { it }
+        override fun note(n: app.couch.alhasapa.data.Note): Boolean = if (notes.any { it.id == n.id }) false else { notes += n; true }
+    }
+    private val tvBook = Book(app.couch.alhasapa.data.Person("a", "סטיב", "circle", "red", 100), app.couch.alhasapa.data.Person("b", "רוני", "triangle", "pink", 100))
     private val server = KeyServer(
         context, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = "MiBOX4",
         onLogins = { payload -> received += payload; "NYT Games" to 3 },
         appCode = 28, appVer = "1.9.4", onLinked = { on -> if (linked.lastOrNull() != on) linked += on },
-        frameSource = { source }, onMirroring = { mirroring += it },
+        frameSource = { source }, onMirroring = { mirroring += it }, book = tvBook,
     )
     private val clients = ArrayList<KeyClient>()
 
@@ -65,10 +74,11 @@ class KeyServerClientTest {
         fail("timed out waiting for: $what")
     }
 
-    private fun paired(): KeyClient {
+    private fun paired(book: CoupleBook? = null): KeyClient {
         RemoteStore(context).forgetPhones()
         server.start()
-        val phone = client()
+        val phone = if (book == null) client() else
+            KeyClient(context, phoneName = "Pixel 8", find = { "127.0.0.1:${server.port}" }, appCode = 28, appVer = "1.9.4", book = book).also { clients += it }
         phone.start()
         waitFor("the TV asks for a code") { phone.state.value is KeyClient.State.NeedCode }
         phone.sendCode(server.ui.value.code!!)
@@ -120,6 +130,47 @@ class KeyServerClientTest {
         waitTicking("told the game is gone") { phone.frameNone.value == KeyLink.NONE_HOME && phone.frame.value == null }
         phone.mirror(false, 0)
         waitTicking("the TV knows no phone shows the game") { mirroring.lastOrNull() == false }
+    }
+
+    @Test
+    fun eachOfUsChangesTheirOwnLookOnTheirPhoneAndTheTvAndTheOtherPhoneFollow() {
+        // Roni's phone: Roni changed her name and colour there (newer than the TV's); it also knows an older Steve.
+        RemoteStore(context).me = "b"
+        val roni = Book(app.couch.alhasapa.data.Person("a", "סטיבי", "circle", "red", 50), app.couch.alhasapa.data.Person("b", "רונית", "heart", "teal", 500))
+        val phone = paired(roni)
+        waitFor("the TV took Roni's newer look") { tvBook.couple()[1].name == "רונית" }
+        assertEquals("heart", tvBook.couple()[1].shape)
+        assertEquals("the TV's Steve is newer: it stays", "סטיב", tvBook.couple()[0].name)
+        waitFor("and the phone took the TV's newer Steve") { roni.couple()[0].name == "סטיב" }
+        waitFor("the TV shows the phone by who holds it") { server.ui.value.phones == listOf("רונית") }
+
+        // A change on the phone later goes at once.
+        roni.offer(listOf(app.couch.alhasapa.data.Person("b", "רוני", "star", "purple", 900)))
+        phone.sendCouple()
+        waitFor("the TV follows") { tvBook.couple()[1].shape == "star" }
+        RemoteStore(context).me = null
+    }
+
+    @Test
+    fun aNoteWrittenAwayFromTheTvWaitsOnThePhoneAndArrivesOnce() {
+        RemoteStore(context).me = "a"
+        val store = RemoteStore(context)
+        store.pendingNotes().forEach { store.noteKept(it.id) }
+        val note = app.couch.alhasapa.data.Note("n7", "b", "krillion", "בהצלחה הערב", listOf(intArrayOf(0, 0, 900, 900)), 1_000)
+        // Written while not connected: kept on the phone.
+        val offline = KeyClient(context, phoneName = "Pixel 8", find = { null }, appCode = 28, appVer = "1.9.4", book = Book()).also { clients += it }
+        offline.sendNote(note)
+        assertEquals(1, offline.notesWaiting.value)
+        // Connected: it goes, the TV keeps it once (from whoever holds the phone), and the phone stops keeping it.
+        val phone = paired(Book())
+        waitFor("the TV kept the note") { tvBook.notes.size == 1 }
+        assertEquals("a", tvBook.notes[0].from)
+        assertEquals("krillion", tvBook.notes[0].game)
+        waitFor("nothing waits on the phone") { RemoteStore(context).pendingNotes().isEmpty() }
+        phone.sendNote(note)
+        Thread.sleep(300); shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("sent again, kept once", 1, tvBook.notes.size)
+        RemoteStore(context).me = null
     }
 
     @Test
@@ -196,9 +247,9 @@ class KeyServerClientTest {
     @Test
     fun aReleaseThatChangesOnlyOneOfTheTwoDoesNotSendThePeopleToUpdateTheOther() {
         // What the two tell each other is the version at which they last had to be updated together (raised by 1.9.7, the end of a
-        // game, and by 1.9.8, touch mode): two apps of releases after it that changed only one of the two have nothing to say to each
-        // other about versions.
-        assertEquals("raised only by a release that needs both", 32, KeyLink.TOGETHER_SINCE)
+        // game, by 1.9.8, touch mode, and by 1.9.9, each of us on our own phone): two apps of releases after it that changed only one
+        // of the two have nothing to say to each other about versions.
+        assertEquals("raised only by a release that needs both", 33, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()

@@ -35,6 +35,8 @@ import app.couch.alhasapa.ui.animationsRemoved
 import app.couch.alhasapa.ui.theme.AlHasapaTheme
 import java.time.LocalDate
 import org.json.JSONObject
+import app.couch.alhasapa.tv.NoteView
+import app.couch.alhasapa.data.Notes
 
 /**
  * The isolated player: landscape (the phone sits sideways, cast to the TV), immersive full screen, screen kept on, the game in
@@ -59,9 +61,7 @@ class PlayerActivity : ComponentActivity() {
         // Touch mode (1.9.8): a game played by dragging turns the phone to touch mode by itself, and the phone is shown the game's page.
         if (tv.enabled) {
             remote.touchGame = !session.loginMode && session.gameId?.let { app.catalog.game(it)?.touch } == true
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                remote.frameSource = FrameSource { w, done -> picturePage(w, done) }
-            }
+            remote.frameSource = FrameSource { w, done -> picturePage(w, done) }
         }
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -100,6 +100,18 @@ class PlayerActivity : ComponentActivity() {
                         ?.let { ResultSupport(it, state, today()) },
                     onSaveResult = { input -> saveResult(app, input) },
                     onAutoPlayed = { markPlayed(app) },
+                    // The notes one of us left the other for this game (shown after its result is saved and celebrated).
+                    notesFor = {
+                        val id = session.gameId
+                        if (id == null) emptyList() else {
+                            val s = app.repo.snapshot()
+                            Notes.waitingFor(s, id).map { NoteView.of(it, s, pieces, app.catalog) }
+                        }
+                    },
+                    onNoteSeen = { id ->
+                        app.repo.update { s -> Notes.markSeen(s, id, System.currentTimeMillis()) }
+                        Flight.log("notes: one was read after its game")
+                    },
                     onClearResult = { clearResult(app) },
                     onTogglePlayed = { togglePlayed(app) },
                     reduceMotion = reduceMotion,
@@ -118,7 +130,6 @@ class PlayerActivity : ComponentActivity() {
      * A picture of the game's page for a phone in touch mode: the window's own pixels where the page is (PixelCopy, so whatever the
      * graphics chip drew, a game's canvas included), made at most [maxWidth] wide by the copy itself.
      */
-    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
     private fun picturePage(maxWidth: Int, done: (android.graphics.Bitmap?) -> Unit) {
         val box = remote.pageBox
         if (box == null || isFinishing || isDestroyed) { done(null); return }
@@ -127,7 +138,7 @@ class PlayerActivity : ComponentActivity() {
         val w = minOf(maxWidth, src.width()).coerceAtLeast(16)
         val h = (src.height().toLong() * w / src.width()).toInt().coerceAtLeast(16)
         val bmp = pictureBitmap?.takeIf { it.width == w && it.height == h }
-            ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).also { pictureBitmap = it }
+            ?: androidx.core.graphics.createBitmap(w, h).also { pictureBitmap = it }
         runCatching {
             android.view.PixelCopy.request(
                 window, src, bmp, { result -> done(if (result == android.view.PixelCopy.SUCCESS) bmp else null) },

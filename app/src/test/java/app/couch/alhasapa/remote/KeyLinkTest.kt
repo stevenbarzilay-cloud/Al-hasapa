@@ -36,6 +36,12 @@ class KeyLinkTest {
             Msg.Mirror(true, 1_080), Msg.Mirror(false, 0), Msg.FrameOk(17), Msg.FrameNone(KeyLink.NONE_HOME), Msg.FrameNone(KeyLink.NONE_CAPTURE),
             Msg.Touch(KeyLink.TouchAction.DOWN, 0.25f, 0.75f), Msg.Touch(KeyLink.TouchAction.MOVE, 0.2512f, 0.7f),
             Msg.Touch(KeyLink.TouchAction.UP, 1f, 0f), Msg.Touch(KeyLink.TouchAction.CANCEL, 0.5f, 0.5f),
+            // From 1.9.9: each of us on our own phone, and notes.
+            Msg.CoupleMsg("b", listOf(app.couch.alhasapa.data.Person("a", "סטיב", "star", "teal", 5), app.couch.alhasapa.data.Person("b", "רוני", "", "", 0))),
+            Msg.CoupleMsg("", emptyList()),
+            Msg.NoteMsg(app.couch.alhasapa.data.Note("n1", "a", "krillion", "כל הכבוד 🎉", listOf(intArrayOf(0, 0, 1000, 1000), intArrayOf(5, 5)), 99L)),
+            Msg.NoteMsg(app.couch.alhasapa.data.Note("n2", "b", null, "", listOf(intArrayOf(1, 2)), 100L)),
+            Msg.NoteOk("n1"),
         )
         for (m in all) {
             val line = KeyLink.encode(m)

@@ -3,6 +3,8 @@ package app.couch.alhasapa.remote
 import android.view.KeyEvent
 import java.net.Inet6Address
 import java.net.InetAddress
+import app.couch.alhasapa.data.Note
+import app.couch.alhasapa.data.Person
 import org.json.JSONObject
 
 /**
@@ -37,6 +39,12 @@ import org.json.JSONObject
  *     phone → TV     touch {a, x, y}                      a finger on the picture: down / move / up / cancel, at shares (0 to 1)
  *                                                         of the page's width and height
  *
+ *     each of us on our own phone (from 1.9.9)
+ *     both ways      couple {who, a, b}                   both of us as the sender knows us: name, shape, colour, and when each last
+ *                                                         changed (the newer wins, person by person); who: whose phone sent it
+ *     phone → TV     note {note}                          a note for the other one: words and a drawing, tied to a game or none
+ *     TV    → phone  note-ok {id}                         the TV keeps it (the phone stops keeping it to send)
+ *
  *     the sign-in handoff (from 1.9, see LoginHandoff and LoginCrypto):
  *     phone → TV     logins-key {key}                     a fresh public key
  *     TV    → phone  logins-ready {key, sig} | logins-no {why}
@@ -64,7 +72,7 @@ object KeyLink {
      * Not simply the app's own version number: a release that changes only one of the two (the TV's home got a new look in 1.9.5)
      * must not send the people to update the other for nothing. It is raised only when a release needs both.
      */
-    const val TOGETHER_SINCE = 32
+    const val TOGETHER_SINCE = 33
 
     /** A line longer than this is not one of ours (a site's cookies, encrypted, fit well within it). */
     const val MAX_LINE = 65_536
@@ -144,6 +152,13 @@ object KeyLink {
         /** A finger on the picture: [a] at [x], [y], shares (0 to 1) of the page's width and height. */
         data class Touch(val a: TouchAction, val x: Float, val y: Float) : Msg
 
+        /** Both of us as the sender knows us; [who]: whose phone sent it ("a", "b"; empty from the TV, or a phone that has not said). */
+        data class CoupleMsg(val who: String, val people: List<Person>) : Msg
+        /** A note for the other one, written on a phone. */
+        data class NoteMsg(val note: Note) : Msg
+        /** The TV keeps note [id]. */
+        data class NoteOk(val id: String) : Msg
+
         /** The sign-in handoff: the phone's fresh public key; the TV's, signed with the pairing token; the logins; the answer. */
         data class LoginsKey(val key: String) : Msg
         data class LoginsReady(val key: String, val sig: String) : Msg
@@ -190,6 +205,9 @@ object KeyLink {
         is Msg.FrameOk -> JSONObject().put("t", "frame-ok").put("n", m.n)
         is Msg.FrameNone -> JSONObject().put("t", "frame-none").put("why", m.why)
         is Msg.Touch -> JSONObject().put("t", "touch").put("a", m.a.name.lowercase()).put("x", round4(m.x)).put("y", round4(m.y))
+        is Msg.CoupleMsg -> JSONObject().put("t", "couple").put("who", m.who).apply { for (p in m.people) put(p.who, p.toJson()) }
+        is Msg.NoteMsg -> JSONObject().put("t", "note").put("note", m.note.toJson())
+        is Msg.NoteOk -> JSONObject().put("t", "note-ok").put("id", m.id)
     }
 
     private fun frameLine(m: Msg.Frame): String = StringBuilder(m.data.length + 96)
@@ -245,6 +263,12 @@ object KeyLink {
                 if (x.isNaN() || y.isNaN()) return null
                 Msg.Touch(a, x.coerceIn(0.0, 1.0).toFloat(), y.coerceIn(0.0, 1.0).toFloat())
             }
+            "couple" -> Msg.CoupleMsg(
+                s("who").takeIf { it in app.couch.alhasapa.data.Couple.WHO }.orEmpty(),
+                app.couch.alhasapa.data.Couple.WHO.mapNotNull { Person.fromJson(it, o.optJSONObject(it)) },
+            )
+            "note" -> Note.fromJson(o.optJSONObject("note"))?.let { Msg.NoteMsg(it) }
+            "note-ok" -> s("id").takeIf { it.isNotEmpty() }?.let { Msg.NoteOk(it) }
             else -> null
         }
     }

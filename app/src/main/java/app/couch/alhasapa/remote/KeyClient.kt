@@ -30,6 +30,8 @@ class KeyClient(
     /** Told to the TV and compared with what the TV tells (see [KeyLink.TOGETHER_SINCE] and [Versions]), and this app's version by name. */
     private val appCode: Int = KeyLink.TOGETHER_SINCE,
     private val appVer: String = app.couch.alhasapa.BuildConfig.VERSION_NAME,
+    /** Both of us as this phone knows us (1.9.9): sent to the TV, and the TV's newer word kept. */
+    private val book: CoupleBook = RepoCoupleBook { (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo },
 ) {
     sealed interface State {
         /** Looking for the TV on the home network. */
@@ -104,6 +106,23 @@ class KeyClient(
 
     /** Picture [n] is on the screen: the TV may send the next. */
     fun frameShown(n: Int) = send(Msg.FrameOk(n))
+
+    private val _notesWaiting = MutableStateFlow(store.pendingNotes().size)
+    /** How many notes written here wait for the TV (sent at the next connection). */
+    val notesWaiting: StateFlow<Int> get() = _notesWaiting
+
+    /** Both of us as this phone knows us, and whose phone it is, to the TV (after a change made here; on connecting it goes by itself). */
+    fun sendCouple() {
+        val people = runCatching { book.couple() }.getOrDefault(emptyList())
+        if (people.isNotEmpty()) send(Msg.CoupleMsg(store.me.orEmpty(), people))
+    }
+
+    /** A note for the other one: kept here until the TV says it has it. */
+    fun sendNote(n: app.couch.alhasapa.data.Note) {
+        store.keepNote(n)
+        _notesWaiting.value = store.pendingNotes().size
+        send(Msg.NoteMsg(n))
+    }
 
     private class Pending(val site: String, val payload: String, val pair: java.security.KeyPair, val key: String)
     @Volatile private var pending: Pending? = null
@@ -267,6 +286,9 @@ class KeyClient(
                         startPinging()
                         // Touch mode was on the screen when the connection dropped: the pictures are asked for again.
                         if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth))
+                        // Both of us as this phone knows us, and the notes still waiting for the TV.
+                        sendCouple()
+                        for (n in store.pendingNotes()) write(Msg.NoteMsg(n))
                     }
                     is Msg.Screen -> (_state.value as? State.Connected)?.let { _state.value = it.copy(screen = m.screen, result = m.result, touch = m.touch) }
                     is Msg.Frame -> {
@@ -281,6 +303,8 @@ class KeyClient(
                         }
                     }
                     is Msg.FrameNone -> if (mirrorWidth > 0) { _frame.value = null; _frameNone.value = m.why }
+                    is Msg.CoupleMsg -> runCatching { book.offer(m.people) }
+                    is Msg.NoteOk -> { store.noteKept(m.id); _notesWaiting.value = store.pendingNotes().size }
                     is Msg.Bye -> { if (m.why == "wait") _state.value = State.Wait; break }
                     else -> {}
                 }

@@ -21,6 +21,18 @@ class PiecesConfig private constructor(private val doc: JSONObject) {
     private fun shape(id: String): JSONObject? = (0 until doc.getJSONArray("shapes").length()).map { doc.getJSONArray("shapes").getJSONObject(it) }.firstOrNull { it.getString("id") == id }
     private fun color(id: String): JSONObject? = (0 until doc.getJSONArray("colors").length()).map { doc.getJSONArray("colors").getJSONObject(it) }.firstOrNull { it.getString("id") == id }
 
+    /** Every shape and every colour there is, in the catalogue's order (the choices of the phone's "me" dialog). */
+    val shapeIds: List<String> get() = (0 until doc.getJSONArray("shapes").length()).map { doc.getJSONArray("shapes").getJSONObject(it).getString("id") }
+    val colorIds: List<String> get() = (0 until doc.getJSONArray("colors").length()).map { doc.getJSONArray("colors").getJSONObject(it).getString("id") }
+
+    /** A shape in a colour (either empty or unknown: the first person's default). */
+    fun style(shape: String, color: String): PieceStyle =
+        styleFor(JSONObject().put("pieces", JSONObject().put("a", JSONObject().put("shape", shape).put("color", color))), "a")
+
+    /** How [p] looks: their own choices, or their defaults. */
+    fun styleOf(p: Person): PieceStyle =
+        styleFor(JSONObject().put("pieces", JSONObject().put(p.who, JSONObject().put("shape", p.shape).put("color", p.color))), p.who)
+
     /** [who] is "a" (the first person: red circle by default) or "b" (the second: pink triangle). */
     fun styleFor(state: JSONObject?, who: String): PieceStyle {
         val defaults = doc.getJSONObject("defaults").getJSONObject(who)

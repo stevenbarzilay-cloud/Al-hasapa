@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.couch.alhasapa.remote.KeyClient
@@ -93,6 +94,43 @@ class KeyboardModePreviewTest {
         while (!shown && System.currentTimeMillis() < until) { rule.waitForIdle(); Thread.sleep(10) }
         rule.onNode(androidx.compose.ui.test.hasTestTag(MIRROR_TAG)).performTouchInput { down(Offset(width * 0.55f, height * 0.6f)); moveBy(Offset(20f, 0f)) }
         save("phone-touch-mode.png")
+    }
+
+    private val pieces by lazy { app.couch.alhasapa.data.PiecesConfig.parse(File("src/main/assets/hub/pieces.json").readText()) }
+    private val people = listOf(app.couch.alhasapa.data.Person("a", "סטיב", "", "", 0), app.couch.alhasapa.data.Person("b", "רוני", "heart", "teal", 0))
+
+    private fun saveDialog(name: String) {
+        rule.waitForIdle()
+        val dir = File("build/previews").apply { mkdirs() }
+        val img = rule.onNode(androidx.compose.ui.test.isDialog()).captureToImage().asAndroidBitmap()
+        File(dir, name).outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    /** "Who holds this phone": asked the first time, with the name, the shape and the colour. */
+    @Test fun meDialog() {
+        rule.setContent {
+            AlHasapaTheme { KeyboardModeScreen(KeyClient.State.Connected("MiTV", "עמוד הבית"), sink, onGame = {}, people = people, me = null, pieces = pieces) }
+        }
+        rule.onNode(hasContentDescription("רוני")).performClick()
+        saveDialog("phone-me.png")
+    }
+
+    /** A note for the other one, with a drawing. */
+    @Test fun noteDialog() {
+        rule.setContent {
+            AlHasapaTheme {
+                KeyboardModeScreen(
+                    KeyClient.State.Connected("MiTV", "Krillion"), sink, onGame = {}, people = people, me = "b", pieces = pieces,
+                    noteGames = listOf(NoteGame("krillion", "Krillion"), NoteGame("wordle", "Wordle"), NoteGame("dialed", "Dialed · צבע")),
+                )
+            }
+        }
+        rule.onNode(hasContentDescription("השארת פתק")).performClick()
+        rule.onNode(androidx.compose.ui.test.hasSetTextAction()).performTextInput("ידעתי שתנצח 😉")
+        rule.onNode(androidx.compose.ui.test.hasTestTag(DOODLE_TAG)).performTouchInput {
+            down(Offset(width * 0.3f, height * 0.4f)); moveBy(Offset(60f, -40f)); moveBy(Offset(60f, 40f)); moveBy(Offset(-60f, 80f)); moveBy(Offset(-60f, -80f)); up()
+        }
+        saveDialog("phone-note.png")
     }
 
     @Test fun pairing() { show(KeyClient.State.NeedCode("MiTV", left = 2)); save("phone-keyboard-code.png") }

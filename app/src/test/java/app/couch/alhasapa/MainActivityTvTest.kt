@@ -62,6 +62,28 @@ class MainActivityTvTest {
     private val inFocus = androidx.compose.ui.test.SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription, "נבחר")
 
     @Test
+    fun aNoteLeftForTheHomeIsReadWithOneOkAndNotShownAgain() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
+        val repo = (context as CouchApp).repo
+        repo.update { st ->
+            app.couch.alhasapa.data.Notes.add(st, app.couch.alhasapa.data.Note("n1", "a", null, "ערב נעים, אהובה", listOf(intArrayOf(100, 100, 900, 900)), at = 1_000))
+            // One for a game not played since it was written: it waits.
+            app.couch.alhasapa.data.Notes.add(st, app.couch.alhasapa.data.Note("n2", "b", "krillion", "אחרי הקריליון", emptyList(), at = 2_000))
+        }
+        launch()
+        rule.onNodeWithText("ערב נעים, אהובה").assertIsDisplayed()
+        rule.onNodeWithText("פתק מסטיב לרוני").assertIsDisplayed()
+        rule.onNodeWithText("אחרי הקריליון").assertDoesNotExist()
+        // The focus is on its button: one OK, and it is gone for good.
+        rule.onNode(hasContentDescription("❤️ קראנו").and(inFocus)).assertIsDisplayed()
+        remote(android.view.KeyEvent.KEYCODE_DPAD_LEFT, android.view.KeyEvent.KEYCODE_DPAD_CENTER)
+        rule.onNodeWithText("ערב נעים, אהובה").assertDoesNotExist()
+        assertTrue(app.couch.alhasapa.data.Notes.all(repo.snapshot()).first { it.id == "n1" }.seen > 0)
+        rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
+        repo.update { st -> st.remove("notes") }
+    }
+
+    @Test
     fun theTvOpensOnItsOwnHomeAndTheRemoteOpensAGame() {
         CrashReport.clear(context); Flight.acknowledgePrevious()
         launch()

@@ -432,7 +432,20 @@ class TvController(val enabled: Boolean, density: Float) {
     fun notice(h: TvHint) { if (enabled) say(h) }
 
     /** Puts the focus on the app's button [id] (a screen's main button, so a single OK presses it). */
-    fun focus(id: String) { if (enabled) { zone = Zone.NATIVE; focusedId = id } }
+    fun focus(id: String) {
+        if (!enabled) return
+        // While a sheet or a card of the app's own is up, nothing behind it takes the focus (the home, which keeps a focus of its own,
+        // would otherwise pull it back to a game).
+        modalPrefix?.let { if (!id.startsWith(it)) return }
+        zone = Zone.NATIVE; focusedId = id
+    }
+
+    /** A sheet or a card is put away: the focus on its buttons is let go, and the screen behind takes it back. */
+    fun endModal() {
+        val m = modalPrefix ?: return
+        modalPrefix = null
+        if (focusedId?.startsWith(m) == true) focusedId = null
+    }
 
     fun closePanel() {
         panel = null; textScroller = null; focusedId = null
@@ -617,7 +630,7 @@ class TvController(val enabled: Boolean, density: Float) {
     /** OK: press what is focused. */
     fun activate() {
         if (zone == Zone.NATIVE) {
-            if (panel == null && screenNav?.ok(focusedId) == true) return
+            if (panel == null && modalPrefix == null && screenNav?.ok(focusedId) == true) return
             focusedId?.let { actions[it]?.invoke() }
             return
         }

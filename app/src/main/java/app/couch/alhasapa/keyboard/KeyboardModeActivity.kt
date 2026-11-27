@@ -29,6 +29,8 @@ import app.couch.alhasapa.ui.theme.AlHasapaTheme
  */
 class KeyboardModeActivity : ComponentActivity() {
     private lateinit var client: KeyClient
+    /** Which of us holds this phone (1.9.9), as the screen shows it. */
+    private val me = androidx.compose.runtime.mutableStateOf<String?>(null)
 
     private val askLocalNetwork = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) client.start() else client.noPermission()
@@ -45,6 +47,10 @@ class KeyboardModeActivity : ComponentActivity() {
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         hideSystemBars()
         client = KeyClient(this)
+        val couch = application as CouchApp
+        val store = app.couch.alhasapa.remote.RemoteStore(this)
+        me.value = store.me
+        val pieces = app.couch.alhasapa.data.PiecesConfig.load(this)
         val sink = object : KeySink {
             override fun text(s: String) = client.send(KeyLink.Msg.Text(s))
             override fun key(k: KeyLink.Key, a: KeyLink.Action) = client.send(KeyLink.Msg.Press(k, a))
@@ -73,6 +79,20 @@ class KeyboardModeActivity : ComponentActivity() {
             override fun frameShown(n: Int) = client.frameShown(n)
             override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) = client.send(KeyLink.Msg.Touch(a, x, y))
 
+            // Each of us on our own phone: who holds this one and how they look, kept here and told to the TV (which tells the other phone).
+            override fun saveMe(p: app.couch.alhasapa.data.Person) {
+                store.me = p.who; me.value = p.who
+                couch.repo.update { app.couch.alhasapa.data.Couple.put(it, p) }
+                client.sendCouple()
+                Flight.log("me: this phone is ${if (p.who == "a") "the first" else "the second"} of us")
+            }
+
+            override fun sendNote(game: String?, text: String, doodle: List<IntArray>) {
+                val who = store.me ?: return
+                client.sendNote(app.couch.alhasapa.data.Note(app.couch.alhasapa.remote.RemoteStore.randomHex(8), who, game, text, doodle, System.currentTimeMillis()))
+                Flight.log("notes: one written${if (game != null) " for a game" else " for the home"}")
+            }
+
             // The site's own sign-in page, here on the phone, in the same browser the login is then read from.
             override fun signIn(site: String) {
                 val s = (application as CouchApp).catalog.sites[site] ?: return
@@ -88,9 +108,18 @@ class KeyboardModeActivity : ComponentActivity() {
                 val versions by client.versions.collectAsState()
                 val frame by client.frame.collectAsState()
                 val frameNone by client.frameNone.collectAsState()
+                val revision by couch.repo.revision.collectAsState()
+                val people = androidx.compose.runtime.remember(revision) {
+                    val s = couch.repo.snapshot(); app.couch.alhasapa.data.Couple.WHO.map { app.couch.alhasapa.data.Couple.person(s, it) }
+                }
+                val noteGames = androidx.compose.runtime.remember(revision) {
+                    val s = couch.repo.snapshot(); couch.catalog.games.filter { couch.catalog.inLib(it, s) }.map { NoteGame(it.id, it.n) }
+                }
+                val notesWaiting by client.notesWaiting.collectAsState()
                 KeyboardModeScreen(
                     state, sink, onGame = { finish() }, handoff = handoff, versions = versions, openLogins = openLogins,
                     frame = frame, frameNone = frameNone,
+                    people = people, me = me.value, pieces = pieces, noteGames = noteGames, notesWaiting = notesWaiting,
                 )
             }
         }
