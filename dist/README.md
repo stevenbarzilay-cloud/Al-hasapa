@@ -7,7 +7,7 @@ the TV, the phone build with the phone's browser.
 
     https://raw.githubusercontent.com/stevenbarzilay-cloud/Al-hasapa/ccr-e79b67fd-boiaic/dist/al-hasapa-tv.apk
 
-**Phone (1.11.0):**
+**Phone (1.11.1):**
 
     https://raw.githubusercontent.com/stevenbarzilay-cloud/Al-hasapa/ccr-e79b67fd-boiaic/dist/al-hasapa-phone.apk
 

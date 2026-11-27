@@ -4,6 +4,11 @@ import androidx.activity.ComponentActivity
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.isDialog
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -65,6 +70,30 @@ class HomeDialogsPreviewTest {
             }
         }
         saveDialog("phone-play-mode.png")
+    }
+
+    /** A game played elsewhere (1.11.1): its result from a photo of the computer's screen, as the sheet shows it once read. */
+    @Test fun photoSheet() {
+        val game = app.couch.alhasapa.catalog.Catalog.load(rule.activity).game("wordle")!!
+        rule.setContent {
+            AlHasapaTheme {
+                androidx.compose.foundation.layout.Box(
+                    androidx.compose.ui.Modifier.fillMaxSize().background(app.couch.alhasapa.ui.theme.Palette.Cream),
+                    contentAlignment = androidx.compose.ui.Alignment.Center,
+                ) {
+                    app.couch.alhasapa.results.ResultSheet(
+                        support = app.couch.alhasapa.results.ResultSupport(game, app.couch.alhasapa.data.CouchState.empty(), "2026-11-27"),
+                        couple = app.couch.alhasapa.results.Couple("סטיב", "רוני", pieces.styleFor(null, "a"), pieces.styleFor(null, "b")),
+                        who = "a", initialText = "4/6", captured = false, onSave = {}, onClear = null, onCancel = {},
+                        modifier = androidx.compose.ui.Modifier.padding(12.dp), solo = true,
+                        onPhoto = {}, photoNote = "📷 קראנו מהתמונה. כדאי לבדוק.",
+                    )
+                }
+            }
+        }
+        rule.waitForIdle()
+        val img = rule.onRoot().captureToImage().asAndroidBitmap()
+        File(File("build/previews").apply { mkdirs() }, "phone-photo-sheet.png").outputStream().use { img.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
 
     /** A note from the home, for anyone here. */
