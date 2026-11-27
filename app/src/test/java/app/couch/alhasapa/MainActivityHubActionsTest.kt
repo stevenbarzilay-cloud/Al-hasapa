@@ -113,6 +113,7 @@ class MainActivityHubActionsTest {
     /** On the phone's home (1.10): who holds the phone, a guest added for the evening, and a note left from there for the TV. */
     @Test
     fun whoHoldsThePhoneAndANoteAreOnTheHomeToo() {
+        org.junit.Assume.assumeFalse("the phone's home only: the TV has its own", app.couch.alhasapa.BuildConfig.TV)
         val store = app.couch.alhasapa.remote.RemoteStore(context)
         store.me = null
         store.pendingNotes().forEach { store.noteKept(it.id) }
