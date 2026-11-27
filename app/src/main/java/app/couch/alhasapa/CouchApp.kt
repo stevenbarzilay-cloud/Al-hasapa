@@ -151,8 +151,21 @@ class CouchApp : Application() {
     val repo: StateRepository by lazy {
         // The first thing done with the state: what a new catalogue asks of the choices made here before (see CatalogUpdate).
         StateRepository(FileStateStore(File(filesDir, "state.json"))).also { app.couch.alhasapa.catalog.CatalogUpdate.apply(this, it) }
+            // A device from before 2.0 is given its couch (its data stays as it is; a new device chooses on its first screen).
+            .also { runCatching { app.couch.alhasapa.remote.CouchSetup.migrate(this, it, TvMode.isTelevision(this)) } }
             // A change made here goes to the other devices (1.12): the ones connected at once, and through the relay from anywhere.
             .also { it.onLocalChange = { app.couch.alhasapa.remote.ShareBus.changed(); app.couch.alhasapa.remote.RelayOut.schedule(this) } }
+            .also { r -> if (TvMode.isTelevision(this)) followGuests(r) }
+    }
+
+    /**
+     * On a TV (2.0): what the home's own phones bring (a game one of them played alone, through the relay) changes the contests the
+     * guests connected just now may see, so they are told too.
+     */
+    private fun followGuests(r: StateRepository) {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
+            r.merged.collect { if (it > 0) RemoteKeys.server?.stateChanged() }
+        }
     }
 
     private val base: Catalog by lazy { Catalog.load(this) }

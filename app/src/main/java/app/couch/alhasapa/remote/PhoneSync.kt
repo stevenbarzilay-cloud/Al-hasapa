@@ -17,7 +17,8 @@ import app.couch.alhasapa.diag.Flight
  */
 class PhoneSync(
     private val context: Context,
-    private val newClient: () -> KeyClient = { KeyClient(context) },
+    /** A connection to the home's own TVs, as one of the home's phones (2.0): never to any other TV. */
+    private val newClient: () -> KeyClient = { KeyClient(context, target = KeyClient.Target(CouchStore(context).homeTvs, KeyLink.AS_HOME)) },
     /** The newest change to how any of us looks, here (0 when nothing is known). */
     private val newest: () -> Long = {
         (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo?.snapshot()?.let { s -> Couple.all(s).maxOfOrNull { it.at } } ?: 0L
@@ -34,7 +35,8 @@ class PhoneSync(
     /** Whether anything waits for the TV (or the TV has something for the phone: the solo relay, 1.11). */
     fun waiting(): Boolean {
         val store = RemoteStore(context)
-        return store.pendingNotes().isNotEmpty() || newest() > store.syncedAt || needsRelay() || shareDue(store)
+        val home = (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo?.peek { app.couch.alhasapa.data.Couches.of(it)?.id }
+        return store.pendingNotes(home, home).isNotEmpty() || newest() > store.syncedAt || needsRelay() || shareDue(store)
     }
 
     /** The evenings the TV kept since the phone last heard (1.12): asked for each time the app comes to the front, at most this often. */
@@ -47,8 +49,10 @@ class PhoneSync(
 
     fun start() {
         if (client != null) return
-        val store = RemoteStore(context)
-        if (!waiting() || store.lastAddress == null) return       // nothing to hand over, or no TV was ever found from here
+        val couches = CouchStore(context)
+        // Nothing to hand over; or the home has no TV yet; or the phone is at a friend's this evening, or holds a connection of its
+        // own already (2.0): the home's TV is looked for when the phone is at home again.
+        if (!waiting() || couches.homeTvs.isEmpty() || couches.visitNow() != null || Links.open.value) return
         if (Build.VERSION.SDK_INT >= 37 && context.checkSelfPermission(LOCAL_NETWORK) != PackageManager.PERMISSION_GRANTED) return
         target = newest()
         if (needsRelay()) RelayStore(context).askedAt = System.currentTimeMillis()

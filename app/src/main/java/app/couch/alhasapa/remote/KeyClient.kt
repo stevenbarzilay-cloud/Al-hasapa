@@ -20,19 +20,48 @@ import kotlinx.coroutines.flow.StateFlow
  * The phone's side of the phone-as-keyboard link. Finds the TV (where it was last time, or by asking the home network), connects, pairs
  * once with the code the TV shows, and then sends what is typed, as it is typed. If the connection drops it comes back by itself.
  *
+ * Which TV (2.0): only the ones named by its [Target]: the home couch's own, or the one of the friend's couch being visited. Another
+ * TV that happens to be on the same network is never connected to, however it was found: every TV says who it is first, and one that
+ * is not meant is let go of before the phone has said anything of itself.
+ *
  * All the waiting happens on its own thread; [send] and the rest can be called from the screen at any time.
  */
 class KeyClient(
     context: Context,
     private val store: RemoteStore = RemoteStore(context),
     private val phoneName: String = Build.MODEL.orEmpty().ifBlank { "טלפון" },
-    private val find: (timeoutMs: Long) -> String? = { NsdFinder(context).find(it) },
+    /** In the tests: where the TV is. */
+    private val find: ((timeoutMs: Long) -> String?)? = null,
     /** Told to the TV and compared with what the TV tells (see [KeyLink.TOGETHER_SINCE] and [Versions]), and this app's version by name. */
     private val appCode: Int = KeyLink.TOGETHER_SINCE,
     private val appVer: String = app.couch.alhasapa.BuildConfig.VERSION_NAME,
     /** Both of us as this phone knows us (1.9.9): sent to the TV, and the TV's newer word kept. */
     private val book: CoupleBook = RepoCoupleBook { (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo },
+    /** Which TVs to connect to, and as what (2.0). Null: none (the home couch has no TV yet, and no visit is on). */
+    target: Target? = Target.ANY_HOME,
+    /** What the phone keeps of friends' couches (2.0): their players as their TVs name them, and the games played alone there. */
+    private val couches: CouchStore = CouchStore(context),
+    private val guestSolo: GuestSolo = GuestSolo(context),
+    /** Where the TVs of [Target.tvs] are on this network, the likeliest first (asked when they are not where they were last). */
+    private val finder: (tvs: Set<String>, timeoutMs: Long) -> List<String> = { tvs, ms ->
+        if (find != null) listOfNotNull(find.invoke(ms)) else NsdFinder(context).find(tvs, ms)
+    },
 ) {
+    /**
+     * Which TVs this client may connect to, and what the phone comes as ([role], see [KeyLink.ROLES]; [ASK]: only to see which couch a
+     * TV is of, for a phone from before 2.0 that cannot tell which of its TVs is its home's). [address]: where a TV chosen by hand is.
+     * No [tvs] at all: any TV (in the tests only; the app always names them).
+     */
+    data class Target(val tvs: Set<String>, val role: String = KeyLink.AS_HOME, val address: String? = null) {
+        companion object {
+            const val ASK = "ask"
+            val ANY_HOME = Target(emptySet(), KeyLink.AS_HOME)
+        }
+    }
+
+    /** A TV that said who it is: its id and name, and the couch it is of (2.0; null from a TV with none yet, or an app before 2.0). */
+    data class Tv(val id: String, val name: String, val couch: app.couch.alhasapa.data.CouchRef?)
+
     sealed interface State {
         /** Looking for the TV on the home network. */
         data object Looking : State
@@ -43,15 +72,49 @@ class KeyClient(
         data class NeedCode(val tv: String, val left: Int? = null) : State
         /**
          * [result]: a game's end screen is up on the TV, and the phone offers to save the result. [touch]: the game on the TV is played
-         * by dragging, and the phone turns to touch mode by itself (1.9.8).
+         * by dragging, and the phone turns to touch mode by itself (1.9.8). [couch]: the couch the TV is of, and [role] what the phone
+         * was let in as (2.0).
          */
-        data class Connected(val tv: String, val screen: String, val result: Boolean = false, val touch: Boolean = false) : State
+        data class Connected(
+            val tv: String, val screen: String, val result: Boolean = false, val touch: Boolean = false,
+            val couch: app.couch.alhasapa.data.CouchRef? = null, val role: String = KeyLink.AS_HOME,
+        ) : State
         /** The TV closed pairing for a while (too many wrong codes). */
         data object Wait : State
+        /** There is no TV to connect to (2.0): the home couch has none yet, and no visit is on. */
+        data object NoTv : State
+        /** The TV meant to be the home's is of another couch now ([tv]): nothing was said to it. */
+        data class OtherCouch(val tv: Tv) : State
+        /** A phone from before 2.0, paired with several TVs: is [tv] its home's? Asked once; nothing is said to the TV meanwhile. */
+        data class AskHome(val tv: Tv) : State
     }
 
     private val _state = MutableStateFlow<State>(State.Looking)
     val state: StateFlow<State> get() = _state
+
+    /** Which TVs, and as what (see [Target]); changed with [retarget]. */
+    @Volatile var target: Target? = target
+        private set
+
+    /** Another TV, or none, from now on (a visit began or ended, the home's TV was chosen): what is connected is let go of at once. */
+    fun retarget(t: Target?) {
+        if (t == target) return
+        target = t
+        manual = null
+        closeSocket(); wake.offer(Unit)
+    }
+
+    private val _tv = MutableStateFlow<Tv?>(null)
+    /** The TV in front of this client: the last one that said who it is and was one of the meant ones. */
+    val tv: StateFlow<Tv?> get() = _tv
+
+    /** What the phone was let in as on this connection ([KeyLink.AS_HOME] until the TV says otherwise). */
+    @Volatile private var role = KeyLink.AS_HOME
+    private val isGuest: Boolean get() = role != KeyLink.AS_HOME
+    /** The couch of the TV connected to (2.0), when it said. */
+    @Volatile private var tvCouch: app.couch.alhasapa.data.CouchRef? = null
+    /** A phone with no couch of its own yet takes the TV's first (it joins it), and only then says what it keeps. */
+    @Volatile private var adopting = false
 
     /** A site's login on its way to the TV (see [sendLogins]). */
     sealed interface Handoff {
@@ -102,6 +165,8 @@ class KeyClient(
      * Anything that does not open is dropped.
      */
     private fun takeRelay(sealed: String) {
+        // (Never a friend's: a visit does not replace the home's own channel.)
+        if (isGuest) return
         val key = frameKey ?: return
         val c = RelayCrypto.open(key, KeyLink.RELAY_AAD, sealed)?.let { RelayConfig.parse(String(it, Charsets.UTF_8)) }
         if (c == null) { Flight.log("relay: what the TV sent could not be opened; not kept"); return }
@@ -131,15 +196,49 @@ class KeyClient(
 
     /** Both of us as this phone knows us, and whose phone it is, to the TV (after a change made here; on connecting it goes by itself). */
     fun sendCouple() {
+        if (isGuest) { sendGuest(null); return }
         val people = runCatching { book.couple() }.getOrDefault(emptyList())
         if (people.isNotEmpty()) send(Msg.CoupleMsg(store.me.orEmpty(), people))
     }
 
-    /** A note for the other one: kept here until the TV says it has it. */
-    fun sendNote(n: app.couch.alhasapa.data.Note) {
-        store.keepNote(n)
+    /**
+     * As a guest (2.0): who the phone's holder is at this couch, and, when they are new there, themselves ([added]: a guest of the
+     * evening, or someone who comes often). Nothing of the home's players is said to a friend's TV.
+     */
+    fun sendGuest(added: app.couch.alhasapa.data.Person?) {
+        val c = tvCouch ?: return
+        val saved = couches.saved(c.id)
+        val me = added?.who ?: couches.visit?.takeIf { it.couch == c.id }?.me ?: saved?.me ?: return
+        // Themselves, when they are new there, until that couch's TV names them among its players.
+        val made = added ?: saved?.made?.takeIf { p -> p.who == me && couches.people(c.id).none { it.who == p.who } }
+        send(Msg.CoupleMsg(me, listOfNotNull(made)))
+    }
+
+    /** A note for the other one: kept here until the TV says it has it. [couch]: the couch it is for (2.0; null: the home's). */
+    fun sendNote(n: app.couch.alhasapa.data.Note, couch: String? = null) {
+        val to = couch ?: runCatching { book.couch() }.getOrNull()?.id
+        store.keepNote(n, to)
         _notesWaiting.value = store.pendingNotes().size
-        send(Msg.NoteMsg(n))
+        if (notesGoHere()) send(Msg.NoteMsg(n))
+    }
+
+    /** The couch the notes waiting on this phone may go to now: the one the connected TV is of. */
+    private fun notesFor(): List<app.couch.alhasapa.data.Note> {
+        val home = runCatching { book.couch() }.getOrNull()?.id
+        val here = if (isGuest) tvCouch?.id else home
+        return store.pendingNotes(here, home)
+    }
+
+    private fun notesGoHere(): Boolean = _state.value is State.Connected
+
+    /**
+     * The games the phone's holder played alone for this couch's contest and its TV does not keep yet (2.0): sent now. Each goes as
+     * it was written; the TV keeps the newest of a side once, so one sent twice counts once.
+     */
+    fun flushGuest() {
+        val c = tvCouch ?: return
+        if (_state.value !is State.Connected) return
+        for (e in guestSolo.pending(c.id)) write(Msg.SoloSideMsg(e.day, e.game, e.side.toJson()))
     }
 
     private class Pending(val site: String, val payload: String, val pair: java.security.KeyPair, val key: String)
@@ -167,10 +266,10 @@ class KeyClient(
         wake.offer(Unit)
     }
 
-    /** A change made on this phone (1.12): its recent share goes to the TV, when connected. */
+    /** A change made on this phone (1.12): its recent share goes to the TV, when connected (to the home's own TV only, 2.0). */
     private val pushShare: () -> Unit = {
         // Made ready on the thread that writes to the TV, not on the one that made the change (the main one, as a rule).
-        if (_state.value is State.Connected) writer.execute { runCatching { ShareBus.recent(book).forEach { write(Msg.Share(it)) } } }
+        if (_state.value is State.Connected && !isGuest && !adopting) writer.execute { runCatching { ShareBus.recent(book).forEach { write(Msg.Share(it)) } } }
     }
 
     /** How many times the TV brought something new (1.12): the screens showing the state read it again. */
@@ -205,6 +304,8 @@ class KeyClient(
      */
     fun sendLogins(site: String, payload: String) {
         if (_state.value !is State.Connected) { _handoff.value = Handoff.Failed(site, "not-connected"); return }
+        // A login goes to the home's own TV only (2.0): never to a friend's, whoever asks.
+        if (isGuest) { _handoff.value = Handoff.Failed(site, "guest"); return }
         val pair = LoginCrypto.newKeyPair()
         val p = Pending(site, payload, pair, LoginCrypto.encode(pair.public))
         pending = p
@@ -252,60 +353,104 @@ class KeyClient(
         writer.execute { runCatching { s.close() } }
     }
 
+    private enum class Met { NOBODY, ANOTHER, OURS }
+
     private fun loop() {
         var pause = 0L
         while (running.get()) {
             if (pause > 0) { wake.poll(pause, TimeUnit.MILLISECONDS); if (!running.get()) break }
-            val fromBefore = manual ?: store.lastAddress
-            var address = fromBefore
-            var connected = address != null && session(address)
-            if (!connected && running.get() && manual == null) {
-                // Not where it was last time (or never found yet): ask the home network.
+            val t = target
+            if (t == null) {
+                // No TV is meant: nothing is looked for, whatever is on this network.
+                _state.value = State.NoTv; _tv.value = null
+                wake.clear(); wake.poll(60_000, TimeUnit.MILLISECONDS)
+                pause = 0
+                continue
+            }
+            // Where a meant TV was last time (or where the person said it is), then the home network.
+            val tried = HashSet<String>()
+            var met = Met.NOBODY
+            val known = listOfNotNull(manual, t.address) + t.tvs.mapNotNull { store.addressOf(it) } +
+                (if (t.role == KeyLink.AS_HOME) listOfNotNull(store.lastAddress) else emptyList())
+            for (a in known) {
+                if (!running.get() || target != t || met == Met.OURS) break
+                if (tried.add(a)) met = maxOf(met, session(a, t))
+            }
+            if (met != Met.OURS && running.get() && target == t && manual == null) {
                 _state.value = State.Looking
-                address = find(8_000)
-                if (address == null) {
+                val found = finder(t.tvs, 8_000).filter { it !in tried }
+                for (a in found) {
+                    if (!running.get() || target != t || met == Met.OURS) break
+                    if (tried.add(a)) met = maxOf(met, session(a, t))
+                }
+                if (met != Met.OURS && running.get() && target == t && _state.value !is State.OtherCouch && _state.value !is State.AskHome) {
                     _state.value = State.NotFound(NO_TV)
                     wake.clear(); wake.poll(20_000, TimeUnit.MILLISECONDS)      // a press of "look again", or by itself in a while
                     pause = 0
                     continue
                 }
-                connected = session(address)
             }
-            pause = if (connected) 800 else 2_500                              // dropped: back quickly; refused: a little later
+            if (_state.value is State.OtherCouch || _state.value is State.AskHome) {
+                // Until the person answers (or a while passed): nothing more is tried.
+                wake.clear(); wake.poll(60_000, TimeUnit.MILLISECONDS)
+                pause = 0
+                continue
+            }
+            pause = if (met == Met.OURS) 800 else 2_500                         // dropped: back quickly; refused: a little later
         }
         _state.value = State.Looking
     }
 
-    /** One connection, from the greeting to its end. True when it got as far as the TV answering. */
-    private fun session(address: String): Boolean {
+    /** One connection, from the greeting to its end: who was there (nobody, a TV that is not meant, or one that is). */
+    private fun session(address: String, t: Target): Met {
         val host = address.substringBeforeLast(':')
         val port = address.substringAfterLast(':').toIntOrNull() ?: KeyLink.PORT
         _state.value = State.Connecting(address)
         val s = Socket()
-        var answered = false
+        var met = Met.NOBODY
         try {
             s.connect(InetSocketAddress(host, port), 2_500)
             s.tcpNoDelay = true
             s.soTimeout = 15_000
             socket = s
             val input = s.getInputStream().bufferedReader(Charsets.UTF_8)
-            while (running.get()) {
+            while (running.get() && target == t) {
                 // A line from the TV may hold a picture of the game (touch mode): larger than anything the phone sends.
                 val line = KeyServer.readLine(input, KeyLink.MAX_FRAME_LINE) ?: break
                 val m = KeyLink.decode(line, KeyLink.MAX_FRAME_LINE) ?: continue
-                answered = true
+                if (met == Met.NOBODY && m !is Msg.Hi) break                    // not a TV of ours at all
                 when (m) {
                     is Msg.Hi -> {
-                        tvId = m.tv; tvName = m.name
+                        // Who it is, before the phone says anything of itself: a TV that is not meant is left at once.
+                        if (t.tvs.isNotEmpty() && m.tv !in t.tvs) {
+                            met = Met.ANOTHER
+                            if (t.tvs.any { store.addressOf(it) == address }) Flight.log("phone keyboard: another TV is at $address now; left alone")
+                            break
+                        }
+                        met = Met.OURS
+                        val couch = m.couch.takeIf { it.isNotEmpty() }?.let { app.couch.alhasapa.data.CouchRef(it, m.couchName.ifEmpty { m.name }) }
+                        val seen = Tv(m.tv, m.name, couch)
+                        tvId = m.tv; tvName = m.name; tvCouch = couch
                         nonce = m.nonce
+                        _tv.value = seen
+                        if (m.tv.isNotEmpty()) store.setAddress(m.tv, address)
                         _versions.value = when { m.app > appCode -> Versions.TvNewer(m.ver); m.app < appCode -> Versions.TvOlder; else -> null }
+                        // A phone from before 2.0 that knew several TVs: is this one its home's? Nothing is said until it is answered.
+                        if (t.role == Target.ASK) { _state.value = State.AskHome(seen); break }
+                        // The home's TV turned out to be of another couch (it was set up anew, say): nothing of the home goes to it.
+                        val mine = runCatching { book.couch() }.getOrNull()
+                        if (t.role == KeyLink.AS_HOME && mine != null && couch != null && couch.id != mine.id) {
+                            Flight.log("phone keyboard: the TV at $address is of another couch; nothing was said to it")
+                            _state.value = State.OtherCouch(seen)
+                            break
+                        }
                         val token = store.tokenFor(m.tv)
                         frameKey = if (token.isNotEmpty() && m.nonce.isNotEmpty()) FrameCrypto.key(token, m.nonce) else null
                         // From 1.9 the TV sends a nonce, and the phone proves it holds the token without sending it. An older TV
                         // gets the token as before.
                         val hello = if (m.nonce.isNotEmpty() && token.isNotEmpty()) {
-                            Msg.Hello(store.phoneId, phoneName, "", LoginCrypto.proof(token, m.nonce, store.phoneId), appCode, appVer)
-                        } else Msg.Hello(store.phoneId, phoneName, token, "", appCode, appVer)
+                            Msg.Hello(store.phoneId, phoneName, "", LoginCrypto.proof(token, m.nonce, store.phoneId), appCode, appVer, t.role)
+                        } else Msg.Hello(store.phoneId, phoneName, token, "", appCode, appVer, t.role)
                         write(hello)
                     }
                     is Msg.LoginsReady -> finishLogins(m)
@@ -318,20 +463,34 @@ class KeyClient(
                         if (nonce.isNotEmpty()) frameKey = FrameCrypto.key(m.token, nonce)
                     }
                     is Msg.Ok -> {
-                        _state.value = State.Connected(tvName, m.screen)
-                        store.lastAddress = address
-                        Flight.log("phone keyboard: connected to the TV at $address")
+                        // What the phone was let in as: what it asked for (a TV app from before 2.0 says nothing, and knows only homes).
+                        role = m.role.ifEmpty { if (t.role in KeyLink.ROLES) t.role else KeyLink.AS_HOME }
+                        _state.value = State.Connected(tvName, m.screen, couch = tvCouch, role = role)
+                        if (!isGuest) store.lastAddress = address
+                        Flight.log("phone keyboard: connected to the TV at $address${if (isGuest) ", as a guest" else ""}")
                         startPinging()
                         // Touch mode was on the screen when the connection dropped: the pictures are asked for again.
                         if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth, mirrorCrop))
-                        // Both of us as this phone knows us, and the notes still waiting for the TV.
-                        sendCouple()
-                        for (n in store.pendingNotes()) write(Msg.NoteMsg(n))
-                        // Everything this phone keeps alike with the TV (1.12): two weeks of evenings, and the rest. The first time the
-                        // two meet, every evening kept, both ways, so the months before are alike on both too.
-                        val all = tvId.isNotEmpty() && !store.sharedAll(tvId)
-                        for (s in ShareBus.opening(book, all)) write(Msg.Share(s))
-                        if (all) { awaitingAll = true; write(Msg.ShareAll) }
+                        // The notes written for this couch that its TV does not keep yet.
+                        for (n in notesFor()) write(Msg.NoteMsg(n))
+                        if (isGuest) {
+                            // A guest: who they are here, and the games they played alone for this couch. Nothing of the home.
+                            sendGuest(null)
+                            flushGuest()
+                        } else if (runCatching { book.couch() }.getOrNull() == null && tvCouch != null) {
+                            // A phone with no couch yet (it joins this one, or is from before 2.0 and learns which its home is):
+                            // everything the TV keeps first, and only then what the phone keeps.
+                            adopting = true; awaitingAll = true
+                            write(Msg.ShareAll)
+                        } else {
+                            // Both of us as this phone knows us.
+                            sendCouple()
+                            // Everything this phone keeps alike with the TV (1.12): two weeks of evenings, and the rest. The first time
+                            // the two meet, every evening kept, both ways, so the months before are alike on both too.
+                            val all = tvId.isNotEmpty() && !store.sharedAll(tvId)
+                            for (sh in ShareBus.opening(book, all)) write(Msg.Share(sh))
+                            if (all) { awaitingAll = true; write(Msg.ShareAll) }
+                        }
                         sharedAt = System.currentTimeMillis()
                     }
                     is Msg.Screen -> (_state.value as? State.Connected)?.let { _state.value = it.copy(screen = m.screen, result = m.result, touch = m.touch) }
@@ -347,26 +506,43 @@ class KeyClient(
                         }
                     }
                     is Msg.FrameNone -> if (mirrorWidth > 0) { _frame.value = null; _frameNone.value = m.why }
-                    is Msg.CoupleMsg -> runCatching { book.offer(m.people) }
+                    is Msg.CoupleMsg -> {
+                        // A friend's players are kept apart, for the choice of who the phone's holder is there (2.0): they never
+                        // become players of the home.
+                        if (isGuest) { tvCouch?.let { c -> couches.setPeople(c.id, m.people) }; _shared.value = _shared.value + 1 }
+                        else runCatching { book.offer(m.people) }
+                    }
                     is Msg.NoteOk -> { store.noteKept(m.id); _notesWaiting.value = store.pendingNotes().size }
                     is Msg.Relay -> takeRelay(m.sealed)
-                    is Msg.Share -> { if (runCatching { book.takeShare(m.share) }.getOrDefault(false)) _shared.value = _shared.value + 1 }
-                    Msg.ShareAll -> { awaitingAll = false; if (tvId.isNotEmpty()) store.setSharedAll(tvId); Flight.log("sync: every evening kept is alike on the TV and this phone now") }
+                    is Msg.Share -> { if (!isGuest && runCatching { book.takeShare(m.share) }.getOrDefault(false)) _shared.value = _shared.value + 1 }
+                    Msg.ShareAll -> {
+                        awaitingAll = false
+                        if (tvId.isNotEmpty()) store.setSharedAll(tvId)
+                        Flight.log("sync: every evening kept is alike on the TV and this phone now")
+                        if (adopting) {
+                            adopting = false
+                            sendCouple()
+                            for (sh in ShareBus.opening(book, all = true)) write(Msg.Share(sh))
+                        }
+                    }
+                    is Msg.SoloOk -> tvCouch?.let { c -> guestSolo.markSent(c.id, m.day, m.game, m.t) }
+                    is Msg.Contest -> if (isGuest) tvCouch?.let { c -> guestSolo.setContest(c.id, m.day, m.games) }
                     is Msg.Bye -> { if (m.why == "wait") _state.value = State.Wait; break }
                     else -> {}
                 }
             }
         } catch (e: Exception) {
-            if (!answered) Flight.log("phone keyboard: no TV at $address (${e.javaClass.simpleName})")
+            if (met == Met.NOBODY) Flight.log("phone keyboard: no TV at $address (${e.javaClass.simpleName})")
         } finally {
             stopPinging()
             if (socket === s) socket = null
             runCatching { s.close() }
+            adopting = false; awaitingAll = false
             // A login that was on its way when the connection dropped did not arrive.
             pending?.let { p -> pending = null; _handoff.value = Handoff.Failed(p.site, "not-connected") }
         }
-        if (answered && _state.value is State.Connected) _state.value = State.Connecting(address)
-        return answered
+        if (met == Met.OURS && _state.value is State.Connected) _state.value = State.Connecting(address)
+        return met
     }
 
     private fun startPinging() {
@@ -384,38 +560,83 @@ class KeyClient(
     }
 }
 
-/** Asks the home network (DNS-SD) where the TV's keyboard link is. */
+/** A TV found on this network (2.0): where it is, and its id when the network said it. */
+data class FoundTv(val address: String, val tv: String)
+
+/** Asks the home network (DNS-SD) where the TVs' keyboard links are. */
 class NsdFinder(context: Context) {
     private val nsd = context.applicationContext.getSystemService(Context.NSD_SERVICE) as? NsdManager
 
-    /** "host:port" of the first TV found within [timeoutMs], or null. */
+    /**
+     * Where the TVs of [tvs] are, found within [timeoutMs] (it stops as soon as one of them is). A TV whose id the network does not
+     * say is given too (after those it does), to be asked who it is; with no [tvs], every TV found.
+     */
+    fun find(tvs: Set<String>, timeoutMs: Long): List<String> {
+        val all = scan(timeoutMs) { f -> tvs.isNotEmpty() && f.tv in tvs }
+        val meant = all.filter { it.tv in tvs }.map { it.address }
+        return if (tvs.isEmpty()) all.map { it.address } else meant + all.filter { it.tv.isEmpty() }.map { it.address }
+    }
+
+    /** Every TV found within [timeoutMs], or until [enough] says one of them is the one looked for. */
     @Suppress("DEPRECATION") // resolveService and host: the replacements need Android 14; these work on every version the phone app runs on
-    fun find(timeoutMs: Long): String? {
-        val nsd = nsd ?: return null
-        val found = LinkedBlockingQueue<String>()
+    fun scan(timeoutMs: Long, enough: (FoundTv) -> Boolean = { false }): List<FoundTv> {
+        val nsd = nsd ?: return emptyList()
+        val found = LinkedBlockingQueue<FoundTv>()
+        val waiting = LinkedBlockingQueue<NsdServiceInfo>()
         val resolving = AtomicBoolean(false)
+        fun next() {
+            if (!resolving.compareAndSet(false, true)) return
+            val info = waiting.poll() ?: run { resolving.set(false); return }
+            runCatching {
+                nsd.resolveService(info, object : NsdManager.ResolveListener {
+                    override fun onServiceResolved(r: NsdServiceInfo) {
+                        val tv = runCatching { r.attributes["tv"]?.let { String(it, Charsets.UTF_8) } }.getOrNull().orEmpty()
+                        r.host?.hostAddress?.let { found.offer(FoundTv((if (':' in it) "[$it]" else it) + ":" + r.port, tv)) }
+                        resolving.set(false); next()
+                    }
+                    override fun onResolveFailed(r: NsdServiceInfo, error: Int) { resolving.set(false); next() }
+                })
+            }.onFailure { resolving.set(false) }
+        }
         val discovery = object : NsdManager.DiscoveryListener {
             override fun onServiceFound(info: NsdServiceInfo) {
-                if (!info.serviceType.contains("_couchkeys") || !resolving.compareAndSet(false, true)) return
-                runCatching {
-                    nsd.resolveService(info, object : NsdManager.ResolveListener {
-                        override fun onServiceResolved(r: NsdServiceInfo) {
-                            r.host?.hostAddress?.let { found.offer((if (':' in it) "[$it]" else it) + ":" + r.port) }
-                            resolving.set(false)
-                        }
-                        override fun onResolveFailed(r: NsdServiceInfo, error: Int) { resolving.set(false) }
-                    })
-                }.onFailure { resolving.set(false) }
+                if (!info.serviceType.contains("_couchkeys")) return
+                waiting.offer(info); next()
             }
             override fun onServiceLost(info: NsdServiceInfo) {}
             override fun onDiscoveryStarted(type: String) {}
             override fun onDiscoveryStopped(type: String) {}
-            override fun onStartDiscoveryFailed(type: String, error: Int) { found.offer("") }
+            override fun onStartDiscoveryFailed(type: String, error: Int) { found.offer(FoundTv("", "")) }
             override fun onStopDiscoveryFailed(type: String, error: Int) {}
         }
-        if (runCatching { nsd.discoverServices(KeyLink.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discovery) }.isFailure) return null
-        val r = found.poll(timeoutMs, TimeUnit.MILLISECONDS)
+        if (runCatching { nsd.discoverServices(KeyLink.SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discovery) }.isFailure) return emptyList()
+        val out = LinkedHashMap<String, FoundTv>()
+        val until = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            val left = until - System.currentTimeMillis()
+            if (left <= 0) break
+            val f = found.poll(left, TimeUnit.MILLISECONDS) ?: break
+            if (f.address.isEmpty()) break
+            out[f.address] = f
+            if (enough(f)) break
+        }
         runCatching { nsd.stopServiceDiscovery(discovery) }
-        return r?.takeIf { it.isNotEmpty() }
+        return out.values.toList()
     }
+}
+
+/** Asks a TV who it is, and nothing more (2.0): its id and name, and the couch it is of. The TV is told nothing of the phone. */
+object TvPeek {
+    /** Null when nothing of ours answers at [address] within [timeoutMs]. */
+    fun ask(address: String, timeoutMs: Int = 2_500): KeyClient.Tv? = runCatching {
+        val host = address.substringBeforeLast(':')
+        val port = address.substringAfterLast(':').toIntOrNull() ?: KeyLink.PORT
+        Socket().use { s ->
+            s.connect(InetSocketAddress(host, port), timeoutMs)
+            s.soTimeout = timeoutMs
+            val line = KeyServer.readLine(s.getInputStream().bufferedReader(Charsets.UTF_8)) ?: return null
+            val hi = KeyLink.decode(line) as? Msg.Hi ?: return null
+            KeyClient.Tv(hi.tv, hi.name, hi.couch.takeIf { it.isNotEmpty() }?.let { app.couch.alhasapa.data.CouchRef(it, hi.couchName.ifEmpty { hi.name }) })
+        }
+    }.getOrNull()
 }

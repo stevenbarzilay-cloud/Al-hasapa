@@ -165,6 +165,11 @@ class RelayStore(context: Context, name: String = "relay") {
         get() = prefs.getBoolean("share_pending", false)
         set(v) = prefs.edit { putBoolean("share_pending", v) }
 
+    /** The home couch was changed (2.0): the channel of the home before is let go of whole; the new home's TV hands over its own. */
+    fun forgetChannel() {
+        prefs.edit { for (k in listOf("config", "last_id", "sent_at", "pending", "share_sent_at", "share_pending", "asked_at", "told")) remove(k) }
+    }
+
     /** The id of the last message read (null: never read). */
     var lastId: String?
         get() = prefs.getString("last_id", null)
@@ -350,18 +355,18 @@ class SoloRelay(
          * on its own (something that alone is too big, a very long list of jokes say, is left to the home network).
          */
         fun parts(share: JSONObject): List<JSONObject> {
-            val keys = share.keys().asSequence().filter { it != "v" }.toList()
+            val keys = share.keys().asSequence().filter { it != "v" && it != "c" }.toList()
             if (keys.isEmpty()) return emptyList()
             if (size(share) <= MAX_PART) return listOf(share)
             val out = ArrayList<JSONObject>()
-            var cur = JSONObject().put("v", 1)
-            fun flush() { if (cur.length() > 1) out += cur; cur = JSONObject().put("v", 1) }
+            var cur = Shared.blank(share)
+            fun flush() { if (!Shared.empty(cur)) out += cur; cur = Shared.blank(share) }
             share.optJSONObject("log")?.let { log ->
                 for (day in log.keys().asSequence().toList()) {
                     val d = log.optJSONObject(day) ?: continue
                     for (id in d.keys().asSequence().toList()) {
                         val e = d.optJSONObject(id) ?: continue
-                        val one = JSONObject().put("v", 1).put("log", JSONObject().put(day, JSONObject().put(id, e)))
+                        val one = Shared.blank(share).put("log", JSONObject().put(day, JSONObject().put(id, e)))
                         if (size(one) > MAX_PART) continue
                         val l = cur.optJSONObject("log") ?: JSONObject().also { cur.put("log", it) }
                         val dd = l.optJSONObject(day) ?: JSONObject().also { l.put(day, it) }
@@ -373,7 +378,7 @@ class SoloRelay(
             flush()
             for (k in keys) {
                 if (k == "log") continue
-                val one = JSONObject().put("v", 1).put(k, share.get(k))
+                val one = Shared.blank(share).put(k, share.get(k))
                 // A stamp travels with what it stamps: the library's and the links' stamps go with them.
                 if (k == "prefs" || k == "urls" || k == "custom" || k == "jokes") continue
                 if (k == Shared.STAMPS) {
@@ -381,7 +386,7 @@ class SoloRelay(
                     for (name in listOf("prefs", "urls", "custom", "jokes")) {
                         val st = JSONObject().apply { for (s in all.keys().asSequence().filter { it == name || it.startsWith("$name|") }) put(s, all.optLong(s)) }
                         if (st.length() == 0) continue
-                        val part = JSONObject().put("v", 1).put(Shared.STAMPS, st).apply { if (share.has(name)) put(name, share.get(name)) }
+                        val part = Shared.blank(share).put(Shared.STAMPS, st).apply { if (share.has(name)) put(name, share.get(name)) }
                         if (size(part) <= MAX_PART) out += part
                     }
                     continue

@@ -96,7 +96,14 @@ object Couple {
 
     /** [p] into [state] if it is newer than what the state has. True when anything changed. */
     fun offer(state: JSONObject, p: Person): Boolean {
-        if (!isId(p.who) || p.at <= stamp(state, p.who)) return false
+        if (!isId(p.who)) return false
+        if (p.at <= stamp(state, p.who)) {
+            // Nobody named them here yet (2.0: a new TV joining the couch a phone began): the name another device has is taken, though
+            // neither was ever stamped.
+            val cur = if (p.who in WHO) person(state, p.who) else return false
+            val unnamed = cur.at == 0L && p.at == 0L && cur.name == (if (p.who == "a") CouchState.DEFAULT_A else CouchState.DEFAULT_B)
+            if (!unnamed || p.name == cur.name || p.name.isBlank()) return false
+        }
         put(state, p)
         return true
     }

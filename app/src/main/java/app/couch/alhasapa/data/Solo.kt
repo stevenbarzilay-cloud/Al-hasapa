@@ -7,7 +7,7 @@ import org.json.JSONObject
 /**
  * One side of a solo game (1.11): [who] played that day's game alone, on their own phone, and got this result ([v], out of [max],
  * [fail]ed), or only played it ([v] null, not failed: the result may come later). [t] is when the side was last written: the newest of
- * a side wins wherever two copies meet.
+ * a side wins wherever two copies meet. [out] (2.0): they left the contest without a result, so the others are not kept waiting.
  */
 data class SoloSide(
     val who: String,
@@ -16,11 +16,16 @@ data class SoloSide(
     val fail: Boolean = false,
     val kind: String = "",
     val t: Long,
+    val out: Boolean = false,
+    /** Only on a side sealed for someone else ([sealed]): there is a result in the envelope, and nothing here says what. */
+    val env: Boolean = false,
 ) {
     /** A result to compare (a number, or not solved), not only "played". */
-    val hasResult: Boolean get() = v != null || fail
+    val hasResult: Boolean get() = !out && (v != null || fail)
 
     fun toJson(): JSONObject = JSONObject().put("t", t).apply {
+        if (out) { put("out", true); return@apply }
+        if (env) { put("env", true); return@apply }
         if (v != null) put("v", app.couch.alhasapa.scoring.jsNumber(v)) else if (!fail) put("p", true)
         if (max != null) put("max", max)
         if (fail) put("fail", true)
@@ -30,6 +35,9 @@ data class SoloSide(
     /** As the result type the rest of the app formats and scores. */
     fun asResult(): Result? = if (!hasResult) null else Result(v ?: 0.0, max, fail, kind)
 
+    /** As someone else may see it before they handed in their own: that it was played, and whether there is a result, not what it is. */
+    fun sealed(): SoloSide = if (out) this else copy(v = null, max = null, fail = false, kind = "", env = hasResult || env)
+
     companion object {
         private val KINDS = setOf("guesses", "mistakes", "hints", "time", "words", "score", "none")
 
@@ -37,6 +45,8 @@ data class SoloSide(
         fun fromJson(who: String, o: JSONObject?): SoloSide? {
             if (o == null || !Couple.isId(who)) return null
             val t = o.optLong("t", 0L).takeIf { it > 0 } ?: return null
+            if (o.optBoolean("out", false)) return SoloSide(who, null, t = t, out = true)
+            if (o.optBoolean("env", false)) return SoloSide(who, null, t = t, env = true)
             val v = if (o.has("v") && !o.isNull("v")) o.optDouble("v", Double.NaN).takeIf { it.isFinite() && Math.abs(it) < 1e9 } ?: return null else null
             val max = if (o.has("max")) o.optInt("max", 0).takeIf { it in 1..100_000 } else null
             val kind = o.optString("kind").takeIf { it in KINDS }.orEmpty()
@@ -129,34 +139,56 @@ object Solo {
         }
     }
 
+    /** Those in the contest of [game] on [day]: everyone who played it alone, but for those who left it ([SoloSide.out]). */
+    fun players(state: JSONObject, day: String, game: String): List<SoloSide> = sides(state, day, game).filter { !it.out }
+
+    /** Those among [list] who are in the contest and have not handed in a result yet. */
+    fun waiting(list: List<SoloSide>): List<SoloSide> = list.filter { !it.out && !it.hasResult && !it.env }
+
     /**
-     * Who did best on [day] in [game] of [kind], once at least two played it alone with a result: their id, "t" when the best are level,
-     * or null while there is nothing to compare yet.
+     * Who did best on [day] in [game] of [kind]: their id, "t" when the best are level, or null while there is nothing to say yet. With
+     * two it is as it always was: both handed in, and the envelopes open. With more (2.0), nobody is crowned while someone who joined
+     * is still playing; once the day is [over], whoever handed in is compared and the others are waited for no longer.
      */
-    fun winner(state: JSONObject, day: String, game: String, kind: String): String? {
-        val withResult = sides(state, day, game).filter { it.hasResult }
-        if (withResult.size < 2 || kind == "none") return null
-        val best = withResult.sortedWith { x, y -> compare(kind, y, x) }
-        return if (compare(kind, best[0], best[1]) == 0) "t" else best[0].who
+    fun winner(state: JSONObject, day: String, game: String, kind: String, over: Boolean = false): String? =
+        winnerOf(sides(state, day, game), kind, over)
+
+    fun winnerOf(sides: List<SoloSide>, kind: String, over: Boolean = false): String? {
+        val best = leadersOf(sides, kind, over)
+        return when { best.isEmpty() -> null; best.size > 1 -> "t"; else -> best[0] }
     }
+
+    /** Those level at the top (one: the winner; more: a tie between them); empty while there is nothing to say (see [winner]). */
+    fun leadersOf(sides: List<SoloSide>, kind: String, over: Boolean = false): List<String> {
+        val joined = sides.filter { !it.out }
+        val withResult = joined.filter { it.hasResult }
+        if (withResult.size < 2 || kind == "none") return emptyList()
+        if (!over && joined.any { !it.hasResult }) return emptyList()
+        val best = withResult.sortedWith { x, y -> compare(kind, y, x) }
+        return best.filter { compare(kind, best[0], it) == 0 }.map { it.who }
+    }
+
+    /** Whether the contests of [day] are over: its evening has passed ([evening]: the evening it is now, see [Couple.evening]). */
+    fun over(day: String, evening: String = Couple.evening()): Boolean = day < evening
 
     /**
      * The sides [me] may see on [day] in [game]: everyone's once [me] has played it alone too (with a result, or given up on one), or
      * else the others' with their results sealed (played, not how). Sealed sides keep their time, so "who played first" still shows.
      */
-    fun sealedFor(state: JSONObject, day: String, game: String, me: String?): List<SoloSide> {
-        val all = sides(state, day, game)
+    fun sealedFor(state: JSONObject, day: String, game: String, me: String?): List<SoloSide> = sealedFor(sides(state, day, game), me)
+
+    fun sealedFor(all: List<SoloSide>, me: String?): List<SoloSide> {
         val open = me != null && all.any { it.who == me && it.hasResult }
-        return if (open) all else all.map { if (it.who == me) it else it.copy(v = null, max = null, fail = false) }
+        return if (open) all else all.map { if (it.who == me) it else it.sealed() }
     }
 
-    /** Solo wins from [from] to [to] (day keys, both included): who won how many, ties not counted. */
-    fun wins(state: JSONObject, kindOf: (String) -> String, from: String, to: String): Map<String, Int> {
+    /** Solo wins from [from] to [to] (day keys, both included): who won how many, ties not counted. A day still on waits (see [winner]). */
+    fun wins(state: JSONObject, kindOf: (String) -> String, from: String, to: String, evening: String = Couple.evening()): Map<String, Int> {
         val out = LinkedHashMap<String, Int>()
         val solo = state.optJSONObject("solo") ?: return out
         for (day in solo.keys().asSequence().filter { DAY.matches(it) && it >= from && it <= to }) {
             for (game in games(state, day)) {
-                val w = winner(state, day, game, kindOf(game)) ?: continue
+                val w = winner(state, day, game, kindOf(game), over(day, evening)) ?: continue
                 if (w != "t") out[w] = (out[w] ?: 0) + 1
             }
         }

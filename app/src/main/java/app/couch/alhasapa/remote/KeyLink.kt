@@ -60,6 +60,18 @@ import org.json.JSONObject
  *                                                         relay's address, its topic and its key, AES-GCM under the connection's key
  *                                                         (see SoloRelay); a phone app from before 1.11 ignores it
  *
+ *     couches (2.0): a phone is of the TV's home, or a guest at it
+ *     TV    → phone  hi {..., couch, cname}               which couch this TV is of, and its name (empty: the TV has none yet)
+ *     phone → TV     hello {..., as}                      what the phone comes as: "home" (one of the home's own phones: everything
+ *                                                         above), "guest" (a friend who may come again) or "evening" (a friend, for
+ *                                                         this evening); a phone app from before 2.0 says nothing, and is of the home
+ *     TV    → phone  ok {screen, as}                      what it was let in as. A guest gets the remote, the players' names and the
+ *                                                         contests below; never the home's history, its relay, or a login
+ *     phone → TV     solo {day, game, side}               a guest's own side of a game played alone for this couch's contest
+ *     TV    → phone  solo-ok {day, game, t}               the TV keeps it (the phone stops keeping it to send)
+ *     TV    → phone  contest {day, games}                 to a guest: the day's games played alone at this couch, side by side, the
+ *                                                         others' results sealed until the guest handed in their own
+ *
  *     the sign-in handoff (from 1.9, see LoginHandoff and LoginCrypto):
  *     phone → TV     logins-key {key}                     a fresh public key
  *     TV    → phone  logins-ready {key, sig} | logins-no {why}
@@ -87,7 +99,13 @@ object KeyLink {
      * Not simply the app's own version number: a release that changes only one of the two (the TV's home got a new look in 1.9.5)
      * must not send the people to update the other for nothing. It is raised only when a release needs both.
      */
-    const val TOGETHER_SINCE = 39
+    const val TOGETHER_SINCE = 40
+
+    /** What a phone comes to a TV as (2.0): one of the home's own, a friend who may come again, or a friend for this evening. */
+    const val AS_HOME = "home"
+    const val AS_GUEST = "guest"
+    const val AS_EVENING = "evening"
+    val ROLES = setOf(AS_HOME, AS_GUEST, AS_EVENING)
 
     /** What the solo relay's configuration is sealed for, under the connection's key (`relay`, 1.11). */
     const val RELAY_AAD = "couch-relay-config v1"
@@ -156,13 +174,22 @@ object KeyLink {
 
     sealed interface Msg {
         /** [app], [ver]: the sender's app version (its number and its name); 0 and empty from an app before 1.9.4. */
-        data class Hi(val tv: String, val name: String, val nonce: String = "", val app: Int = 0, val ver: String = "") : Msg
-        data class Hello(val phone: String, val name: String, val token: String, val proof: String = "", val app: Int = 0, val ver: String = "") : Msg
+        /** [couch], [couchName]: the couch this TV is of (2.0; empty: none yet, or a TV app from before). */
+        data class Hi(
+            val tv: String, val name: String, val nonce: String = "", val app: Int = 0, val ver: String = "",
+            val couch: String = "", val couchName: String = "",
+        ) : Msg
+        /** [role]: what the phone comes as ([AS_HOME], [AS_GUEST], [AS_EVENING]; empty from a phone app before 2.0). */
+        data class Hello(
+            val phone: String, val name: String, val token: String, val proof: String = "", val app: Int = 0, val ver: String = "",
+            val role: String = "",
+        ) : Msg
         data object NeedCode : Msg
         data class Pair(val code: String) : Msg
         data class Wrong(val left: Int) : Msg
         data class Paired(val token: String) : Msg
-        data class Ok(val screen: String) : Msg
+        /** [role]: what the phone was let in as (empty from a TV app before 2.0). */
+        data class Ok(val screen: String, val role: String = "") : Msg
         /** [touch]: the game in front is played by dragging (from 1.9.8): the phone turns to touch mode by itself. */
         data class Screen(val screen: String, val result: Boolean = false, val touch: Boolean = false) : Msg
 
@@ -209,6 +236,13 @@ object KeyLink {
         /** Every evening kept is asked for (phone to TV), or was all sent (TV to phone). */
         data object ShareAll : Msg
 
+        /** A guest's own side of [game] on [day], played alone for this couch's contest (2.0). */
+        data class SoloSideMsg(val day: String, val game: String, val side: JSONObject) : Msg
+        /** The TV keeps the guest's side of [game] on [day] written at [t]. */
+        data class SoloOk(val day: String, val game: String, val t: Long) : Msg
+        /** To a guest: the games played alone at this couch on [day], game -> who -> side, the others' sealed until the guest handed in. */
+        data class Contest(val day: String, val games: JSONObject) : Msg
+
         /** The sign-in handoff: the phone's fresh public key; the TV's, signed with the pairing token; the logins; the answer. */
         data class LoginsKey(val key: String) : Msg
         data class LoginsReady(val key: String, val sig: String) : Msg
@@ -225,14 +259,14 @@ object KeyLink {
 
     private fun encodeJson(m: Msg): JSONObject = when (m) {
         is Msg.Hi -> JSONObject().put("t", "hi").put("v", VERSION).put("tv", m.tv).put("name", m.name).put("nonce", m.nonce)
-            .put("app", m.app).put("ver", m.ver)
+            .put("app", m.app).put("ver", m.ver).apply { if (m.couch.isNotEmpty()) put("couch", m.couch).put("cname", m.couchName) }
         is Msg.Hello -> JSONObject().put("t", "hello").put("v", VERSION).put("phone", m.phone).put("name", m.name).put("token", m.token)
-            .put("proof", m.proof).put("app", m.app).put("ver", m.ver)
+            .put("proof", m.proof).put("app", m.app).put("ver", m.ver).apply { if (m.role.isNotEmpty()) put("as", m.role) }
         Msg.NeedCode -> JSONObject().put("t", "code")
         is Msg.Pair -> JSONObject().put("t", "pair").put("code", m.code)
         is Msg.Wrong -> JSONObject().put("t", "wrong").put("left", m.left)
         is Msg.Paired -> JSONObject().put("t", "paired").put("token", m.token)
-        is Msg.Ok -> JSONObject().put("t", "ok").put("screen", m.screen)
+        is Msg.Ok -> JSONObject().put("t", "ok").put("screen", m.screen).apply { if (m.role.isNotEmpty()) put("as", m.role) }
         is Msg.Screen -> JSONObject().put("t", "screen").put("screen", m.screen).apply { if (m.result) put("result", true); if (m.touch) put("touch", true) }
         Msg.SaveResult -> JSONObject().put("t", "save-result")
         is Msg.Text -> JSONObject().put("t", "text").put("s", m.s)
@@ -266,6 +300,9 @@ object KeyLink {
         is Msg.Relay -> JSONObject().put("t", "relay").put("s", m.sealed)
         is Msg.Share -> JSONObject().put("t", "share").put("s", m.share)
         Msg.ShareAll -> JSONObject().put("t", "share-all")
+        is Msg.SoloSideMsg -> JSONObject().put("t", "solo").put("day", m.day).put("game", m.game).put("side", m.side)
+        is Msg.SoloOk -> JSONObject().put("t", "solo-ok").put("day", m.day).put("game", m.game).put("at", m.t)
+        is Msg.Contest -> JSONObject().put("t", "contest").put("day", m.day).put("games", m.games)
     }
 
     private fun frameLine(m: Msg.Frame): String = StringBuilder(m.data.length + 140)
@@ -281,13 +318,19 @@ object KeyLink {
         val o = runCatching { JSONObject(line) }.getOrNull() ?: return null
         fun s(k: String) = o.optString(k, "").take(512)
         return when (o.optString("t")) {
-            "hi" -> Msg.Hi(s("tv"), s("name"), s("nonce"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24))
-            "hello" -> Msg.Hello(s("phone"), s("name"), s("token"), s("proof"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24))
+            "hi" -> Msg.Hi(
+                s("tv"), s("name"), s("nonce"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24),
+                s("couch").takeIf { app.couch.alhasapa.data.Couches.isId(it) }.orEmpty(), s("cname").take(app.couch.alhasapa.data.Couches.MAX_NAME),
+            )
+            "hello" -> Msg.Hello(
+                s("phone"), s("name"), s("token"), s("proof"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24),
+                s("as").takeIf { it in ROLES }.orEmpty(),
+            )
             "code" -> Msg.NeedCode
             "pair" -> Msg.Pair(s("code"))
             "wrong" -> Msg.Wrong(o.optInt("left", 0))
             "paired" -> Msg.Paired(s("token"))
-            "ok" -> Msg.Ok(s("screen"))
+            "ok" -> Msg.Ok(s("screen"), s("as").takeIf { it in ROLES }.orEmpty())
             "screen" -> Msg.Screen(s("screen"), o.optBoolean("result", false), o.optBoolean("touch", false))
             "save-result" -> Msg.SaveResult
             "text" -> o.optString("s", "").takeIf { it.isNotEmpty() && it.length <= 1_000 }?.let { Msg.Text(it) }
@@ -332,9 +375,18 @@ object KeyLink {
             "relay" -> s("s").takeIf { it.isNotEmpty() && it.length <= 2_000 }?.let { Msg.Relay(it) }
             "share" -> o.optJSONObject("s")?.takeIf { it.optInt("v") == 1 }?.let { Msg.Share(it) }
             "share-all" -> Msg.ShareAll
+            "solo" -> o.optJSONObject("side")?.let { side ->
+                val day = s("day"); val game = s("game")
+                if (DAY.matches(day) && GAME.matches(game)) Msg.SoloSideMsg(day, game, side) else null
+            }
+            "solo-ok" -> s("day").takeIf { DAY.matches(it) }?.let { Msg.SoloOk(it, s("game"), o.optLong("at", 0L)) }
+            "contest" -> o.optJSONObject("games")?.let { g -> s("day").takeIf { DAY.matches(it) }?.let { Msg.Contest(it, g) } }
             else -> null
         }
     }
+
+    private val DAY = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
+    private val GAME = Regex("[a-z0-9-]{1,40}")
 
     /** A move or a scroll is never more than this many dp at once (and never "not a number"). */
     private fun limit(v: Double): Float = if (v.isNaN()) 0f else v.coerceIn(-400.0, 400.0).toFloat()

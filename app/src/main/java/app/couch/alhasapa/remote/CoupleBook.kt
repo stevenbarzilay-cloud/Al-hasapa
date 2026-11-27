@@ -28,6 +28,18 @@ interface CoupleBook {
 
     /** Another device's share: kept where newer. True when anything here changed. */
     fun takeShare(s: org.json.JSONObject): Boolean = false
+
+    /** The couch this device is of (2.0), or null while it has none yet. */
+    fun couch(): app.couch.alhasapa.data.CouchRef? = null
+
+    /**
+     * On the TV (2.0): a guest's own side of a game played alone for this couch's contest, kept where newer. True when the couch has
+     * it now (kept this time, or already there), so the guest's phone can stop keeping it to send.
+     */
+    fun guestSide(day: String, game: String, side: app.couch.alhasapa.data.SoloSide): Boolean = false
+
+    /** On the TV: the games played alone here on [day] as [who] may see them: game -> who -> side, the others' sealed until [who] handed in. */
+    fun contest(day: String, who: String): org.json.JSONObject = org.json.JSONObject()
 }
 
 /** The app's own state ([repo] null: none yet, so nothing is known or kept). */
@@ -58,4 +70,32 @@ class RepoCoupleBook(private val repo: () -> StateRepository?) : CoupleBook {
     }
 
     override fun takeShare(s: org.json.JSONObject): Boolean = repo()?.mergeShared(s) ?: false
+
+    override fun couch(): app.couch.alhasapa.data.CouchRef? = repo()?.peek { app.couch.alhasapa.data.Couches.of(it) }
+
+    override fun guestSide(day: String, game: String, side: app.couch.alhasapa.data.SoloSide): Boolean {
+        val r = repo() ?: return false
+        // Only the days a contest can still be handed in for: a week back at most, never ahead.
+        val today = java.time.LocalDate.now()
+        if (day > app.couch.alhasapa.data.CouchState.dayKey(today.plusDays(1)) || day < app.couch.alhasapa.data.CouchState.dayKey(today.minusDays(GUEST_DAYS))) return false
+        // A change made here, as far as the home's own phones go: they hear of it like of any other (the link, the relay).
+        r.update { s -> app.couch.alhasapa.data.Solo.put(s, day, game, side) }
+        return r.peek { s -> app.couch.alhasapa.data.Solo.side(s, day, game, side.who)?.let { it.t >= side.t } == true }
+    }
+
+    override fun contest(day: String, who: String): org.json.JSONObject {
+        val s = repo()?.snapshot() ?: return org.json.JSONObject()
+        val out = org.json.JSONObject()
+        for (game in app.couch.alhasapa.data.Solo.games(s, day)) {
+            val g = org.json.JSONObject()
+            for (side in app.couch.alhasapa.data.Solo.sealedFor(s, day, game, who)) g.put(side.who, side.toJson())
+            if (g.length() > 0) out.put(game, g)
+        }
+        return out
+    }
+
+    companion object {
+        /** A guest's side of a game played alone is taken for this many days back. */
+        const val GUEST_DAYS = 7L
+    }
 }

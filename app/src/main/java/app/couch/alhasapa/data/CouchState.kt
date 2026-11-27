@@ -8,13 +8,18 @@ import org.json.JSONObject
  *   v, names{a,b}, prefs{gameId: yes|no|later}, jokes[], log{YYYY-MM-DD: {gameId: {w, r?, d?, t?}}}
  *   + pieces{a:{shape,color}, b:{...}}  (shape and colour per person)
  *   + urls{gameId: url}                (the person's own links, overriding the catalogue's)
+ *   + couch{id, name, at}              (2.0: which couch this is the state of, see [Couches])
  * Entries carry `t` (epoch ms of the last change) so two phones' histories can be merged "newest wins".
  * Unknown fields are always preserved, so a newer app's backup never loses data in an older one.
  */
 object CouchState {
     const val VERSION = 1
-    const val DEFAULT_A = "סטיב"
-    const val DEFAULT_B = "רוני"
+    /** The names of a couch nobody has named yet (2.0): a friend's new couch must not open as ours. */
+    const val DEFAULT_A = "שחקן 1"
+    const val DEFAULT_B = "שחקן 2"
+    /** Until 2.0 there was one couch, ours: a state from then (it has no couch record) whose names were left empty keeps them. */
+    private const val LEGACY_A = "סטיב"
+    private const val LEGACY_B = "רוני"
     const val KEEP_DAYS = 400L
     private val DAY_KEY = Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
@@ -37,10 +42,13 @@ object CouchState {
 
     fun normalize(o: JSONObject): JSONObject? {
         if (o.optInt("v", -1) != VERSION) return null
-        if (o.optJSONObject("names") == null) o.put("names", JSONObject().put("a", DEFAULT_A).put("b", DEFAULT_B))
+        val legacy = o.optJSONObject(Couches.KEY) == null
+        val a = if (legacy) LEGACY_A else DEFAULT_A
+        val b = if (legacy) LEGACY_B else DEFAULT_B
+        if (o.optJSONObject("names") == null) o.put("names", JSONObject().put("a", a).put("b", b))
         o.optJSONObject("names")!!.apply {
-            if (optString("a").isBlank()) put("a", DEFAULT_A)
-            if (optString("b").isBlank()) put("b", DEFAULT_B)
+            if (optString("a").isBlank()) put("a", a)
+            if (optString("b").isBlank()) put("b", b)
         }
         if (o.optJSONObject("prefs") == null) o.put("prefs", JSONObject())
         if (o.optJSONObject("log") == null) o.put("log", JSONObject())

@@ -21,6 +21,10 @@ object RemoteKeys {
         val phones: List<String> = emptyList(),
         val code: String? = null,
         val codeFor: String? = null,
+        /** What the phone being paired asks to come as (2.0, see [KeyLink.ROLES]): said with the code. */
+        val codeAs: String? = null,
+        /** The connected phones that are guests here (2.0), by name. */
+        val guests: List<String> = emptyList(),
         /**
          * A connected phone runs an older app than this TV: its version's name ("" when it is too old to say, before 1.9.4). In
          * November 2026 the TV was updated three times while the phone stayed on 1.9.0, which crashed on every game; nothing said so.

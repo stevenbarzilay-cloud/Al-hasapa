@@ -8,6 +8,8 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import app.couch.alhasapa.data.CouchState
+import app.couch.alhasapa.data.SoloSide
 import app.couch.alhasapa.diag.Flight
 import app.couch.alhasapa.remote.KeyLink.Msg
 import java.io.ByteArrayOutputStream
@@ -55,6 +57,17 @@ class KeyServer(
     private val book: CoupleBook = RepoCoupleBook { (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo },
     /** Where the phones tell each other of the games played alone (1.11): made here once, handed to each paired phone. */
     private val relay: () -> RelayConfig? = { RelayStore(context).ensure() },
+    /**
+     * A guest handed in a side of a game played alone here (2.0), as [who]: the home's own phones are told through the relay, as they
+     * are of each other's (the guest's phone has no relay of this couch, and its own home hears nothing of it).
+     */
+    private val onGuestSide: (who: String) -> Unit = { who ->
+        (context.applicationContext as? app.couch.alhasapa.CouchApp)?.let { a ->
+            Thread({ runCatching { SoloRelay(a, a.repo).send(who) } }, "guest-solo").start()
+        }
+    },
+    /** The evening it is (a guest of the evening is one until it ends). */
+    private val evening: () -> String = { app.couch.alhasapa.data.Couple.evening() },
 ) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -66,6 +79,8 @@ class KeyServer(
 
     private var code: String? = null
     private var codeFor: String? = null
+    /** What the phone being paired asks to come as (2.0): shown with the code, so whoever reads it out knows what they let in. */
+    private var codeAs: String? = null
     private var codeAt = 0L
     private var failures = 0
     private var closedUntil = 0L
@@ -123,7 +138,7 @@ class KeyServer(
         peers.forEach { it.close(bye = "the TV app went to the background") }
         runCatching { s.close() }
         withdraw()
-        synchronized(lock) { code = null; codeFor = null }
+        synchronized(lock) { code = null; codeFor = null; codeAs = null }
         publish()
         Flight.log("phone keyboard: stopped")
     }
@@ -134,18 +149,27 @@ class KeyServer(
      */
     private val shareOut = Executors.newSingleThreadExecutor { r -> Thread(r, "share-out").apply { isDaemon = true } }
     private val pushShares: () -> Unit = {
-        if (peers.any { it.ready && !it.plain }) shareOut.execute {
+        if (peers.any { it.ready }) shareOut.execute {
             runCatching {
-                val shares = ShareBus.recent(book)
-                peers.forEach { p -> if (p.ready && !p.plain) shares.forEach { p.send(Msg.Share(it)) } }
+                // The home's own phones get what changed; a guest only the contests they may see (2.0).
+                if (peers.any { it.member } && book.couch() != null) {
+                    val shares = ShareBus.recent(book)
+                    peers.forEach { p -> if (p.member) shares.forEach { p.send(Msg.Share(it)) } }
+                }
+                peers.forEach { p -> if (p.ready && p.guest) p.sendContests() }
             }
         }
+    }
+
+    /** The state changed by what another device brought (a home phone's side through the relay, say): the guests' contests follow. */
+    fun stateChanged() {
+        if (peers.any { it.ready && it.guest }) shareOut.execute { runCatching { peers.forEach { p -> if (p.ready && p.guest) p.sendContests() } } }
     }
 
     private fun accept(s: ServerSocket) {
         while (!s.isClosed) {
             val c = runCatching { s.accept() }.getOrNull() ?: break
-            if (!KeyLink.isHomeAddress(c.inetAddress) || peers.size >= 4) {
+            if (!KeyLink.isHomeAddress(c.inetAddress) || peers.size >= MAX_PEERS) {
                 Flight.log("phone keyboard: refused a connection from ${c.inetAddress.hostAddress}")
                 runCatching { c.close() }
                 continue
@@ -157,13 +181,14 @@ class KeyServer(
     }
 
     private fun publish() {
-        val (c, f) = synchronized(lock) { code to codeFor }
+        val (c, f, a) = synchronized(lock) { Triple(code, codeFor, codeAs) }
         val ready = peers.filter { it.ready }
         state.value = RemoteKeys.Ui(
             listening = server != null,
             address = if (server != null) addresses().firstOrNull()?.let { "$it:$port" }.orEmpty() else "",
             phones = ready.map { it.shownName() },
-            code = c, codeFor = f,
+            guests = ready.filter { it.guest }.map { it.shownName() },
+            code = c, codeFor = f, codeAs = a,
             older = ready.firstOrNull { it.app < appCode }?.ver,
             newer = ready.firstOrNull { it.app > appCode }?.ver,
         )
@@ -199,6 +224,15 @@ class KeyServer(
         @Volatile var ver = ""
         /** Which of us holds this phone ("a", "b"; empty until it says, or from a phone app before 1.9.9). */
         @Volatile var who = ""
+        /** What the phone was let in as (2.0): of the home, or a guest (who may come again, or of this evening). */
+        @Volatile var role = KeyLink.AS_HOME
+        /** What it asks to be paired as, while the TV shows the code. */
+        private var asking = KeyLink.AS_HOME
+        /** One of the home's own phones, proved: it gets the home's state, its relay, and may hand over a login. */
+        val member: Boolean get() = ready && !plain && role == KeyLink.AS_HOME
+        val guest: Boolean get() = role != KeyLink.AS_HOME
+        /** The contests last sent to this guest, day by day (sent again only when they change). */
+        private val contestsSent = HashMap<String, String>()
         /** Touch mode: how wide the phone draws the pictures (0: it wants none), and the key they are sealed with (null: none for this phone). */
         @Volatile var mirrorWidth = 0
         /** The part of the page the phone shows, zoomed in (null: all of it). */
@@ -238,7 +272,8 @@ class KeyServer(
                 socket.tcpNoDelay = true
                 socket.soTimeout = 30_000                     // the phone says something at least every few seconds
                 val input = socket.getInputStream().bufferedReader(Charsets.UTF_8)
-                send(Msg.Hi(store.tvId, tvName, nonce, appCode, appVer))
+                val couch = runCatching { book.couch() }.getOrNull()
+                send(Msg.Hi(store.tvId, tvName, nonce, appCode, appVer, couch?.id.orEmpty(), couch?.name.orEmpty()))
                 while (true) {
                     val line = readLine(input) ?: break
                     heardAt = SystemClock.uptimeMillis()
@@ -255,12 +290,19 @@ class KeyServer(
             is Msg.Hello -> {
                 name = m.name.ifBlank { "טלפון" }.take(40)
                 app = m.app; ver = m.ver
-                val proved = store.tokenProvedBy(m.proof, nonce, m.phone)
+                // What it comes as (2.0). A phone app from before 2.0 says nothing: it is of the home, as every paired phone was.
+                val want = m.role.ifEmpty { KeyLink.AS_HOME }
+                val proved = store.tokenProvedBy(m.proof, nonce, m.phone, evening())
                 when {
-                    proved != null -> { token = proved; plain = false; frameKey = FrameCrypto.key(proved, nonce); welcome(); true }
+                    // Paired already: let in as what it asks, unless that is more than it was paired as (a guest who now says they
+                    // are of the home, a guest of an evening who would come again): then the code, read out again by the home.
+                    proved != null && rank(want) <= rank(store.roleOf(proved)) -> {
+                        token = proved; plain = false; frameKey = FrameCrypto.key(proved, nonce); role = want; welcome(); true
+                    }
+                    proved != null -> { token = proved; asking = want; askForCode() }
                     // A phone app from before 1.9 sends the token itself: it may still type, but not hand over a login.
-                    store.phoneFor(m.token) != null -> { token = m.token; plain = true; welcome(); true }
-                    else -> askForCode()
+                    store.phoneFor(m.token) != null && store.roleOf(m.token) == KeyLink.AS_HOME -> { token = m.token; plain = true; role = KeyLink.AS_HOME; welcome(); true }
+                    else -> { asking = want; askForCode() }
                 }
             }
             is Msg.LoginsKey -> { offerKey(m.key); true }
@@ -280,7 +322,8 @@ class KeyServer(
             }
             is Msg.FrameOk -> { if (m.n == awaiting) { awaiting = -1; main.post { frameTick() } }; true }
             is Msg.CoupleMsg -> {
-                if (ready) {
+                if (ready && guest) main.post { guestCouple(m) }
+                else if (ready) {
                     if (m.who.isNotEmpty()) who = m.who
                     main.post {
                         // The newer of each of us is kept here, and every phone hears of a change (the other phone too).
@@ -295,16 +338,25 @@ class KeyServer(
                 true
             }
             is Msg.Share -> {
-                // What a phone knows (1.12): kept where newer, and passed on to the other phones connected.
-                if (ready && !plain) {
+                // What a phone of the home knows (1.12): kept where newer, and passed on to the home's other phones connected.
+                // (From a guest it is not looked at: nothing of another couch comes in, and nothing of this one goes out.)
+                if (member) {
                     val changed = runCatching { book.takeShare(m.share) }.getOrDefault(false)
-                    if (changed) peers.forEach { if (it !== this && it.ready && !it.plain) it.send(m) }
+                    if (changed) {
+                        peers.forEach { if (it !== this && it.member) it.send(m) }
+                        peers.forEach { if (it.ready && it.guest) it.sendContests() }
+                    }
                 }
+                true
+            }
+            is Msg.SoloSideMsg -> {
+                // A guest's own side of a game played alone for this couch's contest (2.0): theirs only, whatever it says.
+                if (ready && who.isNotEmpty()) main.post { guestSolo(m) }
                 true
             }
             Msg.ShareAll -> {
                 // The first time this phone and the TV meet since 1.12: every evening the TV keeps, then "that was all".
-                if (ready && !plain) {
+                if (member) {
                     val all = ShareBus.opening(book, all = true)
                     all.forEach { send(Msg.Share(it)) }
                     send(Msg.ShareAll)
@@ -313,7 +365,8 @@ class KeyServer(
                 true
             }
             is Msg.NoteMsg -> {
-                if (ready) main.post {
+                // (A guest writes as the player they said they are; one who has not said writes nothing.)
+                if (ready && (!guest || who.isNotEmpty())) main.post {
                     // From whoever holds this phone, whatever the note says.
                     val n = if (who.isNotEmpty()) m.note.copy(from = who) else m.note
                     val kept = runCatching { book.note(n) }.getOrDefault(false)
@@ -344,20 +397,25 @@ class KeyServer(
 
         private fun welcome() {
             ready = true
-            send(Msg.Ok(screen))
+            send(Msg.Ok(screen, role))
             if (resultReady || touchGame) send(Msg.Screen(screen, resultReady, touchGame))
             // Both of us as the TV knows us: the phone keeps what is newer (its own word comes back from it, see Msg.CoupleMsg).
             // (Not to a phone app from before 1.9, which sends its token as is: it would not know what to do with it.)
+            // A guest gets them too (2.0): the players to choose from, by name and piece, and nothing else of the home.
             if (!plain) runCatching { book.couple() }.getOrNull()?.takeIf { it.isNotEmpty() }?.let { send(Msg.CoupleMsg("", it)) }
             // The solo relay (1.11), sealed for this phone only: someone else on the home network sees that something went, not what.
+            // Only to the home's own phones: a guest never holds the home's relay.
             val key = frameKey
-            if (!plain && key != null) runCatching { relay() }.getOrNull()?.let { c ->
+            val hasCouch = runCatching { book.couch() }.getOrNull() != null
+            if (member && key != null && hasCouch) runCatching { relay() }.getOrNull()?.let { c ->
                 send(Msg.Relay(RelayCrypto.seal(key, KeyLink.RELAY_AAD, c.toJson().toByteArray())))
             }
-            // Everything the TV keeps alike with the phones (1.12): two weeks of evenings, and the rest.
-            if (!plain) for (s in ShareBus.opening(book)) send(Msg.Share(s))
+            // Everything the TV keeps alike with the phones (1.12): two weeks of evenings, and the rest. A TV that is of no couch yet
+            // (2.0: it is joining the one a phone began) says nothing of its own first: it takes the phone's.
+            if (member && hasCouch) for (s in ShareBus.opening(book)) send(Msg.Share(s))
+            if (guest) sendContests()
             Flight.log(
-                "phone keyboard: $name connected" +
+                "phone keyboard: $name connected${if (guest) " as a guest" else ""}" +
                     if (app != appCode) " (its app is ${if (app < appCode) "older" else "newer"}: ${ver.ifEmpty { "before 1.9.4" }}; this TV has $appVer)" else "",
             )
             publish()
@@ -369,9 +427,10 @@ class KeyServer(
                 if (now < closedUntil) { send(Msg.Bye("wait")); return false }
                 if (code == null || now - codeAt > CODE_LIFE_MS) { code = RemoteStore.newCode(); codeAt = now }
                 codeFor = name
+                codeAs = asking
             }
             send(Msg.NeedCode)
-            Flight.log("phone keyboard: $name asks to pair; the TV shows the code")
+            Flight.log("phone keyboard: $name asks to pair as $asking; the TV shows the code")
             publish()
             return true
         }
@@ -379,20 +438,22 @@ class KeyServer(
         private fun checkCode(given: String): Boolean {
             val right = synchronized(lock) { code?.let { MessageDigest.isEqual(it.toByteArray(), given.trim().toByteArray()) } == true }
             if (right) {
+                // (A phone that was paired as less, and asked for more: its old token goes, the new one says what it is now.)
+                this.token?.let { old -> store.forgetPhone(old) }
                 val token = RemoteStore.randomHex(32)
-                store.addPhone(token, name)
-                this.token = token; plain = false
+                store.addPhone(token, name, asking, evening())
+                this.token = token; plain = false; role = asking
                 frameKey = FrameCrypto.key(token, nonce)
-                synchronized(lock) { code = null; codeFor = null; failures = 0 }
+                synchronized(lock) { code = null; codeFor = null; codeAs = null; failures = 0 }
                 send(Msg.Paired(token))
-                Flight.log("phone keyboard: $name paired")
+                Flight.log("phone keyboard: $name paired as $asking")
                 welcome()
                 return true
             }
             tries--
             synchronized(lock) {
                 failures++
-                if (failures >= 6) { closedUntil = SystemClock.elapsedRealtime() + 5 * 60_000; code = null; codeFor = null; failures = 0 }
+                if (failures >= 6) { closedUntil = SystemClock.elapsedRealtime() + 5 * 60_000; code = null; codeFor = null; codeAs = null; failures = 0 }
             }
             send(Msg.Wrong(tries.coerceAtLeast(0)))
             publish()
@@ -403,7 +464,8 @@ class KeyServer(
         /** The phone wants to hand over a login: the TV's own fresh key, signed with the pairing token, and the agreed key kept for one use. */
         private fun offerKey(phoneKey: String) {
             val t = token
-            if (!ready || t == null || plain) { send(Msg.LoginsNo(if (plain) "update-phone" else "pair")); return }
+            // (A guest's logins are theirs: a TV never takes one from a phone that is not of its home.)
+            if (!ready || t == null || plain || guest) { send(Msg.LoginsNo(if (plain) "update-phone" else if (guest) "guest" else "pair")); return }
             val phonePub = LoginCrypto.decode(phoneKey) ?: run { send(Msg.LoginsNo("bad")); return }
             val pair = LoginCrypto.newKeyPair()
             val tvKey = LoginCrypto.encode(pair.public)
@@ -442,10 +504,65 @@ class KeyServer(
                 if (mirrorWidth > 0) { mirrorWidth = 0; main.post { frameTick() } }
             }
             // A phone that was being paired and went away: the TV stops showing the code (it comes back if the phone does).
-            if (!ready) synchronized(lock) { if (peers.none { !it.ready }) { codeFor = null; if (code != null) code = null } }
+            if (!ready) synchronized(lock) { if (peers.none { !it.ready }) { codeFor = null; codeAs = null; if (code != null) code = null } }
             publish()
         }
+
+        /**
+         * What a guest says of the players (2.0, main thread): who they are here, one of the couch's own players or someone new. A
+         * guest may add themselves (a guest of this evening, or someone who comes often) and change what they added; nobody else.
+         */
+        private fun guestCouple(m: Msg.CoupleMsg) {
+            val t = token ?: return
+            val known = runCatching { book.couple() }.getOrDefault(emptyList()).associateBy { it.who }
+            var made = store.madeBy(t)
+            var changed = false
+            for (p in m.people) {
+                if (!p.other || p.removed) continue
+                val mine = p.who in made
+                if (!mine && (known.containsKey(p.who) || made.size >= MAX_GUEST_PEOPLE)) continue
+                if (runCatching { book.offer(listOf(p)) }.getOrDefault(false)) changed = true
+                if (!mine) { store.addMade(t, p.who); made = made + p.who }
+            }
+            val now = runCatching { book.couple() }.getOrDefault(emptyList())
+            if (m.who.isNotEmpty() && now.any { it.who == m.who && !it.removed }) who = m.who
+            if (changed) {
+                peers.forEach { if (it.ready && !it.plain) it.send(Msg.CoupleMsg("", now)) }
+                Flight.log("phone keyboard: a guest added themselves; every phone told")
+            }
+            sendContests()
+            publish()
+        }
+
+        /** A guest's side of a game played alone (main thread): written as the player they said they are, then everyone is told. */
+        private fun guestSolo(m: Msg.SoloSideMsg) {
+            val side = SoloSide.fromJson(who, m.side) ?: return
+            if (side.env) return
+            val kept = runCatching { book.guestSide(m.day, m.game, side) }.getOrDefault(false)
+            if (!kept) return
+            send(Msg.SoloOk(m.day, m.game, side.t))
+            Flight.log("solo: ${shownName()} handed in a side of a game played alone here")
+            runCatching { onGuestSide(who) }
+            peers.forEach { if (it.ready && it.guest) it.sendContests() }
+        }
+
+        /** To a guest: today's and yesterday's games played alone here, as the player they are may see them (only when changed). */
+        fun sendContests() {
+            if (!ready || !guest) return
+            val today = java.time.LocalDate.now()
+            for (day in listOf(CouchState.dayKey(today), CouchState.dayKey(today.minusDays(1)))) {
+                val games = runCatching { book.contest(day, who) }.getOrNull() ?: continue
+                val text = games.toString()
+                synchronized(contestsSent) {
+                    if (contestsSent[day] == text || (games.length() == 0 && day !in contestsSent)) return@synchronized
+                    contestsSent[day] = text
+                    send(Msg.Contest(day, games))
+                }
+            }
+        }
     }
+
+    private fun rank(role: String): Int = when (role) { KeyLink.AS_HOME -> 3; KeyLink.AS_GUEST -> 2; else -> 1 }
 
     // -----------------------------------------------------------------------------------------------------------------------------------
     // Touch mode: pictures of the game for the phones that show it (main thread, the pictures made on a thread of their own)
@@ -567,6 +684,12 @@ class KeyServer(
     }
 
     companion object {
+        /** At most this many phones at once (2.0: an evening of friends, each on their own phone, and the home's own). */
+        const val MAX_PEERS = 8
+
+        /** A guest's phone adds at most this many people (itself, as a rule). */
+        const val MAX_GUEST_PEOPLE = 2
+
         /** How long a pairing code stays the same. */
         const val CODE_LIFE_MS = 3 * 60_000L
 

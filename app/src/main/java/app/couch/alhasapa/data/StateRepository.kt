@@ -159,6 +159,23 @@ class StateRepository(
         true
     }
 
+    /**
+     * Another couch's document takes this one's place (2.0: the phone's home couch was changed, see CouchSetup; the caller has kept
+     * the one before): [raw] is written and read, and every screen reads the state again. Nothing of the state before is merged in.
+     */
+    fun replace(raw: String) {
+        synchronized(lock) {
+            store.write((CouchState.parse(raw) ?: CouchState.empty()).toString())
+            state = CouchState.parse(store.read()) ?: CouchState.empty()
+            rev += 1
+            history.clear(); mergeRevs.clear()
+            history.addLast(rev to state)
+            mergeRevs.add(rev)
+            _merged.value = _merged.value + 1
+            _revision.value = rev
+        }
+    }
+
     /** Another device's share (see [Shared.share]) into this state: the newer of each thing wins. True when anything changed. */
     fun mergeShared(incoming: JSONObject?): Boolean = mergeIf { s -> Shared.merge(s, incoming, clock()) }
 

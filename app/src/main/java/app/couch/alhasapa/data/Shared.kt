@@ -80,6 +80,8 @@ object Shared {
      */
     fun share(state: JSONObject, days: Collection<String>?, since: Long = 0L, raw: Boolean = true, rest: Boolean = true): JSONObject {
         val out = JSONObject().put("v", 1)
+        // Whose it is (2.0): a share of one couch is never merged into another's state (see [Couches.foreign]).
+        Couches.of(state)?.let { out.put("c", it.id) }
         val log = state.optJSONObject("log") ?: JSONObject()
         val outLog = JSONObject()
         for (day in days ?: log.keys().asSequence().toList()) {
@@ -137,6 +139,8 @@ object Shared {
         if (since == 0L || os.has("jokes")) state.optJSONArray("jokes")?.let { out.put("jokes", JSONArray(it.toString())) }
         val people = Couple.all(state).filter { since == 0L || it.at > since }
         if (people.isNotEmpty()) out.put("couple", JSONArray().apply { people.forEach { p -> put(p.toJson().put("who", p.who)) } })
+        // The couch itself: its id, and its name with when it was given (the newer name wins).
+        if (since == 0L || Couches.stamp(state) > since) Couches.toJson(state)?.let { out.put(Couches.KEY, it) }
         return out
     }
 
@@ -158,7 +162,7 @@ object Shared {
         val out = ArrayList<JSONObject>()
         for (day in days) {
             val whole = share(state, listOf(day), rest = false)
-            if (whole.length() <= 1) continue
+            if (empty(whole)) continue
             if (whole.toString().length <= limit) { out += whole; continue }
             // A very full evening: its entries a few at a time; the marks and the games played alone with the first of them.
             val entries = whole.optJSONObject("log")?.optJSONObject(day) ?: JSONObject()
@@ -167,16 +171,22 @@ object Shared {
             for (id in entries.keys().asSequence().toList()) {
                 val e = entries.optJSONObject(id) ?: continue
                 val add = e.toString().length + id.length + 8
-                if (size + add > limit && cur.has("log")) { out += cur; cur = JSONObject().put("v", 1); size = 10 }
+                if (size + add > limit && cur.has("log")) { out += cur; cur = blank(whole); size = 40 }
                 val l = cur.optJSONObject("log") ?: JSONObject().also { cur.put("log", it) }
                 (l.optJSONObject(day) ?: JSONObject().also { l.put(day, it) }).put(id, e)
                 size += add
             }
-            if (cur.length() > 1) out += cur
+            if (!empty(cur)) out += cur
         }
         out += share(state, emptyList(), rest = true)
         return out
     }
+
+    /** A share with nothing in it yet, of the same couch as [like]. */
+    fun blank(like: JSONObject): JSONObject = JSONObject().put("v", 1).apply { like.optString("c").takeIf { it.isNotEmpty() }?.let { put("c", it) } }
+
+    /** Whether [share] says nothing but whose it is. */
+    fun empty(share: JSONObject): Boolean = share.keys().asSequence().none { it != "v" && it != "c" }
 
     /** A line of the link holds 65,536 characters; a message of this size leaves room for its envelope. */
     const val CHUNK = 40_000
@@ -187,7 +197,11 @@ object Shared {
     /** [incoming] (another device's [share]) into [state]: the newer of each thing wins. True when anything here changed. */
     fun merge(state: JSONObject, incoming: JSONObject?, now: Long = System.currentTimeMillis()): Boolean {
         if (incoming == null || incoming.optInt("v") != 1) return false
+        // Another couch's (2.0): nothing of it is taken, whatever it holds.
+        if (Couches.foreign(state, incoming)) return false
         var changed = false
+        // The couch itself: its newer name; and a device that has no couch yet takes this one (a new TV joining the couch a phone began).
+        if (Couches.offer(state, incoming.optJSONObject(Couches.KEY) ?: incoming.optString("c").takeIf { Couches.isId(it) }?.let { JSONObject().put("id", it) })) changed = true
         val log = obj(state, "log")
         val gone = state.optJSONObject(GONE) ?: JSONObject()
         // Their entries: newer than ours and than our mark of having taken it back.

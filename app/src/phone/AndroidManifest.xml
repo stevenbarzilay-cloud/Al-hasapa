@@ -23,6 +23,13 @@
         </provider>
         <!-- Google Play services downloads the text model with the app, so the first photo is read at once. -->
         <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="ocr" />
+        <!-- 2.0: "הספות שלי": the home couch, friends' couches, visits, and the app's install link for a friend. -->
+        <activity
+            android:name=".couches.CouchesActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|uiMode|density|layoutDirection|fontScale"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.AlHasapa" />
         <!-- Long press on the app's icon: "מקלדת לטלוויזיה" goes straight to keyboard mode. -->
         <activity android:name=".MainActivity" android:exported="true" tools:node="merge">
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />

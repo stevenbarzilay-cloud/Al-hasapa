@@ -147,6 +147,12 @@ interface KeySink {
 
     /** One of the others removed (1.10): here, and on the TV and the other phones at the next connection. */
     fun removePerson(who: String) {}
+
+    /** Opens "my couches" (2.0): where a TV is chosen, a visit begun or ended. */
+    fun couches() {}
+
+    /** A phone from before 2.0 that knew several TVs: whether [tv] is its home's. */
+    fun answerHome(tv: KeyClient.Tv, home: Boolean) {}
 }
 
 /** Who a note is for to begin with: the other of the two of us (for anyone else, the first of us). */
@@ -177,9 +183,11 @@ fun KeyboardModeScreen(
     /** The games a note can wait for, and how many notes wait for the TV. */
     noteGames: List<NoteGame> = emptyList(),
     notesWaiting: Int = 0,
+    /** At a friend's couch (2.0): [people] are that couch's players, and who the holder is there is chosen on "my couches". */
+    visiting: Boolean = false,
 ) {
     var loginsOpen by rememberSaveable { mutableStateOf(openLogins) }
-    if (loginsOpen && state is KeyClient.State.Connected) {
+    if (loginsOpen && state is KeyClient.State.Connected && state.role == app.couch.alhasapa.remote.KeyLink.AS_HOME && !visiting) {
         // Read again whenever the phone comes back to this screen: the person may just have signed in.
         var back by remember { mutableIntStateOf(0) }
         LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { back++ }
@@ -202,8 +210,8 @@ fun KeyboardModeScreen(
         var askedWho by rememberSaveable { mutableStateOf(false) }
         val couple = people.size >= 2 && pieces != null
         val today = remember { app.couch.alhasapa.data.Couple.evening() }
-        LaunchedEffect(connected != null, me, couple) { if (connected != null && couple && me == null && !askedWho) { askedWho = true; meOpen = true } }
-        if (meOpen && couple) IdentityDialog(
+        LaunchedEffect(connected != null, me, couple) { if (connected != null && couple && me == null && !askedWho && !visiting) { askedWho = true; meOpen = true } }
+        if (meOpen && couple && !visiting) IdentityDialog(
             people, me, pieces!!, onSave = { sink.saveMe(it); meOpen = false }, onDismiss = { meOpen = false },
             onRemove = { sink.removePerson(it); meOpen = false }, today = today,
         )
@@ -216,11 +224,13 @@ fun KeyboardModeScreen(
         TopStrip(
             state, onGame, onLogins = { loginsOpen = true }, touch = if (connected != null) touchView else null, onTouch = { touchView = it },
             mine = if (couple) mine else null, pieces = pieces, notesWaiting = notesWaiting, showCouple = couple,
-            onMe = { meOpen = true }, onNote = { if (mine == null) meOpen = true else noteOpen = true },
+            onMe = { if (visiting) sink.couches() else meOpen = true },
+            onNote = { if (mine == null) { if (visiting) sink.couches() else meOpen = true } else noteOpen = true },
         )
         // A game's end screen is up on the TV: one press here saves its result there (the TV presses the game's own share for us).
         if (state is KeyClient.State.Connected && state.result) {
-            val label = stringResource(R.string.kb_save_result)
+            // Where it is saved (2.0): at the couch this TV is of, whoever holds the remote.
+            val label = state.couch?.let { stringResource(R.string.kb_save_result_in, app.couch.alhasapa.data.Couches.inCouch(it.name)) } ?: stringResource(R.string.kb_save_result)
             Box(
                 Modifier.fillMaxWidth().padding(end = 12.dp).height(44.dp).clip(RoundedCornerShape(22.dp)).background(Palette.Red)
                     .clickable { sink.saveResult() }.semantics { role = Role.Button; contentDescription = label },
@@ -247,6 +257,17 @@ fun KeyboardModeScreen(
                 is KeyClient.State.Connecting -> Looking(stringResource(R.string.kb_connecting))
                 is KeyClient.State.NotFound -> NotFound(state.reason, sink)
                 KeyClient.State.Wait -> Message(stringResource(R.string.kb_wait)) { Pill(stringResource(R.string.kb_retry), dark = false) { sink.retry() } }
+                // Couches (2.0): no TV is the home's yet; the home's TV is of another couch now; or, once, "is this your home's TV?".
+                KeyClient.State.NoTv -> Message(stringResource(R.string.kb_no_tv)) { Pill(stringResource(R.string.kb_couches), dark = true) { sink.couches() } }
+                is KeyClient.State.OtherCouch -> Message(stringResource(R.string.kb_other_couch, state.tv.name, state.tv.couch?.name.orEmpty())) {
+                    Pill(stringResource(R.string.kb_couches), dark = true) { sink.couches() }
+                }
+                is KeyClient.State.AskHome -> Message(stringResource(R.string.kb_ask_home, state.tv.name, state.tv.couch?.name ?: state.tv.name)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Pill(stringResource(R.string.kb_ask_home_yes), dark = true) { sink.answerHome(state.tv, true) }
+                        Pill(stringResource(R.string.kb_ask_home_no), dark = false) { sink.answerHome(state.tv, false) }
+                    }
+                }
             }
         }
     }
@@ -262,7 +283,10 @@ private fun TopStrip(
         if (touch == null) ModeSwitch(keys = true, onGame = onGame, modifier = Modifier.width(280.dp).height(40.dp))
         else ModeSwitch(keys = !touch, onGame = onGame, modifier = Modifier.width(360.dp).height(40.dp), onKeys = { onTouch(false) }, touch = touch, onTouch = { onTouch(true) })
         val (text, bold, live) = when (state) {
-            is KeyClient.State.Connected -> Triple(stringResource(R.string.kb_connected) + " ·", state.screen.ifBlank { state.tv }, true)
+            is KeyClient.State.Connected ->
+                if (state.role != app.couch.alhasapa.remote.KeyLink.AS_HOME && state.couch != null)
+                    Triple(stringResource(R.string.kb_visiting, app.couch.alhasapa.data.Couches.inCouch(state.couch.name)) + " ·", state.screen.ifBlank { state.tv }, true)
+                else Triple(stringResource(R.string.kb_connected) + " ·", state.screen.ifBlank { state.tv }, true)
             is KeyClient.State.NeedCode -> Triple(stringResource(R.string.kb_code_title), null, false)
             else -> Triple("", null, false)
         }
@@ -286,7 +310,7 @@ private fun TopStrip(
                 contentAlignment = Alignment.Center,
             ) { Text(if (notesWaiting > 0) "✉️ $notesWaiting" else "✉️", fontSize = 17.sp, color = Palette.Ink, maxLines = 1) }
         }
-        if (state is KeyClient.State.Connected) {
+        if (state is KeyClient.State.Connected && state.role == app.couch.alhasapa.remote.KeyLink.AS_HOME) {
             val label = stringResource(R.string.logins_open)
             Box(
                 Modifier.height(38.dp).clip(RoundedCornerShape(19.dp)).background(Palette.Ink).clickable(onClick = onLogins)
