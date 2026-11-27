@@ -68,6 +68,11 @@ class KeyboardModeActivity : ComponentActivity() {
 
             override fun saveResult() = client.send(KeyLink.Msg.SaveResult)
 
+            // Touch mode: the TV's game pictured here, and the fingers on it sent back.
+            override fun mirror(on: Boolean, width: Int) = client.mirror(on, width)
+            override fun frameShown(n: Int) = client.frameShown(n)
+            override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) = client.send(KeyLink.Msg.Touch(a, x, y))
+
             // The site's own sign-in page, here on the phone, in the same browser the login is then read from.
             override fun signIn(site: String) {
                 val s = (application as CouchApp).catalog.sites[site] ?: return
@@ -81,7 +86,12 @@ class KeyboardModeActivity : ComponentActivity() {
                 val state by client.state.collectAsState()
                 val handoff by client.handoff.collectAsState()
                 val versions by client.versions.collectAsState()
-                KeyboardModeScreen(state, sink, onGame = { finish() }, handoff = handoff, versions = versions, openLogins = openLogins)
+                val frame by client.frame.collectAsState()
+                val frameNone by client.frameNone.collectAsState()
+                KeyboardModeScreen(
+                    state, sink, onGame = { finish() }, handoff = handoff, versions = versions, openLogins = openLogins,
+                    frame = frame, frameNone = frameNone,
+                )
             }
         }
         Flight.log("keyboard mode opened")

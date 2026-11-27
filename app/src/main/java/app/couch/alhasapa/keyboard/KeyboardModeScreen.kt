@@ -129,6 +129,15 @@ interface KeySink {
 
     /** Presses "save the result" on the TV (offered while a game's end screen is up there). */
     fun saveResult() {}
+
+    /** Touch mode: pictures of the TV's game are wanted ([on]), [width] pixels wide, or no more. */
+    fun mirror(on: Boolean, width: Int) {}
+
+    /** Picture [n] is on the screen (the TV sends the next one only then). */
+    fun frameShown(n: Int) {}
+
+    /** A finger on the picture: [a] at [x], [y], shares (0 to 1) of its width and height. */
+    fun touch(a: KeyLink.TouchAction, x: Float, y: Float) {}
 }
 
 /**
@@ -146,6 +155,9 @@ fun KeyboardModeScreen(
     versions: KeyClient.Versions? = null,
     /** Opened from the accounts screen's "send to the TV": the sign-in list opens by itself as soon as the TV is connected. */
     openLogins: Boolean = false,
+    /** Touch mode: the latest picture of the TV's game, and why there is none when the TV said so. */
+    frame: KeyClient.MirrorFrame? = null,
+    frameNone: String? = null,
 ) {
     var loginsOpen by rememberSaveable { mutableStateOf(openLogins) }
     if (loginsOpen && state is KeyClient.State.Connected) {
@@ -159,7 +171,13 @@ fun KeyboardModeScreen(
         Modifier.fillMaxSize().background(Palette.Cream).windowInsetsPadding(WindowInsets.displayCutout).padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        TopStrip(state, onGame, onLogins = { loginsOpen = true })
+        // Keyboard or touch (1.9.8): the TV says when its game is played by dragging, and the phone turns to touch by itself; either
+        // can be chosen at any time, and the choice stands until the TV opens another kind of game.
+        val connected = state as? KeyClient.State.Connected
+        var touchView by rememberSaveable { mutableStateOf(false) }
+        val suggested = connected?.touch
+        LaunchedEffect(suggested) { if (suggested != null) touchView = suggested }
+        TopStrip(state, onGame, onLogins = { loginsOpen = true }, touch = if (connected != null) touchView else null, onTouch = { touchView = it })
         // A game's end screen is up on the TV: one press here saves its result there (the TV presses the game's own share for us).
         if (state is KeyClient.State.Connected && state.result) {
             val label = stringResource(R.string.kb_save_result)
@@ -183,7 +201,7 @@ fun KeyboardModeScreen(
         }
         Box(Modifier.fillMaxWidth().weight(1f).padding(end = if (state is KeyClient.State.Connected) 0.dp else 12.dp)) {
             when (state) {
-                is KeyClient.State.Connected -> Connected(sink)
+                is KeyClient.State.Connected -> if (touchView) MirrorPad(frame, frameNone, sink, Modifier.fillMaxSize().padding(end = 12.dp)) else Connected(sink)
                 is KeyClient.State.NeedCode -> CodeEntry(state.left, sink)
                 KeyClient.State.Looking -> Looking(stringResource(R.string.kb_looking))
                 is KeyClient.State.Connecting -> Looking(stringResource(R.string.kb_connecting))
@@ -195,9 +213,10 @@ fun KeyboardModeScreen(
 }
 
 @Composable
-private fun TopStrip(state: KeyClient.State, onGame: () -> Unit, onLogins: () -> Unit) {
+private fun TopStrip(state: KeyClient.State, onGame: () -> Unit, onLogins: () -> Unit, touch: Boolean? = null, onTouch: (Boolean) -> Unit = {}) {
     Row(Modifier.fillMaxWidth().height(42.dp).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        ModeSwitch(keys = true, onGame = onGame, modifier = Modifier.width(280.dp).height(40.dp))
+        if (touch == null) ModeSwitch(keys = true, onGame = onGame, modifier = Modifier.width(280.dp).height(40.dp))
+        else ModeSwitch(keys = !touch, onGame = onGame, modifier = Modifier.width(360.dp).height(40.dp), onKeys = { onTouch(false) }, touch = touch, onTouch = { onTouch(true) })
         val (text, bold, live) = when (state) {
             is KeyClient.State.Connected -> Triple(stringResource(R.string.kb_connected) + " ·", state.screen.ifBlank { state.tv }, true)
             is KeyClient.State.NeedCode -> Triple(stringResource(R.string.kb_code_title), null, false)
@@ -280,15 +299,17 @@ private fun LoginsDialog(
 
 /** Playing here, or being the TV's keyboard: one switch, the same as in the hub's header. */
 @Composable
-fun ModeSwitch(keys: Boolean, onGame: () -> Unit, modifier: Modifier = Modifier, onKeys: () -> Unit = {}) {
-    val desc = stringResource(R.string.kb_mode_switch)
+fun ModeSwitch(keys: Boolean, onGame: () -> Unit, modifier: Modifier = Modifier, onKeys: () -> Unit = {}, touch: Boolean = false, onTouch: (() -> Unit)? = null) {
+    val desc = stringResource(if (onTouch != null) R.string.kb_mode_switch_touch else R.string.kb_mode_switch)
     Row(
         modifier.clip(RoundedCornerShape(26.dp)).background(Palette.Tint)
             .border(BorderStroke(1.dp, Palette.Line2), RoundedCornerShape(26.dp)).padding(3.dp).semantics { contentDescription = desc },
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Segment(stringResource(R.string.kb_mode_game), selected = !keys, onClick = onGame)
-        Segment(stringResource(R.string.kb_mode_keys), selected = keys, onClick = onKeys)
+        Segment(stringResource(R.string.kb_mode_game), selected = !keys && !touch, onClick = onGame)
+        Segment(stringResource(if (onTouch != null) R.string.kb_mode_keys_short else R.string.kb_mode_keys), selected = keys, onClick = onKeys)
+        // Touch mode: the TV's game pictured here, to touch (only while connected to the TV).
+        if (onTouch != null) Segment(stringResource(R.string.kb_mode_touch), selected = touch, onClick = onTouch)
     }
 }
 

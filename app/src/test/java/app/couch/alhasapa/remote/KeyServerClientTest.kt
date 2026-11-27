@@ -27,10 +27,14 @@ class KeyServerClientTest {
     private val typed = CopyOnWriteArrayList<Msg>()
     private val received = CopyOnWriteArrayList<String>()
     private val linked = CopyOnWriteArrayList<Boolean>()
+    /** Touch mode: what the TV pictures (null: no game is open), and whether a phone shows it, as the TV was told. */
+    @Volatile private var source: FrameSource? = null
+    private val mirroring = CopyOnWriteArrayList<Boolean>()
     private val server = KeyServer(
         context, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = "MiBOX4",
         onLogins = { payload -> received += payload; "NYT Games" to 3 },
         appCode = 28, appVer = "1.9.4", onLinked = { on -> if (linked.lastOrNull() != on) linked += on },
+        frameSource = { source }, onMirroring = { mirroring += it },
     )
     private val clients = ArrayList<KeyClient>()
 
@@ -48,6 +52,74 @@ class KeyServerClientTest {
             Thread.sleep(20)
         }
         fail("timed out waiting for: $what")
+    }
+
+    /** As [waitFor], with the clock of the main thread moving on too (the pictures are paced by it). */
+    private fun waitTicking(what: String, ok: () -> Boolean) {
+        val until = System.currentTimeMillis() + 8_000
+        while (System.currentTimeMillis() < until) {
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(25))
+            if (ok()) return
+            Thread.sleep(10)
+        }
+        fail("timed out waiting for: $what")
+    }
+
+    private fun paired(): KeyClient {
+        RemoteStore(context).forgetPhones()
+        server.start()
+        val phone = client()
+        phone.start()
+        waitFor("the TV asks for a code") { phone.state.value is KeyClient.State.NeedCode }
+        phone.sendCode(server.ui.value.code!!)
+        waitFor("connected") { phone.state.value is KeyClient.State.Connected }
+        return phone
+    }
+
+    @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun inTouchModeThePhoneIsShownTheGameOnePictureAtATimeAndItsFingerComesBack() {
+        val phone = paired()
+        server.touchGame = true
+        waitFor("the phone hears that this game is played by touch") { (phone.state.value as? KeyClient.State.Connected)?.touch == true }
+
+        phone.mirror(true, 480)
+        waitTicking("no game is open yet, and the phone is told so") { phone.frameNone.value == KeyLink.NONE_HOME }
+        assertEquals("the TV knows a phone shows the game", listOf(true), mirroring)
+
+        // A game: pictures of its page, a little different each time (as a page that moves is).
+        val asked = CopyOnWriteArrayList<Int>()
+        var shade = 0
+        source = FrameSource { w, done ->
+            asked += w
+            shade = (shade + 50) % 250
+            done(android.graphics.Bitmap.createBitmap(64, 36, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.rgb(shade, 90, 40)) })
+        }
+        server.framesChanged()
+        waitTicking("a picture arrives") { phone.frame.value != null }
+        val first = phone.frame.value!!
+        assertEquals(64, first.w); assertEquals(36, first.h)
+        assertEquals("asked as wide as the phone draws it", 480, asked.first())
+        assertEquals("a JPEG, opened whole on the phone", 0xFF.toByte(), first.jpeg[0]); assertEquals(0xD8.toByte(), first.jpeg[1])
+        assertNull(phone.frameNone.value)
+
+        // One at a time: nothing more until the phone says it showed it.
+        repeat(10) { shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(50)); Thread.sleep(10) }
+        assertEquals(first.n, phone.frame.value!!.n)
+        phone.frameShown(first.n)
+        waitTicking("the next picture") { phone.frame.value!!.n > first.n }
+
+        // The finger on the picture comes back to the TV as it was.
+        phone.send(Msg.Touch(KeyLink.TouchAction.DOWN, 0.5f, 0.25f))
+        phone.send(Msg.Touch(KeyLink.TouchAction.UP, 0.5f, 0.25f))
+        waitFor("the touch reached the TV") { typed.count { it is Msg.Touch } == 2 }
+        assertEquals(Msg.Touch(KeyLink.TouchAction.DOWN, 0.5f, 0.25f), typed.first { it is Msg.Touch })
+
+        // The game closes: the phone hears there is nothing to show; touch mode off: the TV's paw may come back.
+        source = null; server.framesChanged()
+        waitTicking("told the game is gone") { phone.frameNone.value == KeyLink.NONE_HOME && phone.frame.value == null }
+        phone.mirror(false, 0)
+        waitTicking("the TV knows no phone shows the game") { mirroring.lastOrNull() == false }
     }
 
     @Test
@@ -123,9 +195,10 @@ class KeyServerClientTest {
     }
     @Test
     fun aReleaseThatChangesOnlyOneOfTheTwoDoesNotSendThePeopleToUpdateTheOther() {
-        // What the two tell each other is the version at which they last had to be updated together, which this build did not raise:
-        // a TV with the new home (1.9.5) and a phone still on 1.9.4 have nothing to say to each other about versions.
-        assertEquals("raised only by a release that needs both", 31, KeyLink.TOGETHER_SINCE)
+        // What the two tell each other is the version at which they last had to be updated together (raised by 1.9.7, the end of a
+        // game, and by 1.9.8, touch mode): two apps of releases after it that changed only one of the two have nothing to say to each
+        // other about versions.
+        assertEquals("raised only by a release that needs both", 32, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()

@@ -45,6 +45,10 @@ object RemoteKeys {
     private val main = Handler(Looper.getMainLooper())
     private val stopLater = Runnable { control.execute { server?.stop() } }
 
+    /** A phone shows the game in touch mode (see KeyServer): the screen in front keeps its paw away and shows the phone's finger. */
+    @Volatile var touchMode = false
+        private set
+
     /** A screen came to the front: what the phone types goes to its page, and the phone is told which screen it is. */
     fun attach(c: TvController) {
         front = c
@@ -52,9 +56,23 @@ object RemoteKeys {
         server?.resultReady = c.resultReady
         // The screen in front tells the phones when a game's end screen comes up or goes (see TvController.resultScreen).
         c.onResultReady = { ready -> if (front === c) server?.resultReady = ready }
+        // Touch mode: whether this game is played by dragging, and what there is to picture now (nothing on the home).
+        server?.touchGame = c.touchGame
+        if (touchMode) c.phoneTouching(true)
+        server?.framesChanged()
     }
 
-    fun detach(c: TvController) { if (front === c) front = null }
+    fun detach(c: TvController) {
+        if (front !== c) return
+        front = null
+        server?.framesChanged()
+    }
+
+    /** On the main thread: a phone began showing the game in touch mode, or the last one stopped. */
+    fun touchModeChanged(on: Boolean) {
+        touchMode = on
+        front?.phoneTouching(on)
+    }
 
     /** The app's screens are showing ([visible]) or have all left. On a TV only. */
     fun foreground(context: Context, visible: Boolean) {
@@ -80,7 +98,7 @@ object RemoteKeys {
     /** What a paired phone typed, on the main thread: into the page of the screen in front. */
     fun deliver(m: KeyLink.Msg) {
         val c = front
-        if (c == null) { if (m !is KeyLink.Msg.Pointer) Flight.log("phone keyboard: input while no screen is in front"); return }
+        if (c == null) { if (m !is KeyLink.Msg.Pointer && m !is KeyLink.Msg.Touch) Flight.log("phone keyboard: input while no screen is in front"); return }
         when (m) {
             is KeyLink.Msg.Text -> c.remoteInput(TypedKeys.deliveries(m.s))
             is KeyLink.Msg.Press -> c.remoteInput(listOf(TypedKeys.forKey(m.key, m.action)))
@@ -90,6 +108,7 @@ object RemoteKeys {
             is KeyLink.Msg.Drag -> c.remoteDrag(m.on)
             is KeyLink.Msg.Scroll -> c.remoteScroll(m.dy)
             KeyLink.Msg.SaveResult -> c.onSaveResult?.invoke().also { Flight.log("phone keyboard: save the result pressed on the phone") }
+            is KeyLink.Msg.Touch -> c.remoteTouch(m.a, m.x, m.y)
             else -> {}
         }
     }

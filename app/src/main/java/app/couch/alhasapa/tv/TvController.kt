@@ -22,7 +22,7 @@ enum class InputMode { NAV, PAW }
 enum class Zone { PAGE, NATIVE }
 
 /** A short message shown on screen when the way of controlling things changes or something is worth knowing. */
-enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW, FRAME_HIDDEN, RESULT_READY, PLAYED_AUTO }
+enum class TvHint { PAW_ON, NAV_ON, NO_TARGETS, TYPE, PHONE, PHONE_PAW, FRAME_HIDDEN, RESULT_READY, PLAYED_AUTO, PHONE_TOUCH }
 
 /**
  * A screen of the app's own laid over the content (the arrows stay on the app's buttons while it is up): the information for fixing a
@@ -151,6 +151,76 @@ class TvController(val enabled: Boolean, density: Float) {
 
     /** The game was marked as played by itself (after a while in it). */
     fun playedByItself() = say(TvHint.PLAYED_AUTO)
+
+    // -----------------------------------------------------------------------------------------------------------------------------------
+    // Touch mode (1.9.8): a phone pictures the game, and a finger on that picture is a finger on the game here
+    // -----------------------------------------------------------------------------------------------------------------------------------
+
+    /** The game in front is played by dragging: the phones turn to touch mode by themselves. Set by the game's screen. */
+    var touchGame = false
+
+    /** Pictures of the game for the phones in touch mode: set by the game's screen on a TV (none on the home). */
+    var frameSource: app.couch.alhasapa.remote.FrameSource? = null
+
+    /** A phone shows the game in touch mode: the paw stays away meanwhile (the phone's finger points instead). */
+    var phoneTouch by mutableStateOf(false)
+        private set
+
+    /** Where the phone's finger is while it is down, in this screen's coordinates (a ring is drawn there); null while it is up. */
+    var phoneFinger by mutableStateOf<androidx.compose.ui.geometry.Offset?>(null)
+        private set
+    private var phoneDownAt = 0L
+    private var phoneLastX = 0f
+    private var phoneLastY = 0f
+
+    /** A phone began showing the game in touch mode, or the last one stopped. */
+    fun phoneTouching(on: Boolean) {
+        if (phoneTouch == on) return
+        phoneTouch = on
+        if (on) say(TvHint.PHONE_TOUCH) else endPhoneTouch()
+    }
+
+    /**
+     * A finger on the phone's picture of the game, at a share [x], [y] of the page's width and height: the same finger on the page here,
+     * a touch of the screen's own kind (a finger's), so a drag is a drag and a swipe scrolls. A move or a lift whose touch never came
+     * down here (it was lost, or the page went) is dropped.
+     */
+    fun remoteTouch(a: app.couch.alhasapa.remote.KeyLink.TouchAction, x: Float, y: Float) {
+        val box = pageBox
+        if (box == null) { endPhoneTouch(); return }
+        val wx = box.l + x.coerceIn(0f, 1f) * (box.r - box.l)
+        val wy = box.t + y.coerceIn(0f, 1f) * (box.b - box.t)
+        val down = phoneFinger != null
+        when (a) {
+            app.couch.alhasapa.remote.KeyLink.TouchAction.DOWN -> {
+                if (down) injectPhone(MotionEvent.ACTION_CANCEL, phoneLastX, phoneLastY)
+                phoneDownAt = SystemClock.uptimeMillis()
+                injectPhone(MotionEvent.ACTION_DOWN, wx, wy)
+            }
+            app.couch.alhasapa.remote.KeyLink.TouchAction.MOVE -> { if (!down) return; injectPhone(MotionEvent.ACTION_MOVE, wx, wy) }
+            app.couch.alhasapa.remote.KeyLink.TouchAction.UP -> { if (!down) return; injectPhone(MotionEvent.ACTION_UP, wx, wy) }
+            app.couch.alhasapa.remote.KeyLink.TouchAction.CANCEL -> { if (!down) return; injectPhone(MotionEvent.ACTION_CANCEL, wx, wy) }
+        }
+        val lifted = a == app.couch.alhasapa.remote.KeyLink.TouchAction.UP || a == app.couch.alhasapa.remote.KeyLink.TouchAction.CANCEL
+        phoneFinger = if (lifted) null else androidx.compose.ui.geometry.Offset(wx - originX, wy - originY)
+    }
+
+    /** The phone's finger is lifted here if it was down (the phone went away, or the page did). */
+    private fun endPhoneTouch() {
+        if (phoneFinger == null) return
+        injectPhone(MotionEvent.ACTION_CANCEL, phoneLastX, phoneLastY)
+        phoneFinger = null
+    }
+
+    /** At [wx], [wy] in the window's own coordinates. */
+    private fun injectPhone(action: Int, wx: Float, wy: Float) {
+        phoneLastX = wx; phoneLastY = wy
+        onInjected(action, wx - originX, wy - originY)
+        val d = decor ?: return
+        val ev = Touches.finger(phoneDownAt, SystemClock.uptimeMillis(), action, wx, wy)
+        runCatching { d.dispatchTouchEvent(ev) }
+        ev.recycle()
+    }
 
     /**
      * A sheet of the app's own over the screen (the result sheet): while it is up, the arrows move only between the buttons whose ids
@@ -294,6 +364,7 @@ class TvController(val enabled: Boolean, density: Float) {
             cursor.press(false, sink); sync()
             if (phonePaw && mode == InputMode.PAW) togglePaw()
             phonePaw = false
+            endPhoneTouch()
         }
     }
 

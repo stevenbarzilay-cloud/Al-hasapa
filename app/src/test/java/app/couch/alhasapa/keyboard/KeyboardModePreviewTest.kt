@@ -67,6 +67,34 @@ class KeyboardModePreviewTest {
         save("phone-keyboard-hebrew.png")
     }
 
+    /** Touch mode, with a made-up game's picture (colours and a handle, as a game played by dragging has). */
+    @Test fun touchMode() {
+        val w = 960; val h = 540
+        val b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        val cv = android.graphics.Canvas(b)
+        val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+        cv.drawColor(android.graphics.Color.rgb(250, 246, 238))
+        val hues = intArrayOf(0xFFE53935.toInt(), 0xFFFDD835.toInt(), 0xFF43A047.toInt(), 0xFF00ACC1.toInt(), 0xFF3949AB.toInt(), 0xFF8E24AA.toInt(), 0xFFE53935.toInt())
+        p.shader = android.graphics.LinearGradient(120f, 0f, 840f, 0f, hues, null, android.graphics.Shader.TileMode.CLAMP)
+        cv.drawRoundRect(120f, 300f, 840f, 360f, 30f, 30f, p)
+        p.shader = null; p.color = android.graphics.Color.rgb(46, 125, 160)
+        cv.drawRoundRect(330f, 80f, 630f, 260f, 24f, 24f, p)
+        p.color = android.graphics.Color.WHITE; cv.drawCircle(520f, 330f, 34f, p)
+        p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = 6f; p.color = android.graphics.Color.DKGRAY; cv.drawCircle(520f, 330f, 34f, p)
+        val jpeg = java.io.ByteArrayOutputStream().also { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, it) }.toByteArray()
+        var shown = false
+        val watching = object : KeySink by sink { override fun frameShown(n: Int) { shown = true } }
+        rule.setContent {
+            AlHasapaTheme {
+                KeyboardModeScreen(KeyClient.State.Connected("MiTV", "Dialed", touch = true), watching, onGame = {}, frame = KeyClient.MirrorFrame(1, w, h, jpeg))
+            }
+        }
+        val until = System.currentTimeMillis() + 5_000
+        while (!shown && System.currentTimeMillis() < until) { rule.waitForIdle(); Thread.sleep(10) }
+        rule.onNode(androidx.compose.ui.test.hasTestTag(MIRROR_TAG)).performTouchInput { down(Offset(width * 0.55f, height * 0.6f)); moveBy(Offset(20f, 0f)) }
+        save("phone-touch-mode.png")
+    }
+
     @Test fun pairing() { show(KeyClient.State.NeedCode("MiTV", left = 2)); save("phone-keyboard-code.png") }
     @Test fun notFound() { show(KeyClient.State.NotFound(KeyClient.NO_TV)); save("phone-keyboard-notfound.png") }
     @Test fun loginsDialog() {

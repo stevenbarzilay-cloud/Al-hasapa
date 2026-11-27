@@ -4,6 +4,7 @@ import android.os.Looper
 import android.view.KeyEvent
 import android.view.MotionEvent
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.couch.alhasapa.remote.KeyLink.TouchAction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -469,6 +470,36 @@ class TvControllerTest {
         assertFalse(js.contains("</script>")); assertFalse(js.contains(" "))
         assertTrue(js.contains("insertText"))
         WebTyper.deliver(null, Delivery.Text("x"))                // no page, no crash
+    }
+
+    // ---- touch mode: a finger on the phone's picture of the game ----
+
+    @Test
+    fun aFingerOnThePhonesPictureIsAFingerOnTheSameSpotOfThePage() {
+        val (c, _) = screen(); val seen = ArrayList<String>()
+        c.onInjected = { a, x, y -> seen += "${MotionEvent.actionToString(a)} ${x.toInt()},${y.toInt()}" }
+        c.phoneTouching(true)
+        assertTrue("the paw stays away", c.phoneTouch); assertEquals(TvHint.PHONE_TOUCH, c.hint)
+        // The page is 100..900 by 70..530: the middle of the picture is the middle of the page.
+        c.remoteTouch(TouchAction.DOWN, 0.5f, 0.5f); c.remoteTouch(TouchAction.MOVE, 0.75f, 0.5f); c.remoteTouch(TouchAction.MOVE, 1f, 1f)
+        assertEquals(androidx.compose.ui.geometry.Offset(900f, 530f), c.phoneFinger)
+        c.remoteTouch(TouchAction.UP, 1f, 1f)
+        assertEquals(listOf("ACTION_DOWN 500,300", "ACTION_MOVE 700,300", "ACTION_MOVE 900,530", "ACTION_UP 900,530"), seen)
+        assertNull("lifted: no ring on the TV", c.phoneFinger)
+        seen.clear()
+        c.remoteTouch(TouchAction.MOVE, 0.1f, 0.1f); c.remoteTouch(TouchAction.UP, 0.1f, 0.1f)
+        assertTrue("a move whose touch never came down here is dropped", seen.isEmpty())
+        c.remoteTouch(TouchAction.DOWN, 0f, 0f); c.remoteTouch(TouchAction.DOWN, 0.5f, 0f)
+        assertEquals("a second down lifts the first one", listOf("ACTION_DOWN 100,70", "ACTION_CANCEL 100,70", "ACTION_DOWN 500,70"), seen)
+        seen.clear()
+        c.remotePointer(false)
+        assertEquals("the phone went away mid-drag: the finger is lifted", listOf("ACTION_CANCEL 500,70"), seen)
+        c.phoneTouching(false)
+        assertFalse(c.phoneTouch)
+        seen.clear()
+        c.pageBox = null
+        c.remoteTouch(TouchAction.DOWN, 0.5f, 0.5f)
+        assertTrue("no page, no touch", seen.isEmpty())
     }
 
     // ---- the phone's touchpad ----

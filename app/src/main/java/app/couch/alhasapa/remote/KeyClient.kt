@@ -39,8 +39,11 @@ class KeyClient(
         data class Connecting(val where: String) : State
         /** The TV shows four digits; [left] tries remain after a wrong one. */
         data class NeedCode(val tv: String, val left: Int? = null) : State
-        /** [result]: a game's end screen is up on the TV, and the phone offers to save the result. */
-        data class Connected(val tv: String, val screen: String, val result: Boolean = false) : State
+        /**
+         * [result]: a game's end screen is up on the TV, and the phone offers to save the result. [touch]: the game on the TV is played
+         * by dragging, and the phone turns to touch mode by itself (1.9.8).
+         */
+        data class Connected(val tv: String, val screen: String, val result: Boolean = false, val touch: Boolean = false) : State
         /** The TV closed pairing for a while (too many wrong codes). */
         data object Wait : State
     }
@@ -73,6 +76,34 @@ class KeyClient(
 
     private val _versions = MutableStateFlow<Versions?>(null)
     val versions: StateFlow<Versions?> get() = _versions
+
+    /** Touch mode: a picture of the TV's game, opened ([jpeg] as the TV made it), [w] by [h] pixels. */
+    class MirrorFrame(val n: Int, val w: Int, val h: Int, val jpeg: ByteArray)
+
+    private val _frame = MutableStateFlow<MirrorFrame?>(null)
+    /** The latest picture of the TV's game while touch mode is on the screen (null: none yet, or touch mode is off). */
+    val frame: StateFlow<MirrorFrame?> get() = _frame
+
+    private val _frameNone = MutableStateFlow<String?>(null)
+    /** Why there is no picture ([KeyLink.NONE_HOME], [KeyLink.NONE_CAPTURE]), when the TV said so. */
+    val frameNone: StateFlow<String?> get() = _frameNone
+
+    /** Touch mode is on the screen, drawing pictures this wide (0: it is not). Asked for again whenever the connection comes back. */
+    @Volatile private var mirrorWidth = 0
+    /** The connection's picture key (see [FrameCrypto]): from the pairing token and the TV's nonce of this connection. */
+    @Volatile private var frameKey: ByteArray? = null
+    @Volatile private var nonce = ""
+    @Volatile private var badFrames = 0
+
+    /** Touch mode came on the screen ([on], drawing pictures [width] pixels wide) or left it. */
+    fun mirror(on: Boolean, width: Int) {
+        mirrorWidth = if (on) width.coerceAtLeast(1) else 0
+        if (!on) { _frame.value = null; _frameNone.value = null }
+        send(Msg.Mirror(on, mirrorWidth))
+    }
+
+    /** Picture [n] is on the screen: the TV may send the next. */
+    fun frameShown(n: Int) = send(Msg.FrameOk(n))
 
     private class Pending(val site: String, val payload: String, val pair: java.security.KeyPair, val key: String)
     @Volatile private var pending: Pending? = null
@@ -202,14 +233,17 @@ class KeyClient(
             socket = s
             val input = s.getInputStream().bufferedReader(Charsets.UTF_8)
             while (running.get()) {
-                val line = KeyServer.readLine(input) ?: break
-                val m = KeyLink.decode(line) ?: continue
+                // A line from the TV may hold a picture of the game (touch mode): larger than anything the phone sends.
+                val line = KeyServer.readLine(input, KeyLink.MAX_FRAME_LINE) ?: break
+                val m = KeyLink.decode(line, KeyLink.MAX_FRAME_LINE) ?: continue
                 answered = true
                 when (m) {
                     is Msg.Hi -> {
                         tvId = m.tv; tvName = m.name
+                        nonce = m.nonce
                         _versions.value = when { m.app > appCode -> Versions.TvNewer(m.ver); m.app < appCode -> Versions.TvOlder; else -> null }
                         val token = store.tokenFor(m.tv)
+                        frameKey = if (token.isNotEmpty() && m.nonce.isNotEmpty()) FrameCrypto.key(token, m.nonce) else null
                         // From 1.9 the TV sends a nonce, and the phone proves it holds the token without sending it. An older TV
                         // gets the token as before.
                         val hello = if (m.nonce.isNotEmpty() && token.isNotEmpty()) {
@@ -222,14 +256,31 @@ class KeyClient(
                     is Msg.LoginsNo -> { val p = pending; pending = null; _handoff.value = Handoff.Failed(p?.site.orEmpty(), m.why) }
                     Msg.NeedCode -> _state.value = State.NeedCode(tvName)
                     is Msg.Wrong -> _state.value = State.NeedCode(tvName, m.left)
-                    is Msg.Paired -> store.saveToken(tvId, m.token)
+                    is Msg.Paired -> {
+                        store.saveToken(tvId, m.token)
+                        if (nonce.isNotEmpty()) frameKey = FrameCrypto.key(m.token, nonce)
+                    }
                     is Msg.Ok -> {
                         _state.value = State.Connected(tvName, m.screen)
                         store.lastAddress = address
                         Flight.log("phone keyboard: connected to the TV at $address")
                         startPinging()
+                        // Touch mode was on the screen when the connection dropped: the pictures are asked for again.
+                        if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth))
                     }
-                    is Msg.Screen -> (_state.value as? State.Connected)?.let { _state.value = it.copy(screen = m.screen, result = m.result) }
+                    is Msg.Screen -> (_state.value as? State.Connected)?.let { _state.value = it.copy(screen = m.screen, result = m.result, touch = m.touch) }
+                    is Msg.Frame -> {
+                        val key = frameKey
+                        val jpeg = key?.let { FrameCrypto.open(it, m.n, m.iv, m.data) }
+                        if (jpeg == null) {
+                            // Not sealed for this phone (or changed on the way): never shown. Said once in the report.
+                            if (badFrames++ == 0) Flight.log("touch mode: a picture from the TV could not be opened; not shown")
+                        } else if (mirrorWidth > 0) {
+                            _frameNone.value = null
+                            _frame.value = MirrorFrame(m.n, m.w, m.h, jpeg)
+                        }
+                    }
+                    is Msg.FrameNone -> if (mirrorWidth > 0) { _frame.value = null; _frameNone.value = m.why }
                     is Msg.Bye -> { if (m.why == "wait") _state.value = State.Wait; break }
                     else -> {}
                 }

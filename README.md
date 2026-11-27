@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 1.9.7.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 1.9.8.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -357,6 +357,31 @@ want to play on, starting with Krillion and NYT:
     bullseye 🎯 for a full score, a new record for our fastest time, "tomorrow is ours" for a miss) and the evening's total so far.
   - Phone and TV now tell each other about the end of a game (`KeyLink`: `result` in "screen", and "save-result"), so **both apps
     must be updated together** this time (`TOGETHER_SINCE` 31); an older phone with the new TV, or the other way round, is told so.
+- **1.9.8: touch mode, the TV's game on the phone to touch.** From the same evening: a game built on dragging (Dialed) was awkward
+  from the couch, and easy on the phone, by touch.
+  - *Touch mode.* Keyboard mode on the phone has a third choice at the top: "משחק | מקלדת | מגע". In "מגע" the phone shows the game
+    that is open on the TV, several times a second, and a finger on that picture is a finger on the game at the same spot: put
+    down, dragged, lifted, and a swipe scrolls, as on a phone. The TV draws a ring where the finger is (for whoever watches the TV),
+    and its paw stays away meanwhile.
+  - *By itself for the games played by dragging*: Dialed and its sound game, Pips, Disorderly, Magnitudle's two games, TimeGuessr,
+    Cutle and Coffee Golf (`"touch": true` in the catalogue). When the TV opens one, the phone turns to touch; when it opens a game
+    played with keys, back to the keyboard. Either can be chosen by hand at any time.
+  - *How the picture travels.* The TV copies the game's page from its own screen (PixelCopy: what the graphics chip drew, a game's
+    canvas included), as wide as the phone draws it (at most 960 pixels), as a JPEG, sealed with AES-256-GCM under a key both
+    sides make from the pairing token and the connection's own nonce (`FrameCrypto`), for that phone only. One picture at a time:
+    the next goes only after the phone has drawn the last, so a slow moment never piles pictures up. The box spends at most about a
+    third of its time on them (a picture that cost 60 ms waits 180 ms for the next; at most about nine a second); a page standing
+    still is pictured a couple of times a second, and sent only when it changed. No picture is kept anywhere.
+  - So the TV no longer sends back only the screen's name: in touch mode, while the phone shows it and asks for it, it sends
+    pictures of the game's page, sealed for that phone. Nothing a page holds (its text, its cookies, what is typed into it) leaves
+    the TV.
+  - Both apps must be updated together again (`TOGETHER_SINCE` 32).
+  - *Tried here:* the link end to end over a real socket (a picture as wide as asked, opened whole on the phone, the next only after
+    the first was drawn, the finger coming back, the game closing, touch mode ending); the sealing (another key, another number, a
+    changed byte: refused); the finger on the page (shares of the page to its pixels, a move whose touch never came down dropped, a
+    second touch lifting the first, the phone leaving mid-drag); the phone's screen (touch by itself and back, by hand, a picture
+    drawn and acknowledged, a drag sent as shares of the picture). **Not tried on the devices:** how fast the pictures come over our
+    Wi-Fi, what they cost the box while a game plays (its sound above all), and how a drag in Dialed feels from the phone.
 - **The per-game check on the box**: when a game is ready, how long after it was chosen; while the phone types, how fast each key shows
   on the page (from its keydown to the frame after the page handled it, measured in the page, times only, never which key) and how long
   keys waited for the TV app itself; all summed up in the flight recorder (ⓘ) when the typing pauses, e.g. "typing on krillion.io: 24
@@ -526,12 +551,15 @@ app's keyboard:
   so the dock's paw button lights up): one finger moves it (faster swipes go further), a short touch taps where it is (a paw print
   shows where you touched), two fingers scroll the page under it, "לחיצה" taps, "גרירה" holds the finger down so moves drag (touch it
   again to let go). Putting the pad away hides the paw again, unless the remote had turned it on.
+- **Touch** (1.9.8): the third choice at the top, "מגע", shows the game that is open on the TV, and a finger on it touches the game
+  there (see 1.9.8 above). It comes up by itself for the games played by dragging.
 - **On the TV**, a small red phone at the top of the dock shows that a phone is connected.
 
 How it works: the TV app listens on the home network while it is in front (port 47123, announced as `_couchkeys._tcp`), and the phone finds
 it there, or where it found it last time, or at an address typed by hand (the TV shows its address under ⓘ). Only devices on the home
 network can connect, only a paired phone can type (a random token from the pairing; six wrong codes close pairing for five minutes), at most
-at a human pace, and the TV sends back nothing but the name of the screen it shows. Android 17 asks once on the phone to allow "devices on
+at a human pace, and the TV sends back the name of the screen it shows and, in touch mode (1.9.8), pictures of the game's page sealed for
+that phone alone. Android 17 asks once on the phone to allow "devices on
 the local network". If they cannot see each other (a guest network that keeps devices apart, for one), the phone says so and offers to
 type the TV's address.
 

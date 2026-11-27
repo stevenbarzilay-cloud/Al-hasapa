@@ -148,6 +148,7 @@ fun TvLayer(c: TvController, content: @Composable () -> Unit) {
             // While the picture's size is being set: its four corners, which must all be seen whole on the TV.
             if (c.panel == TvPanel.SETTINGS) FitCorners()
             CursorOverlay(c)
+            PhoneFingerOverlay(c)
         }
       }
       }
@@ -369,6 +370,7 @@ private fun HintPill(c: TvController, modifier: Modifier) {
         TvHint.FRAME_HIDDEN -> stringResource(R.string.tv_hint_frame_hidden)
         TvHint.RESULT_READY -> stringResource(R.string.tv_hint_result_ready)
         TvHint.PLAYED_AUTO -> stringResource(R.string.tv_hint_played_auto)
+        TvHint.PHONE_TOUCH -> stringResource(R.string.tv_hint_phone_touch)
         null -> null
     }
     AnimatedVisibility(visible = text != null, modifier = modifier, enter = fadeIn(), exit = fadeOut()) {
@@ -400,7 +402,8 @@ private fun HintPill(c: TvController, modifier: Modifier) {
  */
 @Composable
 private fun CursorOverlay(c: TvController) {
-    if (c.mode != InputMode.PAW || !c.cursorVisible || c.keyboardOpen) return
+    // While a phone shows the game in touch mode its finger points, not the paw.
+    if (c.mode != InputMode.PAW || !c.cursorVisible || c.keyboardOpen || c.phoneTouch) return
     Canvas(
         Modifier.size(c.cursorSize.dp.dp).graphicsLayer {
             translationX = c.cursorX - size.width * CursorArt.TIP
@@ -408,6 +411,18 @@ private fun CursorOverlay(c: TvController) {
         },
     ) {
         with(CursorArt) { cursor(c.cursorShape, Offset.Zero, size.width, c.accent, c.dragging) }
+    }
+}
+
+/** Where the finger on the phone's picture is touching the game (touch mode): a ring in the interface's colour, while it is down. */
+@Composable
+private fun PhoneFingerOverlay(c: TvController) {
+    val at = c.phoneFinger ?: return
+    Canvas(Modifier.fillMaxSize()) {
+        val r = 22.dp.toPx()
+        drawCircle(Palette.Cream.copy(alpha = 0.35f), radius = r, center = at)
+        drawCircle(Palette.Ink, radius = r + 2.dp.toPx(), center = at, style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+        drawCircle(c.accent, radius = r, center = at, style = androidx.compose.ui.graphics.drawscope.Stroke(4.dp.toPx()))
     }
 }
 

@@ -27,6 +27,7 @@ import app.couch.alhasapa.results.ResultDraft
 import app.couch.alhasapa.results.Cheers
 import app.couch.alhasapa.results.Cheer
 import app.couch.alhasapa.results.ResultSupport
+import app.couch.alhasapa.remote.FrameSource
 import android.widget.Toast
 import app.couch.alhasapa.R
 import app.couch.alhasapa.diag.Diag
@@ -55,6 +56,13 @@ class PlayerActivity : ComponentActivity() {
         session = buildSession(app) ?: run { finish(); return }
         tv.title = session.title
         Diag.log("player: ${session.title} (${if (session.loginMode) "login" else "game"}) profile ${session.profile}")
+        // Touch mode (1.9.8): a game played by dragging turns the phone to touch mode by itself, and the phone is shown the game's page.
+        if (tv.enabled) {
+            remote.touchGame = !session.loginMode && session.gameId?.let { app.catalog.game(it)?.touch } == true
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                remote.frameSource = FrameSource { w, done -> picturePage(w, done) }
+            }
+        }
 
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -101,6 +109,31 @@ class PlayerActivity : ComponentActivity() {
               }
             }
         }
+    }
+
+    /** Touch mode: one bitmap, drawn into again for each picture (the link reads it before it asks for the next). */
+    private var pictureBitmap: android.graphics.Bitmap? = null
+
+    /**
+     * A picture of the game's page for a phone in touch mode: the window's own pixels where the page is (PixelCopy, so whatever the
+     * graphics chip drew, a game's canvas included), made at most [maxWidth] wide by the copy itself.
+     */
+    @androidx.annotation.RequiresApi(android.os.Build.VERSION_CODES.O)
+    private fun picturePage(maxWidth: Int, done: (android.graphics.Bitmap?) -> Unit) {
+        val box = remote.pageBox
+        if (box == null || isFinishing || isDestroyed) { done(null); return }
+        val src = android.graphics.Rect(box.l.toInt(), box.t.toInt(), box.r.toInt(), box.b.toInt())
+        if (src.width() < 16 || src.height() < 16) { done(null); return }
+        val w = minOf(maxWidth, src.width()).coerceAtLeast(16)
+        val h = (src.height().toLong() * w / src.width()).toInt().coerceAtLeast(16)
+        val bmp = pictureBitmap?.takeIf { it.width == w && it.height == h }
+            ?: android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).also { pictureBitmap = it }
+        runCatching {
+            android.view.PixelCopy.request(
+                window, src, bmp, { result -> done(if (result == android.view.PixelCopy.SUCCESS) bmp else null) },
+                android.os.Handler(android.os.Looper.getMainLooper()),
+            )
+        }.onFailure { Flight.log("touch mode: the TV could not picture the page (${it.javaClass.simpleName})"); done(null) }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

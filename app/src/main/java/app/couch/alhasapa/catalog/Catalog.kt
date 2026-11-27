@@ -47,6 +47,11 @@ data class Game(
      * "ידע" like any quiz); null for the rest, which go by their kind. See home/Category.
      */
     val cat: String? = null,
+    /**
+     * Played by dragging (Dialed's colours, Pips' dominoes, a map): on the TV, the phone that is its keyboard turns to touch mode by
+     * itself for it (1.9.8), where the game is touched on the phone's screen.
+     */
+    val touch: Boolean = false,
 ) {
     /** Head to head: each person plays alone and pastes their own result (the LinkedIn games). */
     val isDuel: Boolean get() = s == "li"
@@ -130,6 +135,7 @@ class Catalog(val sites: Map<String, Site>, val games: List<Game>) {
             lib = o.optInt("lib", 0) == 1, why = o.optString("why").takeIf { it.isNotBlank() },
             metric = o.optString("metric", "none"), placeholder = o.optBoolean("placeholder", false),
             pick = o.optInt("pick", 0).takeIf { it > 0 }, cat = o.optString("cat").takeIf { it.isNotBlank() },
+            touch = o.optBoolean("touch", false),
         )
 
         /** The suggestions in the order they are offered: the hand-picked ones by their [Game.pick], then the rest as the catalogue has them. */

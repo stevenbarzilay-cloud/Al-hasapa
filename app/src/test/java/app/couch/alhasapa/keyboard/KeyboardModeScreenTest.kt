@@ -10,6 +10,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
@@ -53,7 +54,13 @@ class KeyboardModeScreenTest {
         override fun sendLogin(site: String) { sent += "login:$site" }
         override fun signIn(site: String) { sent += "signin:$site" }
         override fun saveResult() { sent += "save-result" }
+        override fun mirror(on: Boolean, width: Int) { sent += "mirror:$on" + (if (on && width > 0) ":w" else "") }
+        override fun frameShown(n: Int) { sent += "shown:$n" }
+        override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) { sent += "touch:${a.name.lowercase()}"; touches += Offset(x, y) }
     }
+    private val touches = ArrayList<Offset>()
+    private var frame by mutableStateOf<KeyClient.MirrorFrame?>(null)
+    private var frameNone by mutableStateOf<String?>(null)
     private var versions by mutableStateOf<KeyClient.Versions?>(null)
     private var openLogins = false
     private var handoff by mutableStateOf<KeyClient.Handoff?>(null)
@@ -62,9 +69,64 @@ class KeyboardModeScreenTest {
     private val tab = hasContentDescription("משטח מגע לכפה: גוררים מהקצה הימני או נוגעים כדי לפתוח")
 
     private fun show() = rule.setContent {
-        AlHasapaTheme { KeyboardModeScreen(state, sink, onGame = { game++ }, handoff = handoff, versions = versions, openLogins = openLogins) }
+        AlHasapaTheme {
+            KeyboardModeScreen(state, sink, onGame = { game++ }, handoff = handoff, versions = versions, openLogins = openLogins, frame = frame, frameNone = frameNone)
+        }
     }
     private fun key(d: String) = rule.onNode(hasContentDescription(d))
+
+    /** A small picture, as the TV sends them: a JPEG. */
+    private fun jpeg(w: Int, h: Int): ByteArray {
+        val b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.rgb(200, 90, 40)) }
+        return java.io.ByteArrayOutputStream().also { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, it) }.toByteArray()
+    }
+
+    @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun aGamePlayedByDraggingTurnsThePhoneToTouchAndAFingerOnThePictureGoesToTheTv() {
+        state = KeyClient.State.Connected("MiTV", "Dialed", touch = true); show()
+        rule.onNodeWithTag(MIRROR_TAG).assertIsDisplayed()
+        key("q").assertDoesNotExist()
+        assertEquals("the pictures are asked for as soon as it shows", "mirror:true:w", sent.first())
+        rule.onNodeWithText("מחכים לתמונה מהטלוויזיה…").assertIsDisplayed()
+
+        // A picture arrives: it is drawn, and only then is the TV told it was shown (so it sends the next).
+        frame = KeyClient.MirrorFrame(3, 160, 90, jpeg(160, 90))
+        // The picture is opened away from the screen's thread, then drawn: the screen's thread is let run until it is.
+        val until = System.currentTimeMillis() + 5_000
+        while (!sent.contains("shown:3") && System.currentTimeMillis() < until) { rule.waitForIdle(); Thread.sleep(10) }
+        assertTrue("sent: $sent", sent.contains("shown:3"))
+        rule.onNodeWithText("מחכים לתמונה מהטלוויזיה…").assertDoesNotExist()
+
+        // A finger down in the middle, dragged right, lifted: the same on the TV, as shares of the picture.
+        sent.clear()
+        rule.onNodeWithTag(MIRROR_TAG).performTouchInput { down(center); moveBy(Offset(60f, 0f)); moveBy(Offset(60f, 10f)); up() }
+        assertEquals("touch:down", sent.first()); assertEquals("touch:up", sent.last()); assertTrue(sent.contains("touch:move"))
+        assertEquals(0.5f, touches.first().x, 0.02f); assertEquals(0.5f, touches.first().y, 0.02f)
+        assertTrue("it moved right", touches.last().x > 0.55f)
+
+        // Back to the keyboard by hand: the pictures stop, the keys are there.
+        sent.clear()
+        rule.onNodeWithText("מקלדת").performClick(); rule.waitForIdle()
+        assertEquals(listOf("mirror:false"), sent.filter { it.startsWith("mirror") })
+        key("q").assertIsDisplayed()
+    }
+
+    @Test
+    fun touchCanBeChosenByHandOnlyWhileConnectedAndSaysWhenNoGameIsOpen() {
+        show()
+        rule.onNodeWithText("מגע").assertDoesNotExist()
+        state = KeyClient.State.Connected("MiTV", "עמוד הבית"); rule.waitForIdle()
+        rule.onNodeWithTag(MIRROR_TAG).assertDoesNotExist()
+        rule.onNodeWithText("מגע").performClick()
+        rule.onNodeWithTag(MIRROR_TAG).assertIsDisplayed()
+        frameNone = KeyLink.NONE_HOME
+        rule.onNodeWithText("פותחים משחק בטלוויזיה, והוא יופיע כאן לנגיעה.").assertIsDisplayed()
+        // The TV opens a game played with the keys: the phone turns back to the keyboard by itself.
+        state = KeyClient.State.Connected("MiTV", "Dialed", touch = true); rule.waitForIdle()
+        state = KeyClient.State.Connected("MiTV", "Wordle", touch = false); rule.waitForIdle()
+        key("q").assertIsDisplayed()
+    }
 
     @Test
     fun theSwitchAtTheTopGoesBackToPlaying() {

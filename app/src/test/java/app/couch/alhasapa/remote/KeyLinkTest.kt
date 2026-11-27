@@ -31,12 +31,44 @@ class KeyLinkTest {
             Msg.Move(1f, 2f, 86_400_123L),
             // From 1.9.7: a game's end screen, and "save the result" from the phone.
             Msg.Screen("Catfishing", result = true), Msg.SaveResult,
+            // From 1.9.8: touch mode.
+            Msg.Screen("Dialed", touch = true), Msg.Screen("Dialed", result = true, touch = true),
+            Msg.Mirror(true, 1_080), Msg.Mirror(false, 0), Msg.FrameOk(17), Msg.FrameNone(KeyLink.NONE_HOME), Msg.FrameNone(KeyLink.NONE_CAPTURE),
+            Msg.Touch(KeyLink.TouchAction.DOWN, 0.25f, 0.75f), Msg.Touch(KeyLink.TouchAction.MOVE, 0.2512f, 0.7f),
+            Msg.Touch(KeyLink.TouchAction.UP, 1f, 0f), Msg.Touch(KeyLink.TouchAction.CANCEL, 0.5f, 0.5f),
         )
         for (m in all) {
             val line = KeyLink.encode(m)
             assertFalse("one line each: $line", line.contains('\n'))
             assertEquals(m, KeyLink.decode(line))
         }
+    }
+
+    @Test
+    fun aPictureGoesOnOneLineThatOnlyThePhoneReads() {
+        val data = "AbC+/09=".repeat(40_000)                                        // 320 KB of Base64, as a large picture is
+        val m = Msg.Frame(42, 960, 540, "AAECAwQFBgcICQoL", data)
+        val line = KeyLink.encode(m)
+        assertFalse(line.contains('\n'))
+        assertEquals("the hand-made line is plain JSON", m, KeyLink.decode(line, KeyLink.MAX_FRAME_LINE))
+        assertEquals(42, org.json.JSONObject(line).getInt("n"))
+        assertNull("the TV's own limit refuses a line this long (a phone never sends one)", KeyLink.decode(line))
+        // Anything that is not Base64 goes the long way round, escaped, and still comes back the same.
+        val odd = Msg.Frame(1, 2, 3, "a\"b", "c\\d")
+        assertEquals(odd, KeyLink.decode(KeyLink.encode(odd), KeyLink.MAX_FRAME_LINE))
+    }
+
+    @Test
+    fun aTouchIsAlwaysOnThePageAndNeverNotANumber() {
+        assertEquals(Msg.Touch(KeyLink.TouchAction.MOVE, 1f, 0f), KeyLink.decode("{\"t\":\"touch\",\"a\":\"move\",\"x\":7.5,\"y\":-2}"))
+        assertNull(KeyLink.decode("{\"t\":\"touch\",\"a\":\"down\",\"x\":0.5}"))
+        assertNull(KeyLink.decode("{\"t\":\"touch\",\"a\":\"pinch\",\"x\":0.5,\"y\":0.5}"))
+        assertNull(KeyLink.decode("{\"t\":\"frame\",\"n\":1,\"w\":2,\"h\":3,\"iv\":\"a\"}"))
+        // To a ten-thousandth of the page: a fifth of a pixel on a TV's screen.
+        assertTrue(KeyLink.encode(Msg.Touch(KeyLink.TouchAction.DOWN, 0.123456f, 0.5f)).contains("\"x\":0.1235"))
+        // An older TV does not say "touch" at all: the phone stays as it is.
+        assertEquals(Msg.Screen("Wordle"), KeyLink.decode("{\"t\":\"screen\",\"screen\":\"Wordle\"}"))
+        assertFalse(KeyLink.encode(Msg.Screen("Wordle")).contains("touch"))
     }
 
     @Test
