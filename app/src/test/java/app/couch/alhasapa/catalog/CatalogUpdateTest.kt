@@ -57,6 +57,41 @@ class CatalogUpdateTest {
         assertEquals("no", repo.snapshot().getJSONObject("prefs").getString("framed"))
     }
 
+    /** 2.0.3: every LinkedIn game on the shelf, the four new to it and any of the eight that had been taken off it; once. */
+    @Test
+    fun everyLinkedInGameIsOnTheShelfWhatEverWasChosenBeforeAndOnlyOnce() {
+        val linkedIn = catalog.games.filter { it.s == "li" }.map { it.id }
+        assertEquals(listOf("queens", "tango", "zip", "pinpoint", "crossclimb", "minisudoku", "patches", "wend"), linkedIn)
+        // A device that took Zip off the shelf, put Patches off and said no to Crossclimb in the suggestions, and saw revision 2 already.
+        context.getSharedPreferences("catalogue", Context.MODE_PRIVATE).edit().putInt("applied", 2).commit()
+        val store = Memory(stateWith(mapOf("zip" to "no", "patches" to "later", "crossclimb" to "no", "queens" to "yes", "framed" to "no", "wordle" to "no")))
+        val repo = StateRepository(store)
+        assertFalse(catalog.inLib(catalog.game("zip")!!, repo.snapshot()))
+        CatalogUpdate.apply(context, repo)
+        val state = repo.snapshot()
+        for (id in linkedIn) assertTrue("$id is on the shelf", catalog.inLib(catalog.game(id)!!, state))
+        val prefs = state.getJSONObject("prefs")
+        assertEquals("a yes stays", "yes", prefs.getString("queens"))
+        assertEquals("revision 2 ran here already: its games are not asked again", "no", prefs.getString("framed"))
+        assertEquals("no", prefs.getString("wordle"))
+        assertEquals(1, store.writes)
+        // Taken off again after that: final.
+        repo.update { it.getJSONObject("prefs").put("wend", "no") }
+        CatalogUpdate.apply(context, repo)
+        assertFalse(catalog.inLib(catalog.game("wend")!!, repo.snapshot()))
+    }
+
+    /** A device that never saw revision 2 gets both, in one write. */
+    @Test
+    fun aDeviceFromBeforeBothRevisionsGetsBoth() {
+        val store = Memory(stateWith(mapOf("framed" to "no", "minisudoku" to "later")))
+        val repo = StateRepository(store)
+        CatalogUpdate.apply(context, repo)
+        val prefs = repo.snapshot().getJSONObject("prefs")
+        assertFalse(prefs.has("framed")); assertFalse(prefs.has("minisudoku"))
+        assertEquals(1, store.writes)
+    }
+
     @Test
     fun aYesStaysAndADeviceWithNothingChosenIsNotWrittenTo() {
         val chosen = Memory(stateWith(mapOf("framed" to "yes", "timeguessr" to "yes")))

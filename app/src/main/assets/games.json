@@ -859,7 +859,7 @@
    "u": "https://www.linkedin.com/games/crossclimb/",
    "d": "סולם מילים שכל שלב בו משנה אות אחת.",
    "metric": "time",
-   "why": "עוד מלינקדאין"
+   "lib": 1
   },
   {
    "id": "minisudoku",
@@ -870,7 +870,7 @@
    "u": "https://www.linkedin.com/games/mini-sudoku/",
    "d": "סודוקו 6x6 מהיר.",
    "metric": "time",
-   "why": "עוד מלינקדאין, קצר וחד"
+   "lib": 1
   },
   {
    "id": "patches",
@@ -878,21 +878,21 @@
    "s": "li",
    "k": "היגיון",
    "m": "Pa",
-   "u": "https://www.linkedin.com/games/",
-   "d": "פאזל טלאים יומי של לינקדאין.",
+   "u": "https://www.linkedin.com/games/patches/",
+   "d": "מחלקים את הלוח למלבנים: בכל אחד רמז אחד, וכמה משבצות הוא.",
    "metric": "time",
-   "why": "עוד מלינקדאין"
+   "lib": 1
   },
   {
    "id": "wend",
    "n": "Wend",
    "s": "li",
-   "k": "היגיון",
+   "k": "מילים",
    "m": "We",
-   "u": "https://www.linkedin.com/games/",
-   "d": "עוד פאזל יומי של לינקדאין.",
+   "u": "https://www.linkedin.com/games/wend/",
+   "d": "מסלול בין אותיות שכנות שיוצר מילים; כל אות פעם אחת בדיוק.",
    "metric": "time",
-   "why": "עוד מלינקדאין"
+   "lib": 1
   }
  ]
 }

@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 2.0.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 2.0.3.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -345,6 +345,11 @@ want to play on, starting with Krillion and NYT:
     the shelf; where one of these three had been skipped or put off on a device, that is forgotten once, `CatalogUpdate`, so they
     show where they were asked for). `games.json` is the app's own catalogue from here on (the prototype in `couch-artifact/` keeps
     its 54).
+    2.0.3: all eight of LinkedIn's games are on the shelf (Queens, Tango, Zip, Pinpoint, Crossclimb, Mini Sudoku, Patches from
+    March 2026 and Wend from June 2026), Patches and Wend at their own pages rather than LinkedIn's list of games; a "no" or
+    "later" for any of the eight is forgotten once, as above (`CatalogUpdate` revision 3; each revision runs once on a device, in
+    order). LinkedIn's own pages could not be opened from the build environment; the addresses follow its other games' and the
+    game's own announcements.
     Only Originle, The Dozen and the two Magnitudle games could be opened from the build environment; the other links are as given.
 - **1.9.5 (TV): the home gets its illustrated look back.** The home had been pared down to plain cards to run well on the box. Its
   look now follows a brief and a demo page from the two of us (kept out of the repository; the demo was a reference for three things:

@@ -32,6 +32,21 @@ class CatalogTest {
         assertEquals("mistakes", m("hzconn")); assertEquals("score", m("krillion")); assertEquals("score", m("dialed")); assertEquals("score", m("dozen")); assertEquals("guesses", m("hz5"))
     }
 
+    /** 2.0.3: all eight of LinkedIn's games are on the shelf, each opening its own page (none LinkedIn's list of games). */
+    @Test
+    fun everyLinkedInGameIsOnTheShelfAtItsOwnAddress() {
+        val li = catalog.games.filter { it.s == "li" }
+        assertEquals(8, li.size)
+        for (g in li) {
+            assertTrue("${g.id} is on the shelf", g.lib)
+            assertTrue("${g.id} opens its own page: ${g.u}", Regex("^https://www\\.linkedin\\.com/games/[a-z-]+/$").matches(g.u))
+            assertFalse(g.id, g.placeholder); assertNull("${g.id} is not a suggestion", g.pick)
+            assertTrue("${g.id} says what it is", g.d.isNotBlank() && g.m.isNotBlank() && g.k.isNotBlank())
+        }
+        assertEquals("https://www.linkedin.com/games/patches/", catalog.game("patches")!!.u)
+        assertEquals("https://www.linkedin.com/games/wend/", catalog.game("wend")!!.u)
+    }
+
     @Test
     fun onlyTheLinkedInGamesAreHeadToHead() {
         assertEquals(setOf("queens", "tango", "zip", "pinpoint", "crossclimb", "minisudoku", "patches", "wend"),
