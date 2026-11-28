@@ -74,7 +74,8 @@ class KeyServer(
      * a new one in place of the old) takes it, rather than making another that the couch's other devices would not hear. True when
      * it was taken (the TV had none).
      */
-    private val onRelay: (RelayConfig) -> Boolean = { c -> RelayStore(context).let { st -> if (st.config == null) { st.config = c; true } else false } },
+    /** [replace]: the TV is taking the phone's couch whole (its own had nothing in it), so the couch's relay replaces any of its own. */
+    private val onRelay: (RelayConfig, Boolean) -> Boolean = { c, replace -> RelayStore(context).let { st -> if (replace || st.config == null) { st.config = c; true } else false } },
 ) {
     private val app = context.applicationContext
     private val main = Handler(Looper.getMainLooper())
@@ -159,9 +160,10 @@ class KeyServer(
         if (peers.any { it.ready }) shareOut.execute {
             runCatching {
                 // The home's own phones get what changed; a guest only the contests they may see (2.0).
-                if (peers.any { it.member } && !book.fresh()) {
+                // (Not to a phone whose couch this TV is about to take: what the TV has is of the empty couch, about to go.)
+                if (peers.any { it.member && !it.adopt } && !book.fresh()) {
                     val shares = ShareBus.recent(book)
-                    peers.forEach { p -> if (p.member) shares.forEach { p.send(Msg.Share(it)) } }
+                    peers.forEach { p -> if (p.member && !p.adopt) shares.forEach { p.send(Msg.Share(it)) } }
                 }
                 peers.forEach { p -> if (p.ready && p.guest) p.sendContests() }
             }
@@ -237,6 +239,11 @@ class KeyServer(
         private var asking = KeyLink.AS_HOME
         /** One of the home's own phones, proved: it gets the home's state, its relay, and may hand over a login. */
         val member: Boolean get() = ready && !plain && role == KeyLink.AS_HOME
+        /**
+         * This TV's couch has nothing in it and no phone is of it (2.0.1), as this connection began: if this phone comes as one of a
+         * home's own and brings a couch of its own, the TV takes it whole; if it brings none (a new phone), it is given this one.
+         */
+        @Volatile var adopt = false
         val guest: Boolean get() = role != KeyLink.AS_HOME
         /** The contests last sent to this guest, day by day (sent again only when they change). */
         private val contestsSent = HashMap<String, String>()
@@ -280,7 +287,8 @@ class KeyServer(
                 socket.soTimeout = 30_000                     // the phone says something at least every few seconds
                 val input = socket.getInputStream().bufferedReader(Charsets.UTF_8)
                 val couch = runCatching { book.couch() }.getOrNull()
-                send(Msg.Hi(store.tvId, tvName, nonce, appCode, appVer, couch?.id.orEmpty(), couch?.name.orEmpty()))
+                adopt = couch != null && runCatching { book.bare() }.getOrDefault(false) && store.homePhones() == 0
+                send(Msg.Hi(store.tvId, tvName, nonce, appCode, appVer, couch?.id.orEmpty(), couch?.name.orEmpty(), adopt))
                 while (true) {
                     val line = readLine(input) ?: break
                     heardAt = SystemClock.uptimeMillis()
@@ -349,7 +357,16 @@ class KeyServer(
                 // (From a guest it is not looked at: nothing of another couch comes in, and nothing of this one goes out.)
                 if (member) {
                     val had = runCatching { book.couch() }.getOrNull() != null
-                    val changed = runCatching { book.takeShare(m.share) }.getOrDefault(false)
+                    // A TV whose couch has nothing in it takes the phone's couch whole, in its place (2.0.1).
+                    val adopted = adopt && runCatching { book.adopt(m.share) }.getOrDefault(false)
+                    if (adopted) {
+                        adopt = false
+                        Flight.log("couches: this TV, with nothing on its couch yet, took the couch of ${shownName()}'s phone")
+                        // The couch's relay (the phone's, taken just before; or one made now, when the couch had none yet).
+                        sendRelay()
+                        publish()
+                    }
+                    val changed = adopted || runCatching { book.takeShare(m.share) }.getOrDefault(false)
                     if (changed) {
                         peers.forEach { if (it !== this && it.member) it.send(m) }
                         peers.forEach { if (it.ready && it.guest) it.sendContests() }
@@ -367,7 +384,7 @@ class KeyServer(
                 // The couch's relay from one of the home's own phones, sealed under this connection's key: taken only by a TV with none.
                 val key = frameKey
                 if (member && key != null) RelayCrypto.open(key, KeyLink.RELAY_AAD, m.sealed)?.let { RelayConfig.parse(String(it, Charsets.UTF_8)) }?.let { c ->
-                    if (runCatching { onRelay(c) }.getOrDefault(false)) Flight.log("relay: this TV took the couch's relay from ${shownName()}'s phone")
+                    if (runCatching { onRelay(c, adopt) }.getOrDefault(false)) Flight.log("relay: this TV took the couch's relay from ${shownName()}'s phone")
                 }
                 true
             }
@@ -384,6 +401,8 @@ class KeyServer(
                     all.forEach { send(Msg.Share(it)) }
                     send(Msg.ShareAll)
                     Flight.log("sync: every evening kept was sent to ${shownName()} (${all.size} messages)")
+                    // A new phone joined this TV's couch, empty as it is: the couch is theirs together now, and its relay goes with it.
+                    if (adopt) { adopt = false; sendRelay() }
                 }
                 true
             }
@@ -421,6 +440,8 @@ class KeyServer(
 
         private fun welcome() {
             ready = true
+            // Only a phone of a home takes part in what a TV with an empty couch does (see [adopt]).
+            if (role != KeyLink.AS_HOME || plain) adopt = false
             send(Msg.Ok(screen, role))
             if (resultReady || touchGame) send(Msg.Screen(screen, resultReady, touchGame))
             // Both of us as the TV knows us: the phone keeps what is newer (its own word comes back from it, see Msg.CoupleMsg).
@@ -431,7 +452,8 @@ class KeyServer(
             // Only to the home's own phones: a guest never holds the home's relay.
             // (A TV on which nothing was chosen yet makes no relay and says nothing of its own: it takes the couch of the phone
             // that joins it to its home, relay and all.)
-            val settled = !runCatching { book.fresh() }.getOrDefault(false)
+            // (A TV whose couch has nothing in it waits too: the phone's couch may be the one, see [adopt].)
+            val settled = !runCatching { book.fresh() }.getOrDefault(false) && !adopt
             if (settled) sendRelay()
             // Everything the TV keeps alike with the phones (1.12): two weeks of evenings, and the rest. A TV that is of no couch yet
             // (2.0: it is joining the one a phone began) says nothing of its own first: it takes the phone's.

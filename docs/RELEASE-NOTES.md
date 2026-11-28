@@ -4,6 +4,8 @@
 
 ## 📱 התקנה בטלפון (Android)
 
+בטלפון מתקינים את קובץ הטלפון (`al-hasapa-phone.apk`), ובטלוויזיה את קובץ הטלוויזיה (`al-hasapa-tv.apk`).
+
 **[הורדה לטלפון](https://github.com/stevenbarzilay-cloud/Al-hasapa/releases/latest/download/al-hasapa-phone.apk)**
 
 1. פותחים את הקישור בטלפון, והקובץ יורד.

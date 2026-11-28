@@ -95,6 +95,9 @@ class RemoteStore(context: Context, name: String = "remote") {
     /** The paired phones by name: the home's own, and the friends who may come again or are here this evening. */
     fun pairedPhones(): List<String> = phones().let { o -> o.keys().asSequence().map { o.optString(it) }.toList() }
 
+    /** How many phones are paired as the home's own (from before 2.0, every paired phone). */
+    fun homePhones(): Int = phones().keys().asSequence().count { roleOf(it) == KeyLink.AS_HOME }
+
     fun pairedGuests(): List<String> = phones().let { o -> o.keys().asSequence().filter { roleOf(it) != KeyLink.AS_HOME }.map { o.optString(it) }.toList() }
 
     fun forgetPhones() { prefs.edit { remove("phones"); remove("roles") } }

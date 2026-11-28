@@ -164,7 +164,12 @@ class CouchesActivity : ComponentActivity() {
                 home() ?: CouchRef("", couch.repo.peek { Couches.name(it) }), s.n.tv.name,
                 onConnect = { step = Step.None; connect(s.n, KeyLink.AS_HOME, Purpose.HOME_TV) }, onDismiss = { step = Step.None },
             )
-            is Step.Join -> JoinDialog(s.n.tv.couch, s.n.tv.name, onJoin = { step = Step.None; connect(s.n, KeyLink.AS_HOME, Purpose.JOIN) }, onDismiss = { step = Step.None })
+            is Step.Join -> JoinDialog(
+                s.n.tv, onJoin = { step = Step.None; connect(s.n, KeyLink.AS_HOME, Purpose.JOIN) },
+                // Back to the first screen, to begin a couch here; the TV is connected to it after.
+                onCreate = { step = Step.None; setResult(RESULT_CREATE); finish() },
+                onDismiss = { step = Step.None },
+            )
             is Step.SetHome -> SetHomeDialog(s.to, home(), onConfirm = { step = Step.None; setHome(s) }, onDismiss = { step = Step.None })
             is Step.AskHome -> DialogCard({ step = Step.None }) {
                 androidx.compose.material3.Text(
@@ -259,7 +264,8 @@ class CouchesActivity : ComponentActivity() {
                 if (st.role != KeyLink.AS_HOME) return
                 // (A phone that joins has the couch only once the TV handed it over, players and all.)
                 val home = home() ?: return
-                if (tv.couch != null && tv.couch.id != home.id) return
+                // (A TV whose couch had nothing in it took this phone's: it is the home's, whatever it said of its couch before.)
+                if (tv.homeCouch != null && tv.homeCouch?.id != home.id) return
                 if (p.purpose != Purpose.HOME_TV && client.awaitingAll) return
                 couches.addHomeTv(tv.id)
                 pending = null
@@ -276,7 +282,7 @@ class CouchesActivity : ComponentActivity() {
 
     private fun pick(n: Nearby) {
         val home = home()
-        val c = n.tv.couch
+        val c = n.tv.homeCouch
         step = when {
             joining -> Step.Join(n)
             // A phone from before 2.0 that knew several TVs, and this is one of them: asked once whether it is its home's.
@@ -420,6 +426,9 @@ class CouchesActivity : ComponentActivity() {
         const val EXTRA_JOIN = "join"
 
         fun joinIntent(context: Context): Intent = Intent(context, CouchesActivity::class.java).putExtra(EXTRA_JOIN, true)
+
+        /** The result of [joinIntent] when the TV chosen had no couch yet: one is begun on the phone first. */
+        const val RESULT_CREATE = 2
 
         /** Opened by "שליחת האפליקציה לחבר": the install link goes to the share sheet as soon as both downloads are known to be there. */
         const val EXTRA_SHARE = "share"

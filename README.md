@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 2.0.0.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 2.0.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -171,6 +171,13 @@ visiting, and where the result of the game in front goes.
   כאורח הערב" or "לשמור את הספה לביקורים הבאים"; in both the holder chooses one of that couch's players or adds themselves.
   Neither changes the home. The home changes only by "להגדיר כספת הבית שלי", with a confirmation that names the new home; the
   home that was is kept whole (on its own devices, and here among the saved couches), and nothing played until now moves.
+- **The first steps are said plainly (2.0.1).** A phone whose home couch has no TV yet shows "📺 עוד לא חיברתם טלוויזיה" over its
+  home, with "לחבר טלוויזיה" (or "לא עכשיו", said once). A couch begun on a TV with one press, nothing in it yet, says at the foot
+  of the TV's home what to do on the phone; and that TV takes the couch of the first phone of a home that joins it (with its names,
+  history and relay), so a couch begun on both the TV and the phone ends up one couch, not two. A phone that wants to join a TV on
+  which nothing was chosen yet is offered to begin the couch on the phone instead. The TV app installed on a phone by mistake says
+  so first ("זו האפליקציה לטלוויזיה", with the way to remove it), instead of showing a TV's screens, and does not announce itself on
+  the network as a TV until the person goes on with it all the same.
 - **A visit** (`CouchStore.visit`) shows as a line over the phone's home for as long as it lasts ("מתארח בספה של דני", whether its
   TV is reached, "סיום ביקור"); it ends when asked or with the evening (five in the morning), and never begins again by itself.
 - **Where a result goes.** A game on a TV is that TV's couch's, whoever holds the remote (the phone's button says "שמירת תוצאה

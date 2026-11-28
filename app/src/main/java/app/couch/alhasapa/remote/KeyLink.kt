@@ -61,7 +61,9 @@ import org.json.JSONObject
  *                                                         (see SoloRelay); a phone app from before 1.11 ignores it
  *
  *     couches (2.0): a phone is of the TV's home, or a guest at it
- *     TV    → phone  hi {..., couch, cname}               which couch this TV is of, and its name (empty: the TV has none yet)
+ *     TV    → phone  hi {..., couch, cname, empty}        which couch this TV is of, and its name (empty: the TV has none yet);
+ *                                                         empty: nothing is in it yet and no phone is of it (2.0.1): the first phone
+ *                                                         of a home that comes as one of its own brings its couch, and the TV takes it
  *     phone → TV     hello {..., as}                      what the phone comes as: "home" (one of the home's own phones: everything
  *                                                         above), "guest" (a friend who may come again) or "evening" (a friend, for
  *                                                         this evening); a phone app from before 2.0 says nothing, and is of the home
@@ -99,7 +101,7 @@ object KeyLink {
      * Not simply the app's own version number: a release that changes only one of the two (the TV's home got a new look in 1.9.5)
      * must not send the people to update the other for nothing. It is raised only when a release needs both.
      */
-    const val TOGETHER_SINCE = 40
+    const val TOGETHER_SINCE = 41
 
     /** What a phone comes to a TV as (2.0): one of the home's own, a friend who may come again, or a friend for this evening. */
     const val AS_HOME = "home"
@@ -178,6 +180,8 @@ object KeyLink {
         data class Hi(
             val tv: String, val name: String, val nonce: String = "", val app: Int = 0, val ver: String = "",
             val couch: String = "", val couchName: String = "",
+            /** The TV's couch has nothing in it and no phone of its own (2.0.1): it takes the couch of the first phone of a home. */
+            val empty: Boolean = false,
         ) : Msg
         /** [role]: what the phone comes as ([AS_HOME], [AS_GUEST], [AS_EVENING]; empty from a phone app before 2.0). */
         data class Hello(
@@ -259,7 +263,7 @@ object KeyLink {
 
     private fun encodeJson(m: Msg): JSONObject = when (m) {
         is Msg.Hi -> JSONObject().put("t", "hi").put("v", VERSION).put("tv", m.tv).put("name", m.name).put("nonce", m.nonce)
-            .put("app", m.app).put("ver", m.ver).apply { if (m.couch.isNotEmpty()) put("couch", m.couch).put("cname", m.couchName) }
+            .put("app", m.app).put("ver", m.ver).apply { if (m.couch.isNotEmpty()) put("couch", m.couch).put("cname", m.couchName); if (m.empty) put("empty", true) }
         is Msg.Hello -> JSONObject().put("t", "hello").put("v", VERSION).put("phone", m.phone).put("name", m.name).put("token", m.token)
             .put("proof", m.proof).put("app", m.app).put("ver", m.ver).apply { if (m.role.isNotEmpty()) put("as", m.role) }
         Msg.NeedCode -> JSONObject().put("t", "code")
@@ -321,6 +325,7 @@ object KeyLink {
             "hi" -> Msg.Hi(
                 s("tv"), s("name"), s("nonce"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24),
                 s("couch").takeIf { app.couch.alhasapa.data.Couches.isId(it) }.orEmpty(), s("cname").take(app.couch.alhasapa.data.Couches.MAX_NAME),
+                o.optBoolean("empty", false),
             )
             "hello" -> Msg.Hello(
                 s("phone"), s("name"), s("token"), s("proof"), o.optInt("app", 0).coerceAtLeast(0), s("ver").take(24),

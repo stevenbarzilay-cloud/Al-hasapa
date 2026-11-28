@@ -34,6 +34,21 @@ class CouchesTest {
     }
 
     @Test
+    fun aCouchBegunWithOnePressIsBareUntilAnythingIsInIt() {
+        val s = CouchState.empty().also { Couches.set(it, "c9999999999999ee", "", 0L) }
+        assertTrue(Couches.bare(s))
+        assertFalse("no couch: not bare, new", Couches.bare(CouchState.empty()))
+        fun with(block: (JSONObject) -> Unit) = CouchState.copy(s).also(block)
+        assertFalse("named", Couches.bare(with { Couches.rename(it, "הסלון", now = 5) }))
+        assertFalse("a player named", Couches.bare(with { Couple.put(it, Person("a", "נועה", "", "", 5)) }))
+        assertFalse("something played", Couches.bare(with { CouchState.setEntry(it, "2026-11-28", "wordle", JSONObject().put("w", "").put("t", 5L)) }))
+        assertFalse("someone added", Couches.bare(with { Couple.put(it, Person("u1234567", "סבתא", "", "", 5)) }))
+        assertFalse("a game played alone", Couches.bare(with { Solo.put(it, "2026-11-28", "bandle", SoloSide("a", null, t = 5), now = 10) }))
+        assertFalse("a note", Couches.bare(with { Notes.add(it, Note("n1", "a", null, "שלום", emptyList(), 5)) }))
+        assertTrue("a game put on the shelf is not something in it", Couches.bare(with { it.getJSONObject("prefs").put("wordle", "yes") }))
+    }
+
+    @Test
     fun aStateFromBefore20KeepsOurNamesAndIsNotANewDevice() {
         // As 1.12 wrote it: no couch record. Names left empty by an old backup come back as they always did.
         val old = CouchState.parse("""{"v":1,"names":{"a":"","b":""},"prefs":{},"log":{"2026-11-20":{"wordle":{"w":"a","t":5}}}}""")!!

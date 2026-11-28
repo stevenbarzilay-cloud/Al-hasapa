@@ -59,8 +59,14 @@ class KeyClient(
         }
     }
 
-    /** A TV that said who it is: its id and name, and the couch it is of (2.0; null from a TV with none yet, or an app before 2.0). */
-    data class Tv(val id: String, val name: String, val couch: app.couch.alhasapa.data.CouchRef?)
+    /**
+     * A TV that said who it is: its id and name, and the couch it is of (2.0; null from a TV with none yet, or an app before 2.0).
+     * [empty]: its couch has nothing in it and no phone is of it (2.0.1): it takes the couch of the first phone of a home.
+     */
+    data class Tv(val id: String, val name: String, val couch: app.couch.alhasapa.data.CouchRef?, val empty: Boolean = false) {
+        /** The couch it is of for a phone that comes as one of a home's own: none, while it is empty. */
+        val homeCouch: app.couch.alhasapa.data.CouchRef? get() = if (empty) null else couch
+    }
 
     sealed interface State {
         /** Looking for the TV on the home network. */
@@ -435,8 +441,10 @@ class KeyClient(
                         }
                         met = Met.OURS
                         val couch = m.couch.takeIf { it.isNotEmpty() }?.let { app.couch.alhasapa.data.CouchRef(it, m.couchName.ifEmpty { m.name }) }
-                        val seen = Tv(m.tv, m.name, couch)
-                        tvId = m.tv; tvName = m.name; tvCouch = couch
+                        val seen = Tv(m.tv, m.name, couch, m.empty)
+                        tvId = m.tv; tvName = m.name
+                        // A TV with nothing on its couch takes this phone's, if this phone comes as one of a home's own (2.0.1).
+                        tvCouch = if (m.empty && t.role == KeyLink.AS_HOME) null else couch
                         nonce = m.nonce
                         _tv.value = seen
                         if (m.tv.isNotEmpty()) store.setAddress(m.tv, address)
@@ -445,7 +453,7 @@ class KeyClient(
                         if (t.role == Target.ASK) { _state.value = State.AskHome(seen); break }
                         // The home's TV turned out to be of another couch (it was set up anew, say): nothing of the home goes to it.
                         val mine = runCatching { book.couch() }.getOrNull()
-                        if (t.role == KeyLink.AS_HOME && mine != null && couch != null && couch.id != mine.id) {
+                        if (t.role == KeyLink.AS_HOME && mine != null && couch != null && !m.empty && couch.id != mine.id) {
                             Flight.log("phone keyboard: the TV at $address is of another couch; nothing was said to it")
                             _state.value = State.OtherCouch(seen)
                             break
@@ -661,7 +669,7 @@ object TvPeek {
             s.soTimeout = timeoutMs
             val line = KeyServer.readLine(s.getInputStream().bufferedReader(Charsets.UTF_8)) ?: return null
             val hi = KeyLink.decode(line) as? Msg.Hi ?: return null
-            KeyClient.Tv(hi.tv, hi.name, hi.couch.takeIf { it.isNotEmpty() }?.let { app.couch.alhasapa.data.CouchRef(it, hi.couchName.ifEmpty { hi.name }) })
+            KeyClient.Tv(hi.tv, hi.name, hi.couch.takeIf { it.isNotEmpty() }?.let { app.couch.alhasapa.data.CouchRef(it, hi.couchName.ifEmpty { hi.name }) }, hi.empty)
         }
     }.getOrNull()
 }

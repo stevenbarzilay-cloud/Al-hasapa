@@ -127,6 +127,25 @@ class MainActivityTvTest {
         }
     }
 
+    /** 2.0.1: a couch begun on the TV with one press: what to do on the phone, at the foot of the home, until a phone joins. */
+    @Test
+    fun aTvWithNothingOnItsCouchSaysWhatToDoOnThePhone() {
+        CrashReport.clear(context); Flight.acknowledgePrevious()
+        (context as CouchApp).repo.update { s ->
+            s.put("names", org.json.JSONObject().put("a", app.couch.alhasapa.data.CouchState.DEFAULT_A).put("b", app.couch.alhasapa.data.CouchState.DEFAULT_B))
+            s.remove("idAt"); s.put("log", org.json.JSONObject())
+            app.couch.alhasapa.data.Couches.set(s, "c9999999999999ee", "", 0L)
+        }
+        launch()
+        rule.onNodeWithText("המדף של הערב").assertIsDisplayed()
+        rule.onNode(androidx.compose.ui.test.hasTestTag(app.couch.alhasapa.couches.TV_BARE_HINT_TAG)).assertIsDisplayed()
+        rule.onNode(androidx.compose.ui.test.hasText("לחבר אותה לספת הבית שלי", substring = true)).assertIsDisplayed()
+        // Once anything is in it, it is a couch like any other, and the hint is gone.
+        (context as CouchApp).repo.update { s -> app.couch.alhasapa.data.Couple.put(s, app.couch.alhasapa.data.Person("a", "נועה", "", "", 5)) }
+        rule.waitForIdle()
+        rule.onNode(androidx.compose.ui.test.hasTestTag(app.couch.alhasapa.couches.TV_BARE_HINT_TAG)).assertDoesNotExist()
+    }
+
     @Test
     fun comingBackFromAGameTheShelfAndTheFocusAreWhereTheyWereLeft() {
         CrashReport.clear(context); Flight.acknowledgePrevious()

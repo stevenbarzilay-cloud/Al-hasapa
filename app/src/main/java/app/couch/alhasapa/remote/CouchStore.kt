@@ -108,6 +108,11 @@ class CouchStore(context: Context, name: String = "couches") {
         get() = prefs.getBoolean("ask_me", false)
         set(v) = prefs.edit { putBoolean("ask_me", v) }
 
+    /** "Not now" was said to connecting a TV (2.0.1): the line over the home is not shown again ("הספות שלי" connects one any time). */
+    var tvLater: Boolean
+        get() = prefs.getBoolean("tv_later", false)
+        set(v) = prefs.edit { putBoolean("tv_later", v) }
+
     /** Whether what the phone knew before 2.0 was sorted into couches (done once, see CouchSetup). */
     var migrated: Boolean
         get() = prefs.getBoolean("migrated", false)

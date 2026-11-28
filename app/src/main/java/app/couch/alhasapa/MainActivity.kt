@@ -69,6 +69,10 @@ import app.couch.alhasapa.couches.CouchesActivity
 import app.couch.alhasapa.couches.OpenContest
 import app.couch.alhasapa.couches.VisitBar
 import app.couch.alhasapa.couches.WelcomeScreen
+import app.couch.alhasapa.couches.WrongAppScreen
+import app.couch.alhasapa.couches.AppLink
+import app.couch.alhasapa.couches.TvBareHint
+import app.couch.alhasapa.couches.ConnectTvBar
 import app.couch.alhasapa.data.Couches
 import app.couch.alhasapa.remote.CouchStore
 import app.couch.alhasapa.remote.KeyClient
@@ -163,11 +167,18 @@ class MainActivity : ComponentActivity() {
      */
     private var targetAsk by mutableStateOf<Pair<String, SoloTargets.Need.Ask>?>(null)
     private var couchTick by androidx.compose.runtime.mutableIntStateOf(0)
-    /** A new phone joined the couch of a TV it chose: who holds it is asked next. */
+    /** A new phone joined the couch of a TV it chose: who holds it is asked next. Or that TV had none yet: one is begun here first. */
     private val joinCouch = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
         if (r.resultCode == RESULT_OK && RemoteStore(this).me == null) meOpen = true
+        if (r.resultCode == CouchesActivity.RESULT_CREATE) welcomeCreate = true
         hubReloads++; couchTick++
     }
+
+    /** The first screen goes straight to naming a new couch (2.0.1: the TV chosen to join had none yet). */
+    private var welcomeCreate by mutableStateOf(false)
+
+    /** The splash is over and the hub is what is seen: a line over it (the visit's, "connect a TV") shows from then on. */
+    private var hubShown by mutableStateOf(false)
 
     private fun launchSolo(gameId: String, elsewhere: Boolean) {
         heldBy() ?: return
@@ -414,6 +425,23 @@ class MainActivity : ComponentActivity() {
                     }
                     return@Layer
                 }
+                // The TV app on a phone (2.0.1): said first, instead of a TV's screens on a phone.
+                var wrongApp by remember { mutableStateOf(TvMode.wrongApp(this@MainActivity)) }
+                if (wrongApp) {
+                    WrongAppScreen(
+                        onRemove = {
+                            runCatching {
+                                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.fromParts("package", packageName, null)))
+                            }
+                        },
+                        onDownload = { runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(AppLink.PAGE))) } },
+                        onGoOn = {
+                            TvMode.goOn(this@MainActivity); wrongApp = false
+                            if (Build.FINGERPRINT != "robolectric") RemoteKeys.foreground(application, true)
+                        },
+                    )
+                    return@Layer
+                }
                 // A new device (2.0): a couch of one's own, or the one that already is in this home. Nothing of anyone's is shown before.
                 val stateRev by app.repo.revision.collectAsState()
                 val needsSetup = remember(stateRev) { app.repo.peek { Couches.needsSetup(it) } }
@@ -425,6 +453,7 @@ class MainActivity : ComponentActivity() {
                             if (!tv.enabled) meOpen = true
                         },
                         onJoin = { joinCouch.launch(CouchesActivity.joinIntent(this@MainActivity)) },
+                        create = welcomeCreate,
                     )
                     if (!tv.enabled) PhoneHomeDialogs(app, pieces, stateRev)
                     return@Layer
@@ -460,6 +489,9 @@ class MainActivity : ComponentActivity() {
                             Flight.log("notes: one was read on the home")
                         }
                     }
+                    // A couch begun on this TV with one press, nothing in it yet (2.0.1): what to do on the phone, at the foot of the home.
+                    val bare = remember(revision) { app.repo.peek { Couches.bare(it) } }
+                    if (bare && remote.phones.isEmpty()) TvBareHint(Build.MODEL.orEmpty().ifBlank { "TV" })
                     // A game both of us played alone today (1.11): its reveal, once, when no note is up.
                     if (homeNotes.isEmpty()) {
                         val relay = remember { RelayStore(this@MainActivity) }
@@ -481,9 +513,18 @@ class MainActivity : ComponentActivity() {
                     // back to the home.
                     val guestChanges by GuestSolo.changes.collectAsState()
                     val visit = remember(couchTick, guestChanges, hubReloads) { if (tv.enabled) null else CouchStore(this@MainActivity).visitNow() }
+                    // The home couch has no TV yet (2.0.1): the next step, said plainly over the home, until it is done or put off.
+                    val askTv = remember(couchTick, hubReloads, visit) {
+                        !tv.enabled && visit == null && CouchStore(this@MainActivity).let { it.homeTvs.isEmpty() && it.askHome.isEmpty() && !it.tvLater }
+                    }
+                    val topBar = hubShown && (visit != null || askTv)
                     androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxSize()) {
+                        if (hubShown && visit == null && askTv) ConnectTvBar(
+                            onConnect = { startActivity(Intent(this@MainActivity, CouchesActivity::class.java)) },
+                            onLater = { CouchStore(this@MainActivity).tvLater = true; couchTick++ },
+                        )
                         // A visit (2.0): its line stays at the top for as long as it lasts, with the way out of it.
-                        if (visit != null) {
+                        if (hubShown && visit != null) {
                             val link by remember { Links.client(this@MainActivity) }.state.collectAsState()
                             val linkTv by remember { Links.client(this@MainActivity) }.tv.collectAsState()
                             val guestStore = remember { GuestSolo(this@MainActivity) }
@@ -507,12 +548,13 @@ class MainActivity : ComponentActivity() {
                         }
                         androidx.compose.foundation.layout.Box(
                             androidx.compose.ui.Modifier.weight(1f).then(
-                                if (visit != null) androidx.compose.ui.Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.statusBars) else androidx.compose.ui.Modifier,
+                                if (topBar) androidx.compose.ui.Modifier.consumeWindowInsets(androidx.compose.foundation.layout.WindowInsets.statusBars) else androidx.compose.ui.Modifier,
                             ),
                         ) {
                             AppRoot(
                                 playSplash = if (tv.enabled) true else playSplash, reduceMotion = reduceMotion,
                                 onExit = { if (tv.enabled) webHub = false else finish() }, bridge = bridge, reloads = hubReloads,
+                                onShown = { hubShown = true },
                             )
                         }
                     }

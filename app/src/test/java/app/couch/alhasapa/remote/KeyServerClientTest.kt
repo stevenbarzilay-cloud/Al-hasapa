@@ -375,7 +375,7 @@ class KeyServerClientTest {
         // What the two tell each other is the version at which they last had to be updated together (raised by 1.9.7, the end of a
         // game, by 1.9.8, touch mode, and by 1.9.9, each of us on our own phone): two apps of releases after it that changed only one
         // of the two have nothing to say to each other about versions.
-        assertEquals("raised only by a release that needs both", 40, KeyLink.TOGETHER_SINCE)
+        assertEquals("raised only by a release that needs both", 41, KeyLink.TOGETHER_SINCE)
         RemoteStore(context).forgetPhones()
         val tv = KeyServer(context, onInput = {}, preferredPort = 0, advertise = false, tvName = "TV", onLogins = { null }, appVer = "1.9.5", onLinked = {})
         tv.start()

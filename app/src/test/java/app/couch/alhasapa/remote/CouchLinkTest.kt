@@ -69,7 +69,7 @@ class CouchLinkTest {
             context, store = store, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = name,
             onLogins = { payload -> logins += payload; "NYT Games" to 1 }, onLinked = {}, frameSource = { null }, onMirroring = {},
             book = RepoCoupleBook { repo }, relay = { relay }, onGuestSide = { toldRelay += it }, evening = { evening },
-            onRelay = { c -> relayTaken += c; true },
+            onRelay = { c, _ -> relayTaken += c; true },
         )
         val id: String get() = store.tvId
         val address: String get() = "127.0.0.1:${server.port}"
@@ -343,6 +343,52 @@ class CouchLinkTest {
         assertEquals("and the couch's own relay, not a new one", listOf(couchRelay), tv.relayTaken.toList())
         assertEquals("the phone is what it was", ours, Couches.of(phone.repo.snapshot()))
         assertEquals("סטיב" to "רוני", CouchState.names(phone.repo.snapshot()))
+    }
+
+    /** A couch begun on a TV with one press, nothing in it (2.0.1): what a TV does when it is told to make one, as the app does. */
+    private fun bare(tv: Tv) = tv.repo.update { s -> Couches.set(s, "c9999999999999ee", "", 0L) }
+
+    @Test
+    fun aTvWithNothingOnItsCouchTakesTheCouchOfThePhoneThatComesAsOneOfItsHome() {
+        val tv = Tv("NewTV", null)
+        bare(tv); tv.start()
+        assertTrue(Couches.bare(tv.repo.snapshot()))
+        val phone = Phone(1, ours)
+        phone.repo.update { s -> CouchState.setEntry(s, "2026-10-01", "wordle", JSONObject().put("w", "a").put("r", JSONObject().put("v", 3)).put("t", 50L)) }
+        val couchRelay = RelayConfig.create()
+        RelayStore(context).config = couchRelay
+
+        // On the network it is a new TV, nothing of another couch: the phone that comes as one of its home is not refused.
+        val c = pair(phone, tv, KeyLink.AS_HOME)
+        assertNull("its couch is not the phone's concern", (c.state.value as KeyClient.State.Connected).couch)
+        waitFor("the TV is of the phone's couch now") { Couches.of(tv.repo.snapshot()) == ours }
+        waitFor("with its history") { CouchState.entry(tv.repo.snapshot(), "2026-10-01", "wordle") != null }
+        waitFor("and its names") { CouchState.names(tv.repo.snapshot()) == ("סטיב" to "רוני") }
+        assertEquals("and the couch's own relay", couchRelay, tv.relayTaken.lastOrNull())
+        assertEquals("the phone is what it was", ours, Couches.of(phone.repo.snapshot()))
+        // From now on it is the couch's TV like any other: another phone with a couch of its own is not of it.
+        val other = Phone(2, danny, "דני", "מיה")
+        val o = other.client(KeyClient.Target(setOf(tv.id), KeyLink.AS_HOME, tv.address), tv)
+        o.start()
+        waitFor("another couch's phone sees it is of another couch") { o.state.value is KeyClient.State.OtherCouch }
+        assertEquals(ours, (o.state.value as KeyClient.State.OtherCouch).tv.couch)
+    }
+
+    @Test
+    fun aNewPhoneJoiningATvWithNothingOnItsCouchIsGivenThatCouch() {
+        val tv = Tv("NewTV", null)
+        bare(tv); tv.start()
+        val phone = Phone(1, null)
+        RelayStore(context).config = null
+        val c = pair(phone, tv, KeyLink.AS_HOME)
+        waitFor("the new phone is of the TV's couch") { Couches.of(phone.repo.snapshot())?.id == "c9999999999999ee" }
+        waitFor("and holds its relay") { RelayStore(context).config == tv.relay }
+        waitFor("nothing more on its way") { !c.awaitingAll }
+        assertFalse("the TV has a phone of its own now: it is not empty any more", Couches.bare(tv.repo.snapshot()) && tv.store.homePhones() == 0)
+        // Its names, given on the phone, reach the TV.
+        phone.repo.update { s -> Couple.put(s, Person("a", "נועה", "", "", System.currentTimeMillis())) }
+        c.sendCouple()
+        waitFor("the TV names the player as the phone did") { Couple.name(tv.repo.snapshot(), "a") == "נועה" }
     }
 
     @Test

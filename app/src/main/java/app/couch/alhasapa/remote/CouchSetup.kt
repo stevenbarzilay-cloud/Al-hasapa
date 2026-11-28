@@ -63,8 +63,9 @@ object CouchSetup {
         repo.update { s ->
             val na = a.trim().take(Couple.MAX_NAME).ifEmpty { CouchState.DEFAULT_A }
             val nb = b.trim().take(Couple.MAX_NAME).ifEmpty { CouchState.DEFAULT_B }
-            Couple.put(s, Person("a", na, "", "", now))
-            Couple.put(s, Person("b", nb, "", "", now))
+            // (A name nobody gave, a TV's couch begun with one press, is not stamped: the first phone's names win over it.)
+            Couple.put(s, Person("a", na, "", "", if (a.isBlank()) 0L else now))
+            Couple.put(s, Person("b", nb, "", "", if (b.isBlank()) 0L else now))
             Couches.set(s, id, couchName.trim(), if (couchName.isBlank()) 0L else now)
         }
         CouchStore(context).migrated = true

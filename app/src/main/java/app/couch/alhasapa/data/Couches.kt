@@ -83,6 +83,19 @@ object Couches {
             (state.optJSONObject("solo")?.length() ?: 0) == 0
     }
 
+    /**
+     * A couch with nothing in it yet (2.0): begun on a TV with one press (a TV has no way to type names), never named, nothing played,
+     * nobody added, no note. Such a TV joins the couch of the first phone that comes to it as one of its home's own, rather than stand
+     * as a couch of its own beside the one that phone began (see KeyServer).
+     */
+    fun bare(state: JSONObject): Boolean {
+        if (of(state) == null || stamp(state) != 0L) return false
+        val (a, b) = CouchState.names(state)
+        fun none(k: String) = (state.optJSONObject(k)?.length() ?: 0) == 0
+        return a == CouchState.DEFAULT_A && b == CouchState.DEFAULT_B && none("log") && none("people") && none("solo") &&
+            (state.optJSONArray("notes")?.length() ?: 0) == 0
+    }
+
     /** Whether [share] (another device's, see [Shared]) is of another couch than [state]'s: such a share is never merged. */
     fun foreign(state: JSONObject, share: JSONObject): Boolean {
         val theirs = share.optString("c").ifEmpty { share.optJSONObject(KEY)?.optString("id").orEmpty() }

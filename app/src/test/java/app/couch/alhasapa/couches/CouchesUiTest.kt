@@ -48,6 +48,7 @@ import app.couch.alhasapa.remote.CouchStore
 import app.couch.alhasapa.remote.GuestEntry
 import app.couch.alhasapa.remote.KeyClient
 import app.couch.alhasapa.remote.KeyLink
+import app.couch.alhasapa.tv.TvMode
 import app.couch.alhasapa.remote.KeyServer
 import app.couch.alhasapa.remote.Links
 import app.couch.alhasapa.remote.RemoteStore
@@ -201,6 +202,30 @@ class CouchesScreenTest {
     }
 
     @Test
+    fun aTvWithNoCouchYetOffersToBeginOneOnThePhoneAndAnEmptyOneToBeJoined() {
+        var step by androidx.compose.runtime.mutableIntStateOf(0)
+        rule.setContent {
+            AlHasapaTheme {
+                when (step) {
+                    0 -> JoinDialog(KeyClient.Tv("tv5", "NewTV", null), onJoin = { pressed += "join" }, onCreate = { pressed += "create"; step = 1 }, onDismiss = {})
+                    1 -> JoinDialog(KeyClient.Tv("tv5", "NewTV", CouchRef("c9999999999999ee", "הספה שלנו"), empty = true), onJoin = { pressed += "join"; step = 2 }, onCreate = {}, onDismiss = {})
+                    else -> WelcomeScreen(tv = false, tvName = "", onCreate = { _, _, _ -> }, onJoin = {}, create = true)
+                }
+            }
+        }
+        rule.onNodeWithText("בטלוויזיה הזאת עוד לא הוקמה ספה", substring = true).assertIsDisplayed()
+        rule.onNode(hasTestTag("join-home")).assertDoesNotExist()
+        save("phone-join-no-couch.png", dialog = true)
+        rule.onNode(hasTestTag("create-here")).performClick(); rule.waitForIdle()
+        rule.onNodeWithText("טלוויזיה חדשה, עוד בלי ספה").assertIsDisplayed()
+        rule.onNodeWithText("הספה שהוקמה בה עוד ריקה", substring = true).assertIsDisplayed()
+        rule.onNode(hasTestTag("join-home")).performClick(); rule.waitForIdle()
+        // Straight to naming a new couch.
+        rule.onNode(hasTestTag(SETUP_A_TAG)).assertIsDisplayed()
+        assertEquals(listOf("create", "join"), pressed)
+    }
+
+    @Test
     fun whichCouchAGamePlayedAloneIsForIsAskedWithBothNamedInFull() {
         val h = SoloTarget(home.id, home.name, "a", "סטיב", home = true)
         val v = SoloTarget(danny.id, danny.name, "u1234567", "סטיב", home = false)
@@ -351,6 +376,58 @@ class CouchesInTheAppTest {
         val next = shadowOf(context as android.app.Application).nextStartedActivity
         assertEquals(CouchesActivity::class.java.name, next.component!!.className)
         assertTrue(next.getBooleanExtra(CouchesActivity.EXTRA_JOIN, false))
+    }
+
+    @Test
+    fun theTvAppOnAPhoneSaysSoFirstAndGoesOnOnlyWhenAsked() {
+        TvMode.onPhoneForTest = true
+        try {
+            scenario = ActivityScenario.launch(MainActivity::class.java); rule.waitForIdle()
+            rule.onNodeWithText("זו האפליקציה לטלוויזיה").assertIsDisplayed()
+            rule.onNodeWithText("להסרת האפליקציה הזאת", substring = true).assertIsDisplayed()
+            rule.onNode(hasTestTag(WELCOME_CREATE_TAG)).assertDoesNotExist()
+            // To be removed: the system's own screen for this app.
+            rule.onNode(hasTestTag("wrong-app-remove")).performClick(); rule.waitForIdle()
+            val next = shadowOf(context as android.app.Application).nextStartedActivity
+            assertEquals(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, next.action)
+            assertEquals("package:${context.packageName}", next.dataString)
+            // Going on all the same: said once, and the app is as it is on a TV.
+            rule.onNode(hasTestTag("wrong-app-go-on")).performScrollTo().performClick(); rule.waitForIdle()
+            rule.onNodeWithText("זו האפליקציה לטלוויזיה").assertDoesNotExist()
+            rule.onNode(hasTestTag(WELCOME_CREATE_TAG)).assertIsDisplayed()
+            assertFalse(TvMode.wrongApp(context))
+        } finally {
+            TvMode.onPhoneForTest = null
+            TvMode.forget(context)
+        }
+    }
+
+    @Test
+    fun aHomeCouchWithNoTvSaysTheNextStepUntilItIsPutOff() {
+        org.junit.Assume.assumeFalse(BuildConfig.TV)
+        TestCouch.ours()
+        RemoteStore(context).me = "a"
+        Links.factory = { ctx, target -> KeyClient(ctx, target = target, finder = { _, _ -> emptyList() }) }
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        waitFor("the next step, over the home") { rule.onAllNodes(hasTestTag(CONNECT_TV_TAG)).fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("📺 עוד לא חיברתם טלוויזיה").assertIsDisplayed()
+        rule.onNodeWithText("לחבר טלוויזיה").performClick(); rule.waitForIdle()
+        assertEquals(CouchesActivity::class.java.name, shadowOf(context as android.app.Application).nextStartedActivity.component!!.className)
+        rule.onNode(hasTestTag(CONNECT_TV_LATER_TAG)).performClick(); rule.waitForIdle()
+        rule.onNode(hasTestTag(CONNECT_TV_TAG)).assertDoesNotExist()
+        assertTrue("put off: not shown again", CouchStore(context).tvLater)
+    }
+
+    @Test
+    fun aHomeCouchWithItsTvSaysNothingOfIt() {
+        org.junit.Assume.assumeFalse(BuildConfig.TV)
+        TestCouch.ours()
+        RemoteStore(context).me = "a"
+        CouchStore(context).homeTvs = setOf("tv0001")
+        Links.factory = { ctx, target -> KeyClient(ctx, target = target, finder = { _, _ -> emptyList() }) }
+        scenario = ActivityScenario.launch(MainActivity::class.java); rule.waitForIdle()
+        rule.mainClock.advanceTimeBy(8_000); rule.waitForIdle()
+        rule.onNode(hasTestTag(CONNECT_TV_TAG)).assertDoesNotExist()
     }
 
     @Test

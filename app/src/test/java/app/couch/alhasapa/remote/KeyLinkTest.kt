@@ -55,6 +55,11 @@ class KeyLinkTest {
             Msg.NoteMsg(app.couch.alhasapa.data.Note("n4", "b", null, "", listOf(intArrayOf(0, 0, 500, 500), intArrayOf(7, 9)), 6L, ink = listOf(21, 102))),
             Msg.Relay("c2VhbGVk"),
             Msg.ShareAll,
+            // From 2.0: couches; what a phone comes as; a guest's game played alone, kept. From 2.0.1: a TV with nothing on its couch.
+            Msg.Hi("tv1", "MiBOX4", "0f".repeat(16), 40, "2.0.0", "c0123456789abcde", "הספה של דני"),
+            Msg.Hi("tv1", "MiBOX4", "0f".repeat(16), 41, "2.0.1", "c0123456789abcde", "הספה שלנו", empty = true),
+            Msg.Hello("ph1", "Pixel 8", "", "ab".repeat(32), 41, "2.0.1", KeyLink.AS_GUEST),
+            Msg.Ok("עמוד הבית", KeyLink.AS_EVENING), Msg.SoloOk("2026-11-27", "connections", 1_234L),
         )
         for (m in all) {
             val line = KeyLink.encode(m)

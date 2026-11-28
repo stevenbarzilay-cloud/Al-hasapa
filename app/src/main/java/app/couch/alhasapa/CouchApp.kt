@@ -127,7 +127,7 @@ class CouchApp : Application() {
         override fun onActivityStarted(activity: Activity) {
             started++
             Flight.session(true, activity.javaClass.simpleName)
-            if (tv && started == 1 && Build.FINGERPRINT != "robolectric") RemoteKeys.foreground(app, true)
+            if (tv && started == 1 && Build.FINGERPRINT != "robolectric" && !TvMode.wrongApp(app)) RemoteKeys.foreground(app, true)
         }
         override fun onActivityResumed(activity: Activity) { front = activity; Flight.log("${activity.javaClass.simpleName} in front") }
         override fun onActivityPaused(activity: Activity) {

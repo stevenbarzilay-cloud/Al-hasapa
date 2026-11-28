@@ -30,9 +30,15 @@ import app.couch.alhasapa.hub.HubScreen
  * lifts when the hub reports ready.
  */
 @Composable
-fun AppRoot(playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, bridge: HubBridge? = null, dndSignals: DndSignals? = null, reloads: Int = 0) {
+fun AppRoot(
+    playSplash: Boolean, reduceMotion: Boolean, onExit: () -> Unit, bridge: HubBridge? = null, dndSignals: DndSignals? = null, reloads: Int = 0,
+    /** The splash is over and the hub is what is seen (a line over it, the visit's say, waits for this). */
+    onShown: () -> Unit = {},
+) {
     var hubReady by remember { mutableStateOf(false) }
     var splashDone by remember { mutableStateOf(!playSplash) }
+    val latestShown by androidx.compose.runtime.rememberUpdatedState(onShown)
+    LaunchedEffect(splashDone) { if (splashDone) latestShown() }
     var resumes by remember { mutableIntStateOf(0) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { resumes++ }      // casting may start while the app was away
     val signals = dndSignals ?: DndSignals.real(LocalContext.current)

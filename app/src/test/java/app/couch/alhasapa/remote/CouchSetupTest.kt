@@ -145,6 +145,13 @@ class CouchSetupTest {
         CouchSetup.migrate(context, fresh, tv = false)
         assertNull(Couches.of(fresh.snapshot()))
         assertTrue(Couches.needsSetup(fresh.snapshot()))
+        // On a TV, one press: a couch with nothing in it, its names not stamped (the first phone's names win over them).
+        CouchStore(context).migrated = false
+        val tvState = StateRepository(Memory())
+        CouchSetup.create(context, tvState, "", "", "", now = 1_000)
+        assertTrue(Couches.bare(tvState.snapshot()))
+        assertEquals(0L, Couple.stamp(tvState.snapshot(), "a"))
+        assertTrue(Couple.offer(tvState.snapshot(), Person("a", "נועה", "", "", 500)))
         // Its first choice: a couch of its own, with the names it was given and nothing played.
         val c = CouchSetup.create(context, fresh, "", "נועה", "יואב", now = 1_000)
         assertEquals("הספה של נועה ויואב", c.name)

@@ -35,6 +35,15 @@ interface CoupleBook {
     /** A new device, nothing chosen on it yet (2.0): it has nothing of its own to tell, and takes the couch it joins. */
     fun fresh(): Boolean = false
 
+    /** This device's couch has nothing in it yet (2.0, see [app.couch.alhasapa.data.Couches.bare]). */
+    fun bare(): Boolean = false
+
+    /**
+     * On a TV whose couch has nothing in it (2.0): [s], a share of another couch from a phone of a home, is taken whole, the couch with
+     * it, in place of the empty one. True when it was (the couch was still bare, and [s] named another).
+     */
+    fun adopt(s: org.json.JSONObject): Boolean = false
+
     /**
      * On the TV (2.0): a guest's own side of a game played alone for this couch's contest, kept where newer. True when the couch has
      * it now (kept this time, or already there), so the guest's phone can stop keeping it to send.
@@ -77,6 +86,19 @@ class RepoCoupleBook(private val repo: () -> StateRepository?) : CoupleBook {
     override fun couch(): app.couch.alhasapa.data.CouchRef? = repo()?.peek { app.couch.alhasapa.data.Couches.of(it) }
 
     override fun fresh(): Boolean = repo()?.peek { app.couch.alhasapa.data.Couches.needsSetup(it) } ?: true
+
+    override fun bare(): Boolean = repo()?.peek { app.couch.alhasapa.data.Couches.bare(it) } ?: false
+
+    override fun adopt(s: org.json.JSONObject): Boolean {
+        val r = repo() ?: return false
+        return r.mergeIf { st ->
+            if (!app.couch.alhasapa.data.Couches.bare(st) || !app.couch.alhasapa.data.Couches.foreign(st, s)) return@mergeIf false
+            // The empty couch goes (its id, and the names nobody gave); the phone's comes in its place, with everything in it.
+            st.remove(app.couch.alhasapa.data.Couches.KEY); st.remove("idAt")
+            app.couch.alhasapa.data.Shared.merge(st, s, r.clock())
+            true
+        }
+    }
 
     override fun guestSide(day: String, game: String, side: app.couch.alhasapa.data.SoloSide): Boolean {
         val r = repo() ?: return false

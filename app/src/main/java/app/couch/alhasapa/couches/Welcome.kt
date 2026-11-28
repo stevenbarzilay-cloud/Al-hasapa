@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,8 +64,13 @@ const val SETUP_START_TAG = "setup-start"
  * is how it is listed there).
  */
 @Composable
-fun WelcomeScreen(tv: Boolean, tvName: String, onCreate: (couch: String, a: String, b: String) -> Unit, onJoin: () -> Unit) {
-    var step by remember { mutableIntStateOf(0) }
+fun WelcomeScreen(
+    tv: Boolean, tvName: String, onCreate: (couch: String, a: String, b: String) -> Unit, onJoin: () -> Unit,
+    /** Straight to naming a new couch (a TV chosen to join had none yet: one is begun here first). */
+    create: Boolean = false,
+) {
+    var step by remember { mutableIntStateOf(if (create && !tv) 1 else 0) }
+    LaunchedEffect(create) { if (create && !tv) step = 1 }
     val remote = LocalTv.current
     Column(
         Modifier.fillMaxSize().background(Palette.Cream).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 28.dp),
@@ -118,6 +124,53 @@ private fun WelcomeChoice(title: String, sub: String?, dark: Boolean, id: String
         if (sub != null) Text(sub, fontSize = 16.sp, color = if (dark) Palette.Cream else Palette.Ink2)
     }
 }
+
+const val WRONG_APP_TAG = "wrong-app"
+
+/**
+ * The TV app on a phone (2.0.1): it says what happened and what to do, instead of showing a TV's screens on a phone. Removing it is
+ * done in the system's own screen for the app (an app cannot remove itself without asking for more than it needs).
+ */
+@Composable
+fun WrongAppScreen(onRemove: () -> Unit, onDownload: () -> Unit, onGoOn: () -> Unit) {
+    Column(
+        Modifier.fillMaxSize().background(Palette.Cream).safeDrawingPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 28.dp)
+            .testTag(WRONG_APP_TAG),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+    ) {
+        Text("📺", fontSize = 56.sp)
+        Text(
+            stringResource(R.string.wrong_app_title), fontSize = 30.sp, fontWeight = FontWeight.Bold, color = Palette.Ink, textAlign = TextAlign.Center,
+            modifier = Modifier.semantics { heading() },
+        )
+        Text(stringResource(R.string.wrong_app_body), fontSize = 18.sp, color = Palette.Ink, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 560.dp))
+        WelcomeChoice(stringResource(R.string.wrong_app_remove), stringResource(R.string.wrong_app_remove_sub), dark = true, id = "wrong-app-remove", onClick = onRemove)
+        WelcomeChoice(stringResource(R.string.wrong_app_download), null, dark = false, id = "wrong-app-download", onClick = onDownload)
+        Text(
+            stringResource(R.string.wrong_app_go_on), fontSize = 15.sp, color = Palette.Ink2, textAlign = TextAlign.Center,
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).heightIn(min = 48.dp).tvTarget("wrong-app-go-on", null, onGoOn).testTag("wrong-app-go-on")
+                .semantics { role = Role.Button }.padding(horizontal = 12.dp, vertical = 13.dp),
+        )
+    }
+}
+
+/**
+ * On a TV whose couch has nothing in it yet (2.0.1): what to do on the phone to give it names and play, said at the foot of its
+ * home (not a button: there is nothing to press here, it is all done on the phone).
+ */
+@Composable
+fun TvBareHint(tvName: String, modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxSize().padding(bottom = 18.dp), contentAlignment = Alignment.BottomCenter) {
+        Text(
+            stringResource(R.string.tv_bare_hint, tvName), fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Palette.Cream, textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 880.dp).clip(RoundedCornerShape(20.dp)).background(Palette.Ink.copy(alpha = 0.94f)).padding(horizontal = 24.dp, vertical = 14.dp)
+                .testTag(TV_BARE_HINT_TAG),
+        )
+    }
+}
+
+const val TV_BARE_HINT_TAG = "tv-bare-hint"
 
 /** A new couch on a phone: who plays, and what the couch is called (after its two players, unless named otherwise). */
 @Composable

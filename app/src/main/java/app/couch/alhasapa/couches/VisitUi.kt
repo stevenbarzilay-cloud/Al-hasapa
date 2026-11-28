@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Text
@@ -17,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,6 +72,33 @@ fun VisitBar(
                 Text(stringResource(R.string.visit_contest, c.gameName, c.players), fontSize = 14.sp, color = Palette.Cream, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 SmallButton(stringResource(R.string.visit_join, c.gameName, Couches.inCouch(visit.name)), dark = false, tag = "visit-join-${c.game}") { onJoin(c.game) }
             }
+        }
+    }
+}
+
+const val CONNECT_TV_TAG = "connect-tv"
+const val CONNECT_TV_LATER_TAG = "connect-tv-later"
+
+/**
+ * Over the phone's home while the home couch has no TV yet (2.0.1): the next step, said plainly, and the way to it; or "not now",
+ * for a couch that plays on the phone only (it is said once, and "הספות שלי" connects a TV whenever it is wanted).
+ */
+@Composable
+fun ConnectTvBar(onConnect: () -> Unit, onLater: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier.fillMaxWidth().background(Palette.Ink).statusBarsPadding().padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp)
+            .testTag(CONNECT_TV_TAG),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(stringResource(R.string.connect_tv_title), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Palette.Cream)
+        Text(stringResource(R.string.connect_tv_sub), fontSize = 13.sp, color = Palette.Cream)
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SmallButton(stringResource(R.string.connect_tv_go), dark = false, onClick = onConnect)
+            Text(
+                stringResource(R.string.connect_tv_later), fontSize = 15.sp, color = Palette.Cream,
+                modifier = Modifier.heightIn(min = 44.dp).clickable(onClick = onLater).testTag(CONNECT_TV_LATER_TAG)
+                    .semantics { role = androidx.compose.ui.semantics.Role.Button }.padding(horizontal = 6.dp, vertical = 12.dp),
+            )
         }
     }
 }

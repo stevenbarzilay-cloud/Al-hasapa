@@ -109,7 +109,7 @@ object Links {
                             if (tv.id.isNotEmpty() && tv.id !in couches.homeTvs && CouchStore(context).visitNow() == null) {
                                 // (Only a TV of the home's own couch, or one with no couch yet, which takes the home's.)
                                 val home = (context as? CouchApp)?.repo?.peek { Couches.of(it) }
-                                if (tv.couch == null || home == null || tv.couch.id == home.id) couches.addHomeTv(tv.id)
+                                if (tv.homeCouch == null || home == null || tv.homeCouch?.id == home.id) couches.addHomeTv(tv.id)
                             }
                         } else tv.couch?.let { couch ->
                             couches.saved(couch.id)?.let { s -> if (s.name != couch.name || tv.id !in s.tvs) couches.save(s.copy(name = couch.name, tvs = (s.tvs + tv.id).distinct())) }

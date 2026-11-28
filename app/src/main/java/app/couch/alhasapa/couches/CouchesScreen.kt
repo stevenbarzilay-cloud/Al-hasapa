@@ -206,7 +206,8 @@ fun CouchesScreen(v: CouchesView, a: CouchesActions) {
         if (!v.joining) Text(stringResource(R.string.couch_found_hint), fontSize = 15.sp, color = Palette.Ink2)
         if (v.nearby.isEmpty()) Text(stringResource(if (v.scanning) R.string.couch_found_scan else R.string.couch_found_none), fontSize = 16.sp, color = Palette.Ink2)
         for (n in v.nearby) {
-            val couch = n.tv.couch
+            // (A TV whose couch has nothing in it yet is a new TV: it takes the couch of the phone that joins it.)
+            val couch = n.tv.homeCouch
             val what = when {
                 n.tv.id in v.homeTvIds || (couch != null && couch.id == v.home?.id) -> stringResource(R.string.couch_found_is_home)
                 couch == null -> stringResource(R.string.couch_found_new)
@@ -348,14 +349,25 @@ fun ConnectHomeDialog(home: CouchRef, tvName: String, onConnect: () -> Unit, onD
 
 /** A new phone joining the couch of the TV it chose. */
 @Composable
-fun JoinDialog(couch: CouchRef?, tvName: String, onJoin: () -> Unit, onDismiss: () -> Unit) {
+fun JoinDialog(tv: KeyClient.Tv, onJoin: () -> Unit, onCreate: () -> Unit, onDismiss: () -> Unit) {
     DialogCard(onDismiss) {
-        Text(couch?.name ?: stringResource(R.string.couch_found_new), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
-        Text(stringResource(R.string.couch_tv_of, tvName), fontSize = 16.sp, color = Palette.Ink2)
-        if (couch == null) Text(stringResource(R.string.couch_fresh_join), fontSize = 17.sp, color = Palette.Ink)
-        else {
-            Text(stringResource(R.string.couch_set_home_code), fontSize = 17.sp, color = Palette.Ink)
-            Choice(stringResource(R.string.couch_join_home), null, dark = true, tag = "join-home", onClick = onJoin)
+        Text(tv.homeCouch?.name ?: stringResource(R.string.couch_found_new), fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Palette.Ink)
+        Text(stringResource(R.string.couch_tv_of, tv.name), fontSize = 16.sp, color = Palette.Ink2)
+        when {
+            // Nothing was chosen on that TV yet: a couch is begun here, on the phone, and the TV is connected to it after.
+            tv.couch == null -> {
+                Text(stringResource(R.string.couch_fresh_join), fontSize = 17.sp, color = Palette.Ink)
+                Choice(stringResource(R.string.couch_create_here), stringResource(R.string.couch_create_here_sub), dark = true, tag = "create-here", onClick = onCreate)
+            }
+            // A couch was begun on it with one press, and nothing is in it: joined, and named from here.
+            tv.empty -> {
+                Text(stringResource(R.string.couch_join_empty), fontSize = 17.sp, color = Palette.Ink)
+                Choice(stringResource(R.string.couch_join_home), null, dark = true, tag = "join-home", onClick = onJoin)
+            }
+            else -> {
+                Text(stringResource(R.string.couch_set_home_code), fontSize = 17.sp, color = Palette.Ink)
+                Choice(stringResource(R.string.couch_join_home), null, dark = true, tag = "join-home", onClick = onJoin)
+            }
         }
         SmallButton(stringResource(R.string.couch_cancel), dark = false, onClick = onDismiss)
     }
