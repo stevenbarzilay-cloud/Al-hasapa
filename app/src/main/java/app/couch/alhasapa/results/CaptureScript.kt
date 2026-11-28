@@ -6,8 +6,10 @@ import org.json.JSONObject
 /**
  * Catches the result a game offers when the person presses ITS OWN Share or Copy button, so it need not be pasted by hand.
  *
- * What it does, and all it does: wraps navigator.share, navigator.clipboard.writeText and document.execCommand("copy"); when
- * one is called it tells the app the text, then calls straight through to the original, so the game behaves exactly as before.
+ * What it does, and all it does: wraps navigator.share, navigator.clipboard.writeText and .write (2.0.2: the text of a
+ * ClipboardItem), and document.execCommand("copy"), and hears the copy event's own text (2.0.2: a game that sets what is copied in
+ * the event); when one is used it tells the app the text, then calls straight through to the original, so the game behaves exactly as
+ * before.
  * It reads nothing else: not the page, not the forms, not the storage. It runs only on the game's own sites (the origin
  * allowlist given to addDocumentStartJavaScript), and the app checks the origin again on every message.
  */
@@ -44,6 +46,27 @@ object CaptureScript {
       var ow=cb.writeText;
       cb.writeText=function(t){ try{send("copy",t)}catch(e){} return ow.apply(cb,arguments); };
     }
+  }catch(e){}
+  try{
+    var cw=navigator.clipboard;
+    if(cw&&typeof cw.write==="function"){
+      var ow2=cw.write;
+      cw.write=function(items){
+        try{
+          var it=items&&items[0];
+          if(it&&it.types&&typeof it.getType==="function"&&Array.prototype.indexOf.call(it.types,"text/plain")>=0){
+            it.getType("text/plain").then(function(b){return b.text()}).then(function(t){send("copy",t)}).catch(function(){});
+          }
+        }catch(e){}
+        return ow2.apply(cw,arguments);
+      };
+    }
+  }catch(e){}
+  try{
+    /* After the game's own copy handlers (the window hears it last): what the game put in the event, if it did. */
+    window.addEventListener("copy",function(e){
+      try{ var d=e.clipboardData, t=d&&typeof d.getData==="function"?d.getData("text/plain"):""; if(t) send("copy",t); }catch(x){}
+    },false);
   }catch(e){}
   try{
     var oe=document.execCommand;

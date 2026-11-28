@@ -30,6 +30,8 @@ class KeyServerClientTest {
     /** Touch mode: what the TV pictures (null: no game is open), and whether a phone shows it, as the TV was told. */
     @Volatile private var source: FrameSource? = null
     private val mirroring = CopyOnWriteArrayList<Boolean>()
+    /** A phone held upright in touch mode (2.0.2), as the TV was told: its shape, 0 for none. */
+    private val upright = CopyOnWriteArrayList<Float>()
     /** Each of us as each side knows us, and the notes the TV kept (1.9.9). */
     private class Book(vararg people: app.couch.alhasapa.data.Person) : CoupleBook {
         val state: org.json.JSONObject = app.couch.alhasapa.data.CouchState.empty().also { s -> people.forEach { app.couch.alhasapa.data.Couple.put(s, it) } }
@@ -45,7 +47,7 @@ class KeyServerClientTest {
         context, onInput = { typed += it }, preferredPort = 0, advertise = false, tvName = "MiBOX4",
         onLogins = { payload -> received += payload; "NYT Games" to 3 },
         appCode = 28, appVer = "1.9.4", onLinked = { on -> if (linked.lastOrNull() != on) linked += on },
-        frameSource = { source }, onMirroring = { mirroring += it }, book = tvBook, relay = { relayCfg },
+        frameSource = { source }, onMirroring = { mirroring += it }, onUpright = { upright += it }, book = tvBook, relay = { relayCfg },
     )
     private val clients = ArrayList<KeyClient>()
 
@@ -135,11 +137,21 @@ class KeyServerClientTest {
         waitFor("the touch reached the TV") { typed.count { it is Msg.Touch } == 2 }
         assertEquals(Msg.Touch(KeyLink.TouchAction.DOWN, 0.5f, 0.25f), typed.first { it is Msg.Touch })
 
+        // Held upright (2.0.2): the TV hears the phone's shape (and shows the game shaped like it); on its side again, it hears so.
+        assertTrue("nothing was said of upright while on its side", upright.isEmpty())
+        phone.mirror(true, 480, null, 0.48f)
+        waitTicking("the TV knows the phone is upright") { upright.lastOrNull() == 0.48f }
+        phone.mirror(true, 480, null, 0f)
+        waitTicking("the TV knows it is on its side again") { upright.lastOrNull() == 0f }
+        phone.mirror(true, 480, null, 0.5f)
+        waitTicking("upright once more") { upright.lastOrNull() == 0.5f }
+
         // The game closes: the phone hears there is nothing to show; touch mode off: the TV's paw may come back.
         source = null; server.framesChanged()
         waitTicking("told the game is gone") { phone.frameNone.value == KeyLink.NONE_HOME && phone.frame.value == null }
         phone.mirror(false, 0)
         waitTicking("the TV knows no phone shows the game") { mirroring.lastOrNull() == false }
+        assertEquals("and that none is upright now", 0f, upright.last())
     }
 
     @Test

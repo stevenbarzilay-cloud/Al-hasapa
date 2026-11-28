@@ -127,6 +127,10 @@ object KeyLink {
     /** The widest picture the TV sends, in pixels (wider costs the box more to make than it adds on a phone's screen). */
     const val MAX_FRAME_WIDTH = 960
 
+    /** The shapes (width over height) a phone held upright may say its picture has (2.0.2): any phone's, and nothing wider than square. */
+    const val UP_MIN = 0.3f
+    const val UP_MAX = 1f
+
     /** Why there is no picture: no game is open on the TV ([NONE_HOME]); the TV could not take one ([NONE_CAPTURE]). */
     const val NONE_HOME = "home"
     const val NONE_CAPTURE = "capture"
@@ -216,8 +220,12 @@ object KeyLink {
         data object Pong : Msg
         data class Bye(val why: String) : Msg
 
-        /** Touch mode: pictures of the game are wanted ([on]), [w] pixels wide, of the part [crop] of the page (null: all of it), or no more. */
-        data class Mirror(val on: Boolean, val w: Int = 0, val crop: Crop? = null) : Msg
+        /**
+         * Touch mode: pictures of the game are wanted ([on]), [w] pixels wide, of the part [crop] of the page (null: all of it), or no more.
+         * [up] (2.0.2): the phone is held upright, and its picture has this shape (width over height); the TV then shows the game shaped
+         * like a phone, so that it fills the phone's screen. 0: on its side (and from a phone app before 2.0.2, which never says).
+         */
+        data class Mirror(val on: Boolean, val w: Int = 0, val crop: Crop? = null, val up: Float = 0f) : Msg
         /** Picture [n] of the game's page, [w] by [h] pixels, of the part [crop] (null: all of it): a JPEG sealed with the connection's picture key ([FrameCrypto]). */
         data class Frame(val n: Int, val w: Int, val h: Int, val iv: String, val data: String, val crop: Crop? = null) : Msg
         /** Picture [n] is on the phone's screen: the next one may come. */
@@ -288,7 +296,10 @@ object KeyLink {
         is Msg.Logins -> JSONObject().put("t", "logins").put("iv", m.iv).put("data", m.data)
         is Msg.LoginsDone -> JSONObject().put("t", "logins-done").put("site", m.site).put("n", m.n)
         is Msg.LoginsNo -> JSONObject().put("t", "logins-no").put("why", m.why)
-        is Msg.Mirror -> JSONObject().put("t", "mirror").put("on", m.on).put("w", m.w).apply { m.crop?.let { put("c", it.toJson()) } }
+        is Msg.Mirror -> JSONObject().put("t", "mirror").put("on", m.on).put("w", m.w).apply {
+            m.crop?.let { put("c", it.toJson()) }
+            if (m.up > 0f) put("up", Math.round(m.up * 1000) / 1000.0)
+        }
         is Msg.Frame -> JSONObject().put("t", "frame").put("n", m.n).put("w", m.w).put("h", m.h).put("iv", m.iv).put("data", m.data)
             .apply { m.crop?.let { put("c", it.toJson()) } }
         is Msg.FrameOk -> JSONObject().put("t", "frame-ok").put("n", m.n)
@@ -357,7 +368,10 @@ object KeyLink {
             "logins" -> o.optString("data", "").takeIf { it.isNotEmpty() }?.let { Msg.Logins(s("iv"), it) }
             "logins-done" -> Msg.LoginsDone(s("site"), o.optInt("n", 0))
             "logins-no" -> Msg.LoginsNo(s("why"))
-            "mirror" -> Msg.Mirror(o.optBoolean("on"), o.optInt("w", 0).coerceIn(0, 8_192), Crop.of(o.optJSONArray("c")))
+            "mirror" -> Msg.Mirror(
+                o.optBoolean("on"), o.optInt("w", 0).coerceIn(0, 8_192), Crop.of(o.optJSONArray("c")),
+                o.optDouble("up", 0.0).toFloat().takeIf { it in UP_MIN..UP_MAX } ?: 0f,
+            )
             "frame" -> o.optString("data", "").takeIf { it.isNotEmpty() }?.let {
                 Msg.Frame(o.optInt("n", 0), o.optInt("w", 0).coerceIn(0, 8_192), o.optInt("h", 0).coerceIn(0, 8_192), s("iv"), it, Crop.of(o.optJSONArray("c")))
             }

@@ -58,10 +58,13 @@ class KeyboardModeScreenTest {
         override fun sendLogin(site: String) { sent += "login:$site" }
         override fun signIn(site: String) { sent += "signin:$site" }
         override fun saveResult() { sent += "save-result" }
-        override fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop?) {
-            sent += "mirror:$on" + (if (on && width > 0) ":w" else "") + (if (crop != null) ":part" else "")
+        override fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop?, up: Float) {
+            sent += "mirror:$on" + (if (on && width > 0) ":w" else "") + (if (crop != null) ":part" else "") + (if (up > 0f) ":up" else "")
             if (on) lastCrop = crop
         }
+        override fun touchUpright(game: String) = uprights[game] ?: false
+        override fun setTouchUpright(game: String, upright: Boolean) { uprights[game] = upright }
+        override fun orient(upright: Boolean) { orients += upright }
         override fun frameShown(n: Int) { sent += "shown:$n" }
         override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) { sent += "touch:${a.name.lowercase()}"; touches += Offset(x, y) }
         override fun saveMe(p: app.couch.alhasapa.data.Person) { sent += "me:${p.who}:${p.name}:${p.shape}:${p.color}" }
@@ -77,6 +80,9 @@ class KeyboardModeScreenTest {
     private var me by mutableStateOf<String?>(null)
     private var withCouple = false
     private val touches = ArrayList<Offset>()
+    /** Touch mode upright (2.0.2): what is kept for each game, and each turn of the phone asked for. */
+    private val uprights = HashMap<String, Boolean>()
+    private val orients = ArrayList<Boolean>()
     private var lastCrop: KeyLink.Crop? = null
     private var frame by mutableStateOf<KeyClient.MirrorFrame?>(null)
     private var frameNone by mutableStateOf<String?>(null)
@@ -102,6 +108,39 @@ class KeyboardModeScreenTest {
     private fun jpeg(w: Int, h: Int): ByteArray {
         val b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888).apply { eraseColor(android.graphics.Color.rgb(200, 90, 40)) }
         return java.io.ByteArrayOutputStream().also { b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, it) }.toByteArray()
+    }
+
+    /** 2.0.2: touch mode turns the phone upright, for this game (kept), and back on its side; the keyboard is always on its side. */
+    @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun touchModeTurnsThePhoneUprightForThisGameAndBack() {
+        state = KeyClient.State.Connected("MiTV", "Pips", touch = true); show()
+        rule.onNodeWithTag(MIRROR_TAG).assertIsDisplayed()
+        assertEquals("on its side to begin with", listOf(false), orients.distinct())
+        assertTrue("and the TV is not told of upright", sent.none { it.endsWith(":up") })
+        rule.onNodeWithTag(MIRROR_ROTATE_TAG).assertIsDisplayed()
+        rule.onNodeWithText("📱 לאורך").performClick()
+        rule.waitForIdle()
+        assertEquals("kept for this game", true, uprights["Pips"])
+        assertEquals("the phone is asked to turn upright", true, orients.last())
+        // Upright: the switch on top, and the picture once the phone has turned (this test's screen stays sideways, so it waits).
+        rule.onNodeWithTag(UPRIGHT_TOUCH_TAG).assertIsDisplayed()
+        rule.onNodeWithTag(MIRROR_TAG).assertDoesNotExist()
+        assertTrue("the sideways picture is let go", sent.contains("mirror:false"))
+        // The keyboard is always on its side.
+        rule.onNodeWithText("מקלדת").performClick()
+        rule.waitForIdle()
+        assertEquals(false, orients.last())
+        rule.onNodeWithTag(UPRIGHT_TOUCH_TAG).assertDoesNotExist()
+        // Touch again: upright by itself, as kept for Pips; another game is on its side until it is turned.
+        rule.onNodeWithText("מגע").performClick()
+        rule.waitForIdle()
+        assertEquals(true, orients.last())
+        rule.onNodeWithTag(UPRIGHT_TOUCH_TAG).assertIsDisplayed()
+        state = KeyClient.State.Connected("MiTV", "Dialed", touch = true); rule.waitForIdle()
+        assertEquals(false, orients.last())
+        rule.onNodeWithTag(MIRROR_TAG).assertIsDisplayed()
+        assertEquals("nothing kept for Dialed", null, uprights["Dialed"])
     }
 
     @Test

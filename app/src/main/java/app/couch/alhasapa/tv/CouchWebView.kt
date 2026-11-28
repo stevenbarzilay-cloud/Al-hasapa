@@ -35,15 +35,25 @@ class CouchWebView(context: Context) : WebView(context) {
 
 /** Delivers a typed key to a page. Letters and digits are real key presses, which is what games that listen for keys expect. */
 object WebTyper {
+    /** Keys typed while an Enter waits a moment for the page (see [enter]): they follow it, in the order they were typed. */
+    private var queued: ArrayDeque<Pair<WebView, Delivery>>? = null
+
+    /**
+     * The app's own clock for the Enter's moments, not the page's view: a view that has left the screen (the game closed just then)
+     * runs nothing posted to it, and the keys would wait for good.
+     */
+    private val main by lazy { android.os.Handler(android.os.Looper.getMainLooper()) }
+
+    /** The longest an Enter waits for the page before it goes all the same (a page that is busy, or hung, holds back no key). */
+    const val ENTER_WAIT_MS = 400L
+
     fun deliver(web: WebView?, d: Delivery) {
         web ?: return
+        queued?.let { it.addLast(web to d); return }
         when (d) {
-            is Delivery.Code -> {
-                val t = android.os.SystemClock.uptimeMillis()
-                val meta = if (d.shift) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0
-                web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, d.keyCode, 0, meta))
-                web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, d.keyCode, 0, meta))
-            }
+            // Enter goes to the game, not to a button of the game's that kept the focus (see EnterKey).
+            is Delivery.Code -> if (d.keyCode == KeyEvent.KEYCODE_ENTER && !d.shift) enter(web)
+            else press(web, d.keyCode, if (d.shift) KeyEvent.META_SHIFT_ON or KeyEvent.META_SHIFT_LEFT_ON else 0)
             // No key code for it (Hebrew, symbols): insert it into the focused field the way a paste would.
             is Delivery.Text -> web.evaluateJavascript(insertScript(d.text), null)
             is Delivery.Hold -> {
@@ -51,6 +61,46 @@ object WebTyper {
                 web.dispatchKeyEvent(KeyEvent(t, t, if (d.down) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP, d.keyCode, 0, 0))
             }
         }
+    }
+
+    private fun press(web: WebView, code: Int, meta: Int) {
+        val t = android.os.SystemClock.uptimeMillis()
+        web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0, meta))
+        web.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0, meta))
+    }
+
+    /**
+     * Enter (2.0.2): the focus off a game's button first, then the real key; said from within the page if it never reached it. What is
+     * typed meanwhile waits for it, so a letter typed right after Enter never overtakes it.
+     */
+    private fun enter(web: WebView) {
+        val q = ArrayDeque<Pair<WebView, Delivery>>()
+        queued = q
+        var went = false
+        fun go(before: String) {
+            if (went) return
+            went = true
+            press(web, KeyEvent.KEYCODE_ENTER, 0)
+            if (queued === q) queued = null
+            // In order; another Enter among them waits in its turn, and what follows it waits for it.
+            while (q.isNotEmpty()) { val (w, next) = q.removeFirst(); deliver(w, next) }
+            if (before == "IFRAME" || before.isEmpty()) return
+            main.postDelayed({
+                runCatching {
+                    web.evaluateJavascript(EnterKey.AFTER) { r ->
+                        val after = EnterKey.answer(r)
+                        if (before.startsWith("moved ") || after == "sent") {
+                            app.couch.alhasapa.diag.Flight.log(
+                                "typing: Enter" + (if (before.startsWith("moved ")) "; the page's focus was on a ${before.removePrefix("moved ")} of the game's, moved off it" else "") +
+                                    (if (after == "sent") "; it did not reach the page, so it was said from within the page" else "; the page had it"),
+                            )
+                        }
+                    }
+                }
+            }, EnterKey.CHECK_MS)
+        }
+        val asked = runCatching { web.evaluateJavascript(EnterKey.BEFORE) { raw -> go(EnterKey.answer(raw)) } }
+        if (asked.isFailure) go("") else main.postDelayed({ go("") }, ENTER_WAIT_MS)
     }
 
     fun insertScript(text: String): String =

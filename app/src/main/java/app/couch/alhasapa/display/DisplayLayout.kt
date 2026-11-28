@@ -86,6 +86,16 @@ data class DisplayLayout(
             }
         }
 
+        /**
+         * The page shaped like a phone held upright whose screen is [up] wide for each 1 tall (2.0.2: a phone in touch mode, held
+         * upright, shows the game over all of its screen). A phone width the profile has is kept; a desktop one becomes a phone's.
+         */
+        fun phoneShaped(p: DisplayProfile, up: Float): DisplayProfile {
+            val vw = if (p.mode == DisplayMode.PORTRAIT_FIT && p.vw in 200..599) p.vw else 430
+            val vh = (vw / up.coerceIn(0.3f, 1f)).toInt().coerceIn(vw, 3000)
+            return p.copy(mode = DisplayMode.PORTRAIT_FIT, vw = vw, vh = vh)
+        }
+
         /** The TV-safe rectangle: [safeArea] percent of each dimension is kept free on every side. */
         fun safeInsets(p: DisplayProfile, screenWidth: Float, screenHeight: Float): Pair<Float, Float> =
             (screenWidth * p.safeArea.toFloat() / 100f) to (screenHeight * p.safeArea.toFloat() / 100f)

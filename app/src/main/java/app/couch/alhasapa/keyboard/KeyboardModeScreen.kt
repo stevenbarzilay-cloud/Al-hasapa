@@ -78,6 +78,7 @@ import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -131,7 +132,7 @@ interface KeySink {
     fun saveResult() {}
 
     /** Touch mode: pictures of the TV's game are wanted ([on]), [width] pixels wide, of the part [crop] of the page when zoomed in, or no more. */
-    fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop? = null) {}
+    fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop? = null, up: Float = 0f) {}
 
     /** Picture [n] is on the screen (the TV sends the next one only then). */
     fun frameShown(n: Int) {}
@@ -153,6 +154,14 @@ interface KeySink {
 
     /** A phone from before 2.0 that knew several TVs: whether [tv] is its home's. */
     fun answerHome(tv: KeyClient.Tv, home: Boolean) {}
+
+    /** Touch mode upright (2.0.2): whether [game] (the TV's screen, by name) is shown upright, as it was last chosen for it. */
+    fun touchUpright(game: String): Boolean = false
+
+    fun setTouchUpright(game: String, upright: Boolean) {}
+
+    /** The phone turns upright (touch mode upright), or back on its side. */
+    fun orient(upright: Boolean) {}
 }
 
 /** Who a note is for to begin with: the other of the two of us (for anyone else, the first of us). */
@@ -194,20 +203,32 @@ fun KeyboardModeScreen(
         val items = remember(back) { sink.logins() }
         LoginsDialog(items, handoff, onSend = sink::sendLogin, onSignIn = sink::signIn, onClose = { loginsOpen = false })
     }
+    // Keyboard or touch (1.9.8): the TV says when its game is played by dragging, and the phone turns to touch by itself; either
+    // can be chosen at any time, and the choice stands until the TV opens another kind of game.
+    val connected = state as? KeyClient.State.Connected
+    var touchView by rememberSaveable { mutableStateOf(false) }
+    val suggested = connected?.touch
+    LaunchedEffect(suggested) { if (suggested != null) touchView = suggested }
+    // Touch mode upright (2.0.2): the phone held upright, the game's picture over all of it (a game shaped like a phone fills it). Chosen
+    // with the button on the picture, and kept for each game: the next time that game is touched, the phone turns by itself.
+    val game = connected?.screen.orEmpty()
+    var upright by remember(game) { mutableStateOf(sink.touchUpright(game)) }
+    val wantUpright = connected != null && touchView && upright
+    LaunchedEffect(wantUpright) { sink.orient(wantUpright) }
+    val rotate: () -> Unit = { upright = !upright; sink.setTouchUpright(game, upright) }
+    // Who holds this phone: asked once, the first time it is connected without knowing; changed from the chip at the top. (Kept here,
+    // above the upright view, so turning the phone does not ask again.)
+    var meOpen by rememberSaveable { mutableStateOf(false) }
+    var noteOpen by rememberSaveable { mutableStateOf(false) }
+    var askedWho by rememberSaveable { mutableStateOf(false) }
+    if (wantUpright) {
+        UprightTouch(connected, frame, frameNone, sink, onGame, onKeys = { touchView = false }, onRotate = rotate)
+        return
+    }
     Column(
         Modifier.fillMaxSize().background(Palette.Cream).windowInsetsPadding(WindowInsets.displayCutout).padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Keyboard or touch (1.9.8): the TV says when its game is played by dragging, and the phone turns to touch by itself; either
-        // can be chosen at any time, and the choice stands until the TV opens another kind of game.
-        val connected = state as? KeyClient.State.Connected
-        var touchView by rememberSaveable { mutableStateOf(false) }
-        val suggested = connected?.touch
-        LaunchedEffect(suggested) { if (suggested != null) touchView = suggested }
-        // Who holds this phone: asked once, the first time it is connected without knowing; changed from the chip at the top.
-        var meOpen by rememberSaveable { mutableStateOf(false) }
-        var noteOpen by rememberSaveable { mutableStateOf(false) }
-        var askedWho by rememberSaveable { mutableStateOf(false) }
         val couple = people.size >= 2 && pieces != null
         val today = remember { app.couch.alhasapa.data.Couple.evening() }
         LaunchedEffect(connected != null, me, couple) { if (connected != null && couple && me == null && !askedWho && !visiting) { askedWho = true; meOpen = true } }
@@ -228,15 +249,7 @@ fun KeyboardModeScreen(
             onNote = { if (mine == null) { if (visiting) sink.couches() else meOpen = true } else noteOpen = true },
         )
         // A game's end screen is up on the TV: one press here saves its result there (the TV presses the game's own share for us).
-        if (state is KeyClient.State.Connected && state.result) {
-            // Where it is saved (2.0): at the couch this TV is of, whoever holds the remote.
-            val label = state.couch?.let { stringResource(R.string.kb_save_result_in, app.couch.alhasapa.data.Couches.inCouch(it.name)) } ?: stringResource(R.string.kb_save_result)
-            Box(
-                Modifier.fillMaxWidth().padding(end = 12.dp).height(44.dp).clip(RoundedCornerShape(22.dp)).background(Palette.Red)
-                    .clickable { sink.saveResult() }.semantics { role = Role.Button; contentDescription = label },
-                contentAlignment = Alignment.Center,
-            ) { Text(label, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Palette.Cream) }
-        }
+        if (state is KeyClient.State.Connected && state.result) SaveResultBar(state, sink, Modifier.padding(end = 12.dp))
         if (state is KeyClient.State.Connected && versions != null) {
             val note = when (versions) {
                 is KeyClient.Versions.TvNewer -> stringResource(R.string.kb_tv_newer, versions.ver)
@@ -251,7 +264,7 @@ fun KeyboardModeScreen(
         }
         Box(Modifier.fillMaxWidth().weight(1f).padding(end = if (state is KeyClient.State.Connected) 0.dp else 12.dp)) {
             when (state) {
-                is KeyClient.State.Connected -> if (touchView) MirrorPad(frame, frameNone, sink, Modifier.fillMaxSize().padding(end = 12.dp)) else Connected(sink)
+                is KeyClient.State.Connected -> if (touchView) MirrorPad(frame, frameNone, sink, Modifier.fillMaxSize().padding(end = 12.dp), onRotate = rotate) else Connected(sink)
                 is KeyClient.State.NeedCode -> CodeEntry(state.left, sink)
                 KeyClient.State.Looking -> Looking(stringResource(R.string.kb_looking))
                 is KeyClient.State.Connecting -> Looking(stringResource(R.string.kb_connecting))
@@ -272,6 +285,48 @@ fun KeyboardModeScreen(
         }
     }
 }
+
+/** "Save the result" on the TV, while a game's end screen is up there: said where it is saved (2.0: at the couch this TV is of). */
+@Composable
+private fun SaveResultBar(state: KeyClient.State.Connected, sink: KeySink, modifier: Modifier = Modifier) {
+    val label = state.couch?.let { stringResource(R.string.kb_save_result_in, app.couch.alhasapa.data.Couches.inCouch(it.name)) } ?: stringResource(R.string.kb_save_result)
+    Box(
+        modifier.fillMaxWidth().height(44.dp).clip(RoundedCornerShape(22.dp)).background(Palette.Red)
+            .clickable { sink.saveResult() }.semantics { role = Role.Button; contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) { Text(label, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Palette.Cream, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+}
+
+/**
+ * Touch mode upright (2.0.2): the phone held upright and the TV's game over all of it, with the way back to the keyboard (or to playing
+ * on the phone) at the top, and the button that turns it on its side again on the picture.
+ */
+@Composable
+private fun UprightTouch(
+    state: KeyClient.State.Connected, frame: KeyClient.MirrorFrame?, frameNone: String?, sink: KeySink,
+    onGame: () -> Unit, onKeys: () -> Unit, onRotate: () -> Unit,
+) {
+    Column(
+        Modifier.fillMaxSize().background(Palette.Cream).windowInsetsPadding(WindowInsets.displayCutout).padding(horizontal = 8.dp, vertical = 6.dp)
+            .testTag(UPRIGHT_TOUCH_TAG),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        ModeSwitch(keys = false, onGame = onGame, modifier = Modifier.fillMaxWidth().height(40.dp), onKeys = onKeys, touch = true, onTouch = {})
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            // Only once the phone has turned (a moment after it was asked to): the TV is told the room's shape once, the right one. Of
+            // all the room under the switch, so a result bar that comes and goes does not change the game's shape on the TV.
+            if (constraints.maxHeight > constraints.maxWidth) {
+                val shape = Math.round(constraints.maxWidth * 50f / constraints.maxHeight) / 50f
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (state.result) SaveResultBar(state, sink)
+                    MirrorPad(frame, frameNone, sink, Modifier.fillMaxWidth().weight(1f), up = shape.coerceIn(KeyLink.UP_MIN, KeyLink.UP_MAX), onRotate = onRotate)
+                }
+            }
+        }
+    }
+}
+
+const val UPRIGHT_TOUCH_TAG = "touch-upright"
 
 @Composable
 private fun TopStrip(

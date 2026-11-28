@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -63,6 +64,7 @@ import kotlinx.coroutines.withContext
 
 /** The picture of the TV's game in touch mode, for the tests. */
 const val MIRROR_TAG = "mirror"
+const val MIRROR_ROTATE_TAG = "mirror-rotate"
 
 /** At most one move each this many ms goes to the TV (its screen draws no faster). */
 private const val MOVE_EVERY_MS = 16L
@@ -83,7 +85,14 @@ const val MAX_MIRROR_ZOOM = 5f
  * the corner do the same with one hand. Zoomed in, the TV is asked for that part of the page only, so it stays sharp.
  */
 @Composable
-internal fun MirrorPad(frame: KeyClient.MirrorFrame?, none: String?, sink: KeySink, modifier: Modifier = Modifier) {
+internal fun MirrorPad(
+    frame: KeyClient.MirrorFrame?, none: String?, sink: KeySink, modifier: Modifier = Modifier,
+    /**
+     * Upright (2.0.2): the shape (width over height) of the room the game has on the upright phone, told to the TV, which then shows the
+     * game shaped like it; 0 on its side. And the button that turns the phone: upright, or on its side again.
+     */
+    up: Float = 0f, onRotate: (() -> Unit)? = null,
+) {
     BoxWithConstraints(modifier.clip(RoundedCornerShape(14.dp)).background(Palette.Ink)) {
         val boxW = constraints.maxWidth.toFloat()
         val boxH = constraints.maxHeight.toFloat()
@@ -136,8 +145,10 @@ internal fun MirrorPad(frame: KeyClient.MirrorFrame?, none: String?, sink: KeySi
         // Pictures are asked for while this is on the screen, as wide as they are drawn here (the TV sends none wider), and zoomed in,
         // of the part in view (asked again a moment after the zoom stops changing).
         val crop = geo.visible(boxW, boxH)
-        DisposableEffect(constraints.maxWidth) {
-            latestSink.mirror(true, constraints.maxWidth, null)
+        // Upright (2.0.2), the TV is told the phone's shape too: it shows the game shaped like it, so the game fills the phone.
+        val latestUp by rememberUpdatedState(up)
+        DisposableEffect(constraints.maxWidth, up) {
+            latestSink.mirror(true, constraints.maxWidth, null, up)
             onDispose { latestSink.mirror(false, 0, null) }
         }
         // (The part last asked for: the first request, of all of it, went as the view came.)
@@ -145,7 +156,7 @@ internal fun MirrorPad(frame: KeyClient.MirrorFrame?, none: String?, sink: KeySi
         LaunchedEffect(crop) {
             if (crop == asked) return@LaunchedEffect
             delay(120)
-            latestSink.mirror(true, constraints.maxWidth, crop)
+            latestSink.mirror(true, constraints.maxWidth, crop, latestUp)
             asked = crop
         }
 
@@ -249,6 +260,18 @@ internal fun MirrorPad(frame: KeyClient.MirrorFrame?, none: String?, sink: KeySi
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Text(text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = Palette.Cream, textAlign = TextAlign.Center)
             }
+        }
+        // The phone upright, the game over all of it; or on its side again (2.0.2). Said in words, at the corner across from the zoom.
+        if (onRotate != null) {
+            val label = stringResource(if (up > 0f) R.string.kb_touch_to_landscape else R.string.kb_touch_to_portrait)
+            val desc = stringResource(if (up > 0f) R.string.kb_touch_to_landscape_desc else R.string.kb_touch_to_portrait_desc)
+            Box(
+                Modifier.align(Alignment.TopEnd).padding(8.dp).height(42.dp).clip(RoundedCornerShape(21.dp)).background(Palette.Ink.copy(alpha = 0.78f))
+                    .border(BorderStroke(1.dp, Palette.Cream.copy(alpha = 0.5f)), RoundedCornerShape(21.dp))
+                    .clickable(onClick = onRotate).semantics { role = Role.Button; contentDescription = desc }.testTag(MIRROR_ROTATE_TAG)
+                    .padding(horizontal = 14.dp),
+                contentAlignment = Alignment.Center,
+            ) { Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Palette.Cream) }
         }
         // Zoom with one hand: larger, smaller, and the whole game again.
         val middle = Offset(boxW / 2, boxH / 2)

@@ -207,7 +207,10 @@ fun PlayerScreen(
         if (r != null && !resultOpen) {
             val log = r.state.optJSONObject("log") ?: org.json.JSONObject()
             // A Share press is always a result; a bare copy only when it reads as one (people copy links and words too).
-            if (awaitingCapture || c.kind == "share" || ResultDraft.evaluate(r.game, c.text, "", false, log, r.day).result != null) {
+            val reads = ResultDraft.evaluate(r.game, c.text, "", false, log, r.day).result != null
+            // (What the game handed over is never written down, only that it came and whether it reads as a result: 2.0.2.)
+            if (awaitingCapture) app.couch.alhasapa.diag.Flight.log("result: the game handed over its ${c.kind}; ${if (reads) "it reads as a result" else "no result read in it"}")
+            if (awaitingCapture || c.kind == "share" || reads) {
                 awaitingCapture = false
                 resultText = c.text; resultCaptured = true; resultOpen = true
             }
@@ -340,11 +343,24 @@ fun PlayerScreen(
             if (answered) return@evaluateJavascript
             answered = true
             val at = app.couch.alhasapa.results.ResultWatch.at(raw)
-            if (at == null) { fromScreen(); return@evaluateJavascript }
+            if (at == null) { app.couch.alhasapa.diag.Flight.log("result: no share or copy button of the game's on the screen"); fromScreen(); return@evaluateJavascript }
             awaitingCapture = true
             app.couch.alhasapa.diag.Flight.log("result: pressing the game's own share button for us")
+            // Whether this page hears the game's share or copy at all (2.0.2: said in the report, for when nothing comes).
+            runCatching {
+                view.evaluateJavascript("(function(){return window.__couchCapture===true?'1':'0'})()") { hook ->
+                    if (hook?.contains('1') != true) app.couch.alhasapa.diag.Flight.log("result: this page does not hear the game's share or copy (the WebView may be too old)")
+                }
+            }
             tv.pageNav.tap(at.first, at.second)
-            scope.launch { delay(CAPTURE_WAIT_MS); if (awaitingCapture && !resultOpen) { awaitingCapture = false; fromScreen() } }
+            scope.launch {
+                delay(CAPTURE_WAIT_MS)
+                if (awaitingCapture && !resultOpen) {
+                    awaitingCapture = false
+                    app.couch.alhasapa.diag.Flight.log("result: nothing came from the game's button within ${CAPTURE_WAIT_MS / 1000.0} s")
+                    fromScreen()
+                }
+            }
         }
     }
     val resultReady = tv?.resultReady == true
@@ -444,8 +460,12 @@ fun PlayerScreen(
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val (marginX, marginY) = DisplayLayout.safeInsets(profile, maxWidth.value, maxHeight.value)
             // On a TV the whole frame (clock, score, controls) is the dock at the left edge, so no bars and no panels around the game.
+            // A phone in touch mode held upright (2.0.2): the game shaped like that phone meanwhile, so it fills the phone's screen
+            // (nothing of it is kept: on its side again, the game is shown as it was).
+            val up = tv?.phoneUpright ?: 0f
+            val shown = if (up > 0f && !session.loginMode) DisplayLayout.phoneShaped(profile, up) else profile
             val layout = DisplayLayout.compute(
-                if (tv != null) profile.copy(ui = UiPlace.MINIMAL) else profile,
+                if (tv != null) shown.copy(ui = UiPlace.MINIMAL) else shown,
                 (maxWidth.value - 2 * marginX).coerceAtLeast(1f),
                 (maxHeight.value - 2 * marginY).coerceAtLeast(1f),
             )

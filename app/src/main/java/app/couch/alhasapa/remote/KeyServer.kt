@@ -53,6 +53,11 @@ class KeyServer(
     private val frameSource: () -> FrameSource? = { RemoteKeys.front?.frameSource },
     /** A phone shows the game in touch mode, or the last one stopped (main thread): the TV's paw stays away meanwhile. */
     private val onMirroring: (Boolean) -> Unit = { on -> RemoteKeys.touchModeChanged(on) },
+    /**
+     * A phone in touch mode is held upright (2.0.2), its picture of this shape (width over height), or none is any more (0); main thread.
+     * The game's screen then shows the game shaped like that phone, so that it fills the phone's screen.
+     */
+    private val onUpright: (Float) -> Unit = { up -> RemoteKeys.uprightChanged(up) },
     /** Both of us as this TV knows us, and the notes the phones leave (1.9.9). */
     private val book: CoupleBook = RepoCoupleBook { (context.applicationContext as? app.couch.alhasapa.CouchApp)?.repo },
     /** Where the phones tell each other of the games played alone (1.11): made here once, handed to each paired phone. */
@@ -251,6 +256,8 @@ class KeyServer(
         @Volatile var mirrorWidth = 0
         /** The part of the page the phone shows, zoomed in (null: all of it). */
         @Volatile var mirrorCrop: KeyLink.Crop? = null
+        /** The phone is held upright, its picture of this shape (2.0.2); 0: on its side. */
+        @Volatile var mirrorUp = 0f
         @Volatile var frameKey: ByteArray? = null
         /** The picture sent and not yet said to be seen (-1: none), when it went, and whether this phone has any picture at all yet. */
         @Volatile var awaiting = -1
@@ -328,6 +335,7 @@ class KeyServer(
                     val zoomOnly = m.on && mirrorWidth > 0
                     mirrorWidth = if (m.on) m.w.coerceIn(MIN_FRAME_WIDTH, KeyLink.MAX_FRAME_WIDTH) else 0
                     mirrorCrop = if (m.on) m.crop else null
+                    mirrorUp = if (m.on) m.up else 0f
                     // Zoomed in or out while showing: the next picture is of the new part, at once (the one on the way is let go).
                     awaiting = -1; toldNone = null
                     if (!zoomOnly) hasPicture = false else unchangedReset = true
@@ -553,7 +561,7 @@ class KeyServer(
             if (ready) {
                 Flight.log("phone keyboard: $name left")
                 main.post { onInput(Msg.Pointer(false)) }               // its paw goes away with it, and a finger that was down is lifted
-                if (mirrorWidth > 0) { mirrorWidth = 0; main.post { frameTick() } }
+                if (mirrorWidth > 0) { mirrorWidth = 0; mirrorUp = 0f; main.post { frameTick() } }
             }
             // A phone that was being paired and went away: the TV stops showing the code (it comes back if the phone does).
             if (!ready) synchronized(lock) { if (peers.none { !it.ready }) { codeFor = null; codeAs = null; if (code != null) code = null } }
@@ -633,6 +641,7 @@ class KeyServer(
     /** A phone zoomed: the next picture differs whatever it shows. */
     @Volatile private var unchangedReset = false
     private var mirroringNow = false
+    private var uprightNow = 0f
 
     private fun frameTick() {
         main.removeCallbacks(frameTickR)
@@ -644,6 +653,14 @@ class KeyServer(
             if (!on) { lastJpeg = null; unchanged = 0 }
             runCatching { onMirroring(on) }
             Flight.log(if (on) "touch mode: a phone shows the game" else "touch mode: no phone shows the game now")
+        }
+        // A phone held upright (2.0.2): the game is shown shaped like it, for as long as one is (the first that said so).
+        val up = watching.firstOrNull { it.mirrorUp > 0f }?.mirrorUp ?: 0f
+        if (up != uprightNow) {
+            val was = uprightNow
+            uprightNow = up
+            runCatching { onUpright(up) }
+            if ((was > 0f) != (up > 0f)) Flight.log(if (up > 0f) "touch mode: a phone is held upright; the game is shown shaped like it" else "touch mode: no phone is held upright now")
         }
         if (!on) return
         if (capturing) {

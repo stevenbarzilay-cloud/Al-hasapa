@@ -53,6 +53,10 @@ object RemoteKeys {
     @Volatile var touchMode = false
         private set
 
+    /** A phone in touch mode is held upright (2.0.2), its picture of this shape (width over height); 0: none is. */
+    @Volatile var upright = 0f
+        private set
+
     /** A screen came to the front: what the phone types goes to its page, and the phone is told which screen it is. */
     fun attach(c: TvController) {
         front = c
@@ -63,6 +67,7 @@ object RemoteKeys {
         // Touch mode: whether this game is played by dragging, and what there is to picture now (nothing on the home).
         server?.touchGame = c.touchGame
         if (touchMode) c.phoneTouching(true)
+        c.phoneUpright = upright
         server?.framesChanged()
     }
 
@@ -76,6 +81,12 @@ object RemoteKeys {
     fun touchModeChanged(on: Boolean) {
         touchMode = on
         front?.phoneTouching(on)
+    }
+
+    /** On the main thread: a phone in touch mode turned upright (its picture's shape), or none is upright now (0). */
+    fun uprightChanged(up: Float) {
+        upright = up
+        front?.phoneUpright = up
     }
 
     /** The app's screens are showing ([visible]) or have all left. On a TV only. */

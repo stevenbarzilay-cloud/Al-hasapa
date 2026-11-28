@@ -29,6 +29,8 @@ import app.couch.alhasapa.ui.theme.AlHasapaTheme
  */
 class KeyboardModeActivity : ComponentActivity() {
     private lateinit var client: KeyClient
+    /** What touch mode remembers for each game (2.0.2: upright or on its side). */
+    private val touchPrefs by lazy { getSharedPreferences("keyboard_mode", MODE_PRIVATE) }
     /** Which of us holds this phone (1.9.9), as the screen shows it. */
     private val me = androidx.compose.runtime.mutableStateOf<String?>(null)
 
@@ -83,7 +85,7 @@ class KeyboardModeActivity : ComponentActivity() {
             override fun saveResult() = client.send(KeyLink.Msg.SaveResult)
 
             // Touch mode: the TV's game pictured here, and the fingers on it sent back.
-            override fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop?) = client.mirror(on, width, crop)
+            override fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop?, up: Float) = client.mirror(on, width, crop, up)
             override fun frameShown(n: Int) = client.frameShown(n)
             override fun touch(a: KeyLink.TouchAction, x: Float, y: Float) = client.send(KeyLink.Msg.Touch(a, x, y))
 
@@ -119,6 +121,13 @@ class KeyboardModeActivity : ComponentActivity() {
                 couch.repo.update { app.couch.alhasapa.data.Couple.remove(it, who, System.currentTimeMillis()) }
                 if (store.me == who) { store.me = null; me.value = null }
                 client.sendCouple()
+            }
+
+            // Touch mode upright (2.0.2), kept for each game.
+            override fun touchUpright(game: String): Boolean = touchPrefs.getBoolean("upright|$game", false)
+            override fun setTouchUpright(game: String, upright: Boolean) { touchPrefs.edit().putBoolean("upright|$game", upright).apply() }
+            override fun orient(upright: Boolean) {
+                requestedOrientation = if (upright) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             }
 
             // The site's own sign-in page, here on the phone, in the same browser the login is then read from.

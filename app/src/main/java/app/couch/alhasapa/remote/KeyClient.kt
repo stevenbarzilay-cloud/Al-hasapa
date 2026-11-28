@@ -162,6 +162,7 @@ class KeyClient(
     /** Touch mode is on the screen, drawing pictures this wide (0: it is not), of this part of the page. Asked for again whenever the connection comes back. */
     @Volatile private var mirrorWidth = 0
     @Volatile private var mirrorCrop: KeyLink.Crop? = null
+    @Volatile private var mirrorUp = 0f
     /** The connection's picture key (see [FrameCrypto]): from the pairing token and the TV's nonce of this connection. */
     @Volatile private var frameKey: ByteArray? = null
     private val appContext: Context = context.applicationContext
@@ -185,12 +186,16 @@ class KeyClient(
     @Volatile private var nonce = ""
     @Volatile private var badFrames = 0
 
-    /** Touch mode came on the screen ([on], drawing pictures [width] pixels wide, of the part [crop] of the page when zoomed in) or left it. */
-    fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop? = null) {
+    /**
+     * Touch mode came on the screen ([on], drawing pictures [width] pixels wide, of the part [crop] of the page when zoomed in) or left it;
+     * [up] (2.0.2): the phone is held upright and the picture has this shape (width over height), 0 on its side.
+     */
+    fun mirror(on: Boolean, width: Int, crop: KeyLink.Crop? = null, up: Float = 0f) {
         mirrorWidth = if (on) width.coerceAtLeast(1) else 0
         mirrorCrop = if (on) crop else null
+        mirrorUp = if (on) up else 0f
         if (!on) { _frame.value = null; _frameNone.value = null }
-        send(Msg.Mirror(on, mirrorWidth, mirrorCrop))
+        send(Msg.Mirror(on, mirrorWidth, mirrorCrop, mirrorUp))
     }
 
     /** Picture [n] is on the screen: the TV may send the next. */
@@ -484,7 +489,7 @@ class KeyClient(
                         Flight.log("phone keyboard: connected to the TV at $address${if (isGuest) ", as a guest" else ""}")
                         startPinging()
                         // Touch mode was on the screen when the connection dropped: the pictures are asked for again.
-                        if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth, mirrorCrop))
+                        if (mirrorWidth > 0) write(Msg.Mirror(true, mirrorWidth, mirrorCrop, mirrorUp))
                         // A guest: who they are here first (a note or a game of theirs is taken as that player's).
                         if (isGuest) sendGuest(null)
                         // The notes written for this couch that its TV does not keep yet.

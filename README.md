@@ -8,7 +8,7 @@ Single user, sideloaded, no Play Store. The product brief is in `docs/HANDOFF-PR
 prototype that is the source of truth for look, copy, catalog and scoring is in `couch-artifact/`
 (left untouched). The app's own copy of the hub is in `app/src/main/assets/hub/`.
 
-**Version 2.0.1.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
+**Version 2.0.2.** Everything in the brief is built: the hub (the prototype's UI, native state, import and export that
 merge), the isolated game player with persistent logins (NYT, Haaretz, and a separate LinkedIn login for each of us), the
 accounts screen, "who plays?" for head-to-head games, per-site TV display profiles, result capture (the game's own
 Share / Copy, a native result sheet, an Android share target), a once-per-evening Do Not Disturb nudge while casting,
@@ -18,7 +18,8 @@ device in the build environment); see "Check on the phone" below for exactly wha
 Results (`results/`):
 
 - **Capture.** On the game's own sites only, a script injected at document start wraps `navigator.share`,
-  `navigator.clipboard.writeText` and `document.execCommand("copy")`. When the game calls one (the person pressed the game's
+  `navigator.clipboard.writeText`, `navigator.clipboard.write` (the plain text of a ClipboardItem, 2.0.2) and
+  `document.execCommand("copy")`, and hears the copy event's own text (a game that fills the event itself, 2.0.2). When the game calls one (the person pressed the game's
   own Share or Copy button), the text is passed to the app through a web-message listener, and the call goes straight on to
   the original, so the game behaves as before. The script reads nothing else (a test greps it for page, form and storage
   access) and the app re-checks every message: https origin on the allowlist, size, shape, no repeats. As a second route,
@@ -33,6 +34,10 @@ Results (`results/`):
   if it cannot be told, or two games tie, it asks instead of guessing. A head-to-head result asks "מי שיחק?" first.
 - `tools/capture_check.cjs` runs the real script in Chromium: originals still called, only shares and copies reported,
   a throwing port never reaches the page.
+- **When nothing is captured on the TV (2.0.2)** the flight recorder (ⓘ) says where it stopped, without what the game said:
+  no share or copy button on the screen; the page does not hear the game's share at all (an old WebView); the button was
+  pressed and nothing came within 1.8 s; or what came did or did not read as a result. A Wordle end that was not caught in
+  November 2026 is why.
 
 Polish (`dnd/`, `ui/Motion.kt`, `a11y/` tests):
 
@@ -810,6 +815,16 @@ app's keyboard:
   again to let go). Putting the pad away hides the paw again, unless the remote had turned it on.
 - **Touch** (1.9.8): the third choice at the top, "מגע", shows the game that is open on the TV, and a finger on it touches the game
   there (see 1.9.8 above). It comes up by itself for the games played by dragging.
+- **Touch, upright** (2.0.2): "📱 לאורך" on the picture turns the phone upright, the switch moves to the top, and the picture fills
+  the rest of the screen. Meanwhile the TV shows the game shaped like that phone (the phone says its shape; a game shown wide or
+  as it is becomes phone-shaped, with a phone's width for the page), so the game fills the phone's screen rather than a strip
+  across it; "📱 לרוחב" turns both back. Nothing of it is saved in the game's display settings on the TV. The choice is kept
+  for each game on the phone: the next time that game is touched, the phone turns by itself. The keyboard is always sideways.
+- **Enter** (2.0.2) is the game's even when a button of the game's still holds the page's focus (the paw or a finger pressed one
+  last, and the browser would press that button again instead): the focus is taken off a button or a link first, never off a
+  field (where Enter sends the form), and if the page still did not see the key a moment later, it is said once from within
+  the page, and a real one that arrives late is held back. `tools/enter_check.cjs` runs it in Chromium on a page that behaves
+  like Wordle. (Wordle did not take Enter from our keyboards in November 2026; letters it did.)
 - **On the TV**, a small red phone at the top of the dock shows that a phone is connected.
 
 How it works: the TV app listens on the home network while it is in front (port 47123, announced as `_couchkeys._tcp`), and the phone finds
@@ -862,6 +877,17 @@ Do these in order; each one tells you which part to blame if it fails.
 5. **The link.** After the first run of the release workflow (`docs/DISTRIBUTION.md`): "שליחת האפליקציה לחבר" says "✓ מוכן לשליחה",
    and both downloads install on a device that never had the app (it opens on "הקמת ספה משלי" / "הצטרפות לספה קיימת").
 
+**2.0.2, on the TV with a phone** (after the test in which Wordle took no Enter and its result was not caught):
+
+1. **Enter.** Wordle on the TV, typed from the phone: a word, then Enter: it is sent. Press a key of the game's own with the paw
+   first, then type a word and Enter from the phone: still sent. (ⓘ says "typing: Enter; the page's focus was on a BUTTON of
+   the game's, moved off it" when that was what stood in the way.)
+2. **The result.** At Wordle's end, "שמירת התוצאה" (on the phone or the TV): the sheet opens filled in. If it does not, open ⓘ at
+   once: the lines that begin with "result:" say where it stopped (no button; the page does not hear the game; nothing came).
+3. **Upright.** Touch mode in a game (Pips, or Dialed), "📱 לאורך" on the picture: the phone turns, the TV shows the game shaped
+   like a phone, and the picture fills the phone. "📱 לרוחב" turns both back. Leave and open the same game again in touch mode:
+   the phone turns upright by itself.
+
 What to expect to differ from the prototype: a few game links are Google searches standing in for a direct link (the hub
 marks them "קישור זמני"; replace them under "הקישורים שלנו"), and the Haaretz chain link in the catalogue is a dated page.
 
@@ -875,7 +901,7 @@ marks them "קישור זמני"; replace them under "הקישורים שלנו"
 | `app/src/main/res/font/` | IBM Plex Sans Hebrew for native screens (the hub has its own copy in `assets/hub/fonts/`) |
 | `app/src/main/assets/games.json` | The game catalogue (sites and games). Normally you only change a game's `u` (its link), or edit it in the app ("הקישורים שלנו") |
 | `app/src/main/assets/display_profiles.json` | How each site is shown on the TV (mode, zoom, banner CSS) |
-| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (the catalogue as it first came from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring), `display_check.cjs`, `sound_check.cjs`, `capture_check.cjs`, `tvnav_check.cjs` and `hub_settings_check.cjs` (the injected scripts and the hub's settings page, run in real Chromium) |
+| `tools/` | `make_illustration_masks.py` (illustration masks), `extract_catalog.mjs` (the catalogue as it first came from the prototype), `gen_scoring_vectors.mjs` (golden vectors recorded from the prototype's own scoring), `display_check.cjs`, `sound_check.cjs`, `capture_check.cjs`, `enter_check.cjs`, `tvnav_check.cjs` and `hub_settings_check.cjs` (the injected scripts and the hub's settings page, run in real Chromium) |
 | `THIRD_PARTY/` | Font license (SIL OFL 1.1) |
 | `couch-artifact/` | The original prototype and the Haaretz layout bug screenshots, kept verbatim |
 

@@ -34,6 +34,30 @@ class DisplayLayoutTest {
         assertEquals((w - l.webWidth) / 2f, l.panelWidth, 0.01f)
     }
 
+    /**
+     * 2.0.2: a phone in touch mode held upright. Whatever the game's own shape on the TV (as it is, wide, phone-shaped), it is shown
+     * shaped like that phone meanwhile, so its picture fills the phone's screen; a phone width of its own is kept.
+     */
+    @Test
+    fun anUprightPhoneMakesTheGameShapedLikeIt() {
+        val tvW = 1872f; val tvH = 1026f                                        // a TV's 1920 x 1080 inside its margin
+        for (p in listOf(DisplayProfile(), DisplayProfile(mode = DisplayMode.WIDE, vw = 1280), DisplayProfile(mode = DisplayMode.PORTRAIT_FIT))) {
+            val shaped = DisplayLayout.phoneShaped(p, 0.48f)
+            assertEquals(DisplayMode.PORTRAIT_FIT, shaped.mode)
+            assertEquals(430, shaped.vw)
+            val l = DisplayLayout.compute(shaped.copy(ui = UiPlace.MINIMAL), tvW, tvH)
+            assertEquals("as tall as the TV", tvH, l.webHeight, 0.01f)
+            assertEquals("the phone's shape (${p.mode})", 0.48f, l.webWidth / l.webHeight, 0.003f)
+            assertEquals("a phone's width for the page", 430, l.virtualWidth)
+        }
+        // A narrower phone width the person chose is kept; what else they chose stays.
+        val own = DisplayLayout.phoneShaped(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT, vw = 390, vh = 844, zoom = 120, dark = true), 0.5f)
+        assertEquals(390, own.vw); assertEquals(780, own.vh); assertEquals(120, own.zoom); assertTrue(own.dark)
+        // Never wider than square, never a sliver.
+        assertEquals(430, DisplayLayout.phoneShaped(DisplayProfile(), 3f).vh)
+        assertEquals(1433, DisplayLayout.phoneShaped(DisplayProfile(), 0.01f).vh)
+    }
+
     @Test
     fun panelsDisappearWhenTheyWouldBeTooNarrowToReadFromTheCouch() {
         val narrow = DisplayLayout.compute(DisplayProfile(mode = DisplayMode.PORTRAIT_FIT), 400f, 390f)

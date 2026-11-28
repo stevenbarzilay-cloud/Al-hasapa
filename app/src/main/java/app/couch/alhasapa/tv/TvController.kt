@@ -166,6 +166,13 @@ class TvController(val enabled: Boolean, density: Float) {
     var phoneTouch by mutableStateOf(false)
         private set
 
+    /**
+     * A phone in touch mode is held upright (2.0.2), its picture of this shape (width over height), or 0. The game's screen shows the
+     * game shaped like that phone meanwhile (see DisplayLayout's phone shape), so that it fills the phone's screen; on its side again,
+     * the game is shown as it was.
+     */
+    var phoneUpright by mutableFloatStateOf(0f)
+
     /** Where the phone's finger is while it is down, in this screen's coordinates (a ring is drawn there); null while it is up. */
     var phoneFinger by mutableStateOf<androidx.compose.ui.geometry.Offset?>(null)
         private set

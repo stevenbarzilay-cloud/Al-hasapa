@@ -47,11 +47,32 @@ class TvScreensTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private var scenario: ActivityScenario<PlayerActivity>? = null
 
-    @After fun close() { scenario?.close(); TvController.PageNavOverride = null }
+    @After fun close() { scenario?.close(); TvController.PageNavOverride = null; app.couch.alhasapa.remote.RemoteKeys.uprightChanged(0f) }
 
-    private fun launch(page: PageNav? = null) {
+    private fun launch(page: PageNav? = null, game: String = "wordle") {
         TvController.PageNavOverride = page
-        scenario = ActivityScenario.launch(PlayerActivity.gameIntent(context, "wordle", null)); rule.waitForIdle()
+        scenario = ActivityScenario.launch(PlayerActivity.gameIntent(context, game, null)); rule.waitForIdle()
+    }
+
+    /** The game's box on the screen (the frame that holds its WebView), width over height. */
+    private fun gameShape(): Float {
+        var shape = 0f
+        scenario!!.onActivity { a -> val box = findWeb(a.window.decorView)!!.parent as View; shape = box.width.toFloat() / box.height }
+        return shape
+    }
+
+    /** 2.0.2: a phone in touch mode held upright: the game, shown on the whole TV, is shaped like the phone meanwhile, and only meanwhile. */
+    @Test
+    fun aPhoneHeldUprightInTouchModeShapesTheGameLikeItAndOnItsSideItIsAsItWas() {
+        launch(game = "dialed")
+        val own = gameShape()
+        assertTrue("Dialed is shown on the whole screen beside the dock: $own", own > 1.2f)
+        app.couch.alhasapa.remote.RemoteKeys.uprightChanged(0.48f); rule.waitForIdle()
+        assertEquals("shaped like the phone", 0.48f, gameShape(), 0.02f)
+        app.couch.alhasapa.remote.RemoteKeys.uprightChanged(0f); rule.waitForIdle()
+        assertEquals("as it was", own, gameShape(), 0.01f)
+        val displays = (context as CouchApp).repo.snapshot().optJSONObject("displays")
+        assertTrue("nothing of it was kept for the game", displays == null || displays.length() == 0)
     }
 
     private fun key(a: PlayerActivity, code: Int, action: Int = KeyEvent.ACTION_DOWN) = a.window.callback.dispatchKeyEvent(KeyEvent(0, 0, action, code, 0))

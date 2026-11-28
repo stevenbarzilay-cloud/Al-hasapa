@@ -14,7 +14,10 @@ const PRE = `
   window.__calls = {share: 0, write: 0, exec: 0}; window.__msgs = [];
   window.couchCapture = { postMessage: m => window.__msgs.push(m) };
   navigator.share = function(d){ window.__calls.share++; return Promise.resolve('shared') };
-  Object.defineProperty(navigator, 'clipboard', { value: { writeText: function(t){ window.__calls.write++; return Promise.resolve('written') } }, configurable: true });
+  Object.defineProperty(navigator, 'clipboard', { value: {
+    writeText: function(t){ window.__calls.write++; return Promise.resolve('written') },
+    write: function(items){ window.__calls.item = (window.__calls.item || 0) + 1; return Promise.resolve('written-item') },
+  }, configurable: true });
   document.execCommand = function(c){ window.__calls.exec++; return true };
 `;
 
@@ -53,6 +56,29 @@ const PRE = `
   await run(() => { document.execCommand('bold'); navigator.clipboard.writeText('   '); navigator.clipboard.writeText('x'.repeat(5000)); navigator.share({}); navigator.share(); });
   ok((await msgs()).length === before, 'other commands, blank text, huge text and empty shares are not reported');
   ok((await run(() => window.__calls.exec)) === 3, 'execCommand("bold") still went through to the original');
+
+  // 2.0.2: a game that copies a ClipboardItem: its plain text is reported, and the original still runs.
+  await page.waitForTimeout(1600);
+  const n0 = (await msgs()).length;
+  const r3 = await run(() => navigator.clipboard.write([new ClipboardItem({ 'text/plain': new Blob(['Wordle 1,620 4/6\n⬛🟨🟩'], { type: 'text/plain' }) })]));
+  ok(r3 === 'written-item', 'write: the original still runs');
+  await page.waitForTimeout(200);
+  m = await msgs(); ok(m.length === n0 + 1 && m[n0].k === 'copy' && m[n0].t === 'Wordle 1,620 4/6\n⬛🟨🟩', 'write: the ClipboardItem\'s text is reported as a copy');
+  const r4 = await run(() => navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob(['x'], { type: 'image/png' }) })]));
+  await page.waitForTimeout(200);
+  ok(r4 === 'written-item' && (await msgs()).length === n0 + 1, 'write: a picture only is not reported, and still goes through');
+  ok((await run(() => { try { navigator.clipboard.write(); return 'ok' } catch (e) { return 'threw' } })) === 'ok', 'write: nothing given is passed on as it was');
+
+  // 2.0.2: a game that fills the copy event itself: what it put there is reported.
+  await page.waitForTimeout(1600);
+  const n1 = (await msgs()).length;
+  await run(() => {
+    document.addEventListener('copy', function h(e) { e.clipboardData.setData('text/plain', 'Strands #271\n🔵🔵🟡'); e.preventDefault(); document.removeEventListener('copy', h) });
+    document.body.dispatchEvent(new ClipboardEvent('copy', { clipboardData: new DataTransfer(), bubbles: true, cancelable: true }));
+  });
+  m = await msgs(); ok(m.length === n1 + 1 && m[n1].t === 'Strands #271\n🔵🔵🟡', 'a copy event the game filled: its text is reported');
+  await run(() => document.body.dispatchEvent(new ClipboardEvent('copy', { clipboardData: new DataTransfer(), bubbles: true })));
+  ok((await msgs()).length === n1 + 1, 'a copy event with nothing in it: nothing reported');
 
   // Never throws into the page: a port that throws, and a page without the APIs.
   const p2 = await ctx.newPage();

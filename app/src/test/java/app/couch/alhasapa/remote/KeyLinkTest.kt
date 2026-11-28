@@ -60,6 +60,8 @@ class KeyLinkTest {
             Msg.Hi("tv1", "MiBOX4", "0f".repeat(16), 41, "2.0.1", "c0123456789abcde", "הספה שלנו", empty = true),
             Msg.Hello("ph1", "Pixel 8", "", "ab".repeat(32), 41, "2.0.1", KeyLink.AS_GUEST),
             Msg.Ok("עמוד הבית", KeyLink.AS_EVENING), Msg.SoloOk("2026-11-27", "connections", 1_234L),
+            // From 2.0.2: touch mode held upright, with the phone's shape.
+            Msg.Mirror(true, 960, null, 0.48f), Msg.Mirror(true, 900, KeyLink.Crop(0.25f, 0.1f, 0.75f, 0.6f), 0.5f),
         )
         for (m in all) {
             val line = KeyLink.encode(m)
@@ -113,6 +115,16 @@ class KeyLinkTest {
         assertEquals(KeyLink.Crop(0f, 0.5f, 1f, 1f), crop("[-1,0.5,3,1]"))
         assertEquals(KeyLink.Crop(0.1f, 0.1f, 0.9f, 0.8f), KeyLink.Crop.union(KeyLink.Crop(0.1f, 0.2f, 0.5f, 0.8f), KeyLink.Crop(0.3f, 0.1f, 0.9f, 0.4f)))
         assertNull("a phone that shows all of it wins", KeyLink.Crop.union(part, null))
+    }
+
+    /** 2.0.2: a phone that never says (before 2.0.2) is on its side; a shape no phone has is not taken. */
+    @Test
+    fun anUprightPhoneSaysItsShapeAndOnlyAPhonesShapeIsTaken() {
+        assertEquals(0f, (KeyLink.decode("{\"t\":\"mirror\",\"on\":true,\"w\":960}") as Msg.Mirror).up)
+        assertEquals(0f, (KeyLink.decode("{\"t\":\"mirror\",\"on\":true,\"w\":960,\"up\":2.1}") as Msg.Mirror).up)
+        assertEquals(0f, (KeyLink.decode("{\"t\":\"mirror\",\"on\":true,\"w\":960,\"up\":\"x\"}") as Msg.Mirror).up)
+        assertEquals(0.462f, (KeyLink.decode("{\"t\":\"mirror\",\"on\":true,\"w\":960,\"up\":0.462}") as Msg.Mirror).up, 0.0001f)
+        assertFalse("on its side, nothing more is said", KeyLink.encode(Msg.Mirror(true, 960)).contains("up"))
     }
 
     @Test
