@@ -12,6 +12,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.core.content.edit
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -125,7 +126,7 @@ class KeyboardModeActivity : ComponentActivity() {
 
             // Touch mode upright (2.0.2), kept for each game.
             override fun touchUpright(game: String): Boolean = touchPrefs.getBoolean("upright|$game", false)
-            override fun setTouchUpright(game: String, upright: Boolean) { touchPrefs.edit().putBoolean("upright|$game", upright).apply() }
+            override fun setTouchUpright(game: String, upright: Boolean) { touchPrefs.edit { putBoolean("upright|$game", upright) } }
             override fun orient(upright: Boolean) {
                 requestedOrientation = if (upright) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
             }
